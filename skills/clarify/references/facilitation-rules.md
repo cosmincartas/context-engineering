@@ -20,5 +20,6 @@
 10. Correct misunderstandings with evidence instead of quietly adapting the brief around them.
 11. Do not agree for the sake of momentum. Name conflicting statements and ask which one is authoritative.
 12. Update the saved brief after each material answer. The artifact, not chat history, is the recovery source.
-13. End with one concise Confirmed Understanding. Ask the user to approve or correct it.
-14. If the session stops early, preserve `status: draft`, record the current checkpoint, and leave unresolved questions in the brief.
+13. Before you present the Confirmed Understanding, collect the out-of-scope items and assumptions that come from your inference, not from user statements. Present them as one list and ask the user to confirm or correct them. Do not present an inferred non-goal as a confirmed boundary.
+14. End with one concise Confirmed Understanding. Ask the user to approve or correct it.
+15. If the session stops early, preserve `status: draft`, record the current checkpoint, and leave unresolved questions in the brief.

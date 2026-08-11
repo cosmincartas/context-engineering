@@ -49,6 +49,21 @@ updated: "{{YYYY-MM-DD}}"
 |---|---|---|---|
 | NFR-1 | {{category}} | The system must {{measurable limit or binary condition}}. | {{source}} |
 
+### Category coverage
+
+<!-- Each category gets NFR-* identifiers or "Not applicable" with a reason. An empty cell blocks validation. -->
+
+| Category | Coverage |
+|---|---|
+| Performance | {{NFR-* list, or "Not applicable" and reason}} |
+| Capacity and storage | {{NFR-* list, or "Not applicable" and reason}} |
+| Security | {{NFR-* list, or "Not applicable" and reason}} |
+| Privacy and data retention | {{NFR-* list, or "Not applicable" and reason}} |
+| Availability and recovery | {{NFR-* list, or "Not applicable" and reason}} |
+| Compliance | {{NFR-* list, or "Not applicable" and reason}} |
+| Accessibility | {{NFR-* list, or "Not applicable" and reason}} |
+| Observability | {{NFR-* list, or "Not applicable" and reason}} |
+
 ## 7. Acceptance Criteria
 
 | ID | Story | Requirements | Procedure and expected result |
