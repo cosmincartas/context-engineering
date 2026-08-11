@@ -5,6 +5,8 @@ description: Use when the user wants a PRD, product specification, user stories,
 
 # Requirements Definition
 
+Use ASD-STE100 Simplified Technical English when you ask questions or write output files.
+
 Turn shared understanding into a validated Product Requirements Document. This skill can follow `clarify`, but clarification is optional when the user already knows what they want.
 
 The skill makes no production-code changes and no commits. It reads the repository only to establish current behavior and constraints.

@@ -5,6 +5,8 @@ description: Use when an initial development request is ambiguous or underspecif
 
 # Clarify
 
+Use ASD-STE100 Simplified Technical English when you ask questions or write output files.
+
 Turn an initial development prompt into a shared, user-validated understanding. Clarification establishes what the request means. It does not decide how to implement it.
 
 ## Invariants

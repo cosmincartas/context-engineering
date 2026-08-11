@@ -5,6 +5,8 @@ description: Use when the user explicitly provides a validated design document a
 
 # To Plan
 
+Use ASD-STE100 Simplified Technical English when you ask questions or write output files.
+
 Turn one validated design document into a resumable implementation plan that any agent can execute in a fresh session. Run only when the user explicitly invokes this skill; run the stages in order and never skip a gate.
 
 ## Invariants

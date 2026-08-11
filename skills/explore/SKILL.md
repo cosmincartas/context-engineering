@@ -5,6 +5,8 @@ description: Use when the user wants to understand a technical concept, compare 
 
 # Explore
 
+Use ASD-STE100 Simplified Technical English when you ask questions or write output files.
+
 Answer a technical question without turning it into a delivery project. The user is learning, comparing, or assessing impact. They have not committed to building anything.
 
 ## Modes

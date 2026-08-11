@@ -5,6 +5,8 @@ description: Use when the user wants a technical design, architecture document, 
 
 # Solution Design
 
+Use ASD-STE100 Simplified Technical English when you ask questions or write output files.
+
 Turn a validated PRD into a validated technical design. This skill follows `requirements` and produces the input for `to-plan`.
 
 The skill does not modify production code or make commits. It reads the repository to preserve existing interfaces, constraints, conventions, and verification seams.
