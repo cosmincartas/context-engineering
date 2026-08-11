@@ -42,7 +42,7 @@ Never silently overwrite a validated design. A revised PRD makes the design stal
 
 1. Resolve the input contract and record the current repository baseline.
 2. Read `references/ste-writing-rules.md`.
-3. Fill the template in this order: Scope → Design Rules → Contracts → Architecture → Components → Behavior → Failure Model → ADRs → Traceability → Deferred.
+3. Fill the template in this order: Scope → Design Rules → Contracts → Architecture → Components → Behavior → Failure Model → Cross-Cutting Concerns → ADRs → Traceability → Deferred.
 4. Define contracts before components. Components consume or produce named contracts rather than inventing private interpretations of shared data.
 5. Run the self-checks and complete the user-validation loop.
 6. Report the validated design path as input to `to-plan`.
@@ -63,7 +63,9 @@ Never silently overwrite a validated design. A revised PRD makes the design stal
 
 **Failure Model.** Cover failures relevant to this system, their detectors, responses, and verification identifiers. Do not invent optional dependencies, corruption paths, or persistence failures for systems that do not have them.
 
-**Architecture Decision Records.** Resolve every design-owned `Q-*` and every new consequential technical choice. Record context, options, decision, reasons, and accepted consequences. Ask the user before decisions involving product scope, public compatibility, security policy, cost, or irreversible data behavior.
+**Cross-Cutting Concerns.** State the design position for each row: security (authorization and malicious input), privacy (personal data exposure, retention, and deletion), and operability (monitoring, configuration, and deployment). Write "Not applicable" with a reason when a concern does not apply to this system. An empty row blocks validation.
+
+**Architecture Decision Records.** Resolve every design-owned `Q-*` and every new consequential technical choice. Record context, options, decision, reasons, and accepted consequences. Ask the user before decisions involving product scope, public compatibility, security policy, cost, or irreversible data behavior. A decision involves cost when a realistic option adds a paid service or a material recurring cost.
 
 **Traceability and Verification Map.** Map every `FR-*`, `NFR-*`, and `AC-*` to design sections and observable verification. Map each failure `F-*` to a verification row as well.
 
@@ -80,6 +82,7 @@ Before validation, make sure that:
 - Every component has deliberate non-functions.
 - Persistent write pairs have a recoverable ordering analysis when applicable.
 - Every relevant failure has an observable verification row.
+- Every cross-cutting concern row has a design position or a written reason it does not apply.
 - Every design element traces to a requirement, acceptance criterion, failure, or stated repository constraint.
 - Repository and technology choices are either existing constraints or recorded decisions.
 - The prose follows the STE rules unless the user requested standard English.
