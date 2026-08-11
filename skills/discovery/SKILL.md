@@ -1,4 +1,3 @@
-
 ---
 name: discovery
 description: Conduct structured exploration of a problem space before any requirements exist - map the pains, generate and stress-test multiple solution directions, surface assumptions and unknowns, and end with an explicit disposition. Produces an exploration brief that the requirements-definition (PRD) skill consumes. Use this skill whenever the user wants to brainstorm, explore, ideate, or "think through" something, asks "is it worth building", "what are my options", or "help me figure out whether" - and also when the user states a solution with no stated problem ("I want to build X") and no PRD or requirements exist yet. Do not use it when the user already has a settled direction and asks for requirements or design documents.
