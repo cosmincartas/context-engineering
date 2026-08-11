@@ -1,4 +1,3 @@
-
 # Exploration Brief: {Topic}
 
 **Date:** {YYYY-MM-DD} · **Participants:** {who} · **Disposition:** {proceed | spike | park | dissolve}

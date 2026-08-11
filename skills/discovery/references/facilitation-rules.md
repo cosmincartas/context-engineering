@@ -1,4 +1,3 @@
-
 # Facilitation Rules for Discovery Sessions
 
 The conversation design is most of this skill. These rules govern how to conduct the session.
