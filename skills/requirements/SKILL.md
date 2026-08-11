@@ -7,7 +7,7 @@ description: Use when the user wants a PRD, product specification, user stories,
 
 Use ASD-STE100 Simplified Technical English when you ask questions or write output files.
 
-Turn shared understanding into a validated Product Requirements Document. This skill can follow `clarify`, but clarification is optional when the user already knows what they want.
+Turn a validated context brief into a validated Product Requirements Document. This skill must follow `clarify`, even when the user already knows what they want.
 
 The skill makes no production-code changes and no commits. It reads the repository only to establish current behavior and constraints.
 
@@ -15,19 +15,13 @@ The skill makes no production-code changes and no commits. It reads the reposito
 
 Resolve the input before writing requirements.
 
-### A validated context brief exists
+### Required validated context brief
 
-1. Read it fully.
-2. Require `artifact: context-brief` and `status: validated` in its frontmatter. If it is still a draft, stop and offer to resume `clarify`.
+1. Require one saved context-brief path from `clarify`. If it is absent or unreadable, stop and direct the user to `clarify`.
+2. Read it fully and require `artifact: context-brief` and `status: validated` in its frontmatter. If it is still a draft, stop and offer to resume `clarify`.
 3. Preserve its confirmed problem, desired outcome, scope, constraints, provenance, and unresolved questions. Do not silently reopen settled context.
 4. Record the SHA-256 hash of the exact context-brief file in the PRD frontmatter so later stages can detect stale context.
 5. Re-inspect repository facts that requirements depend on. If material repository drift contradicts the brief, show the evidence and ask before continuing.
-
-### No context brief exists
-
-Do not force a clarification stage. If the prompt and conversation already establish the problem, desired outcome, scope, and constraints, start directly. Ask only questions that materially affect requirements or acceptance.
-
-If the request is not materially clear, offer `clarify`. If the user prefers to continue here, capture the missing context in the PRD and mark unsupported assumptions explicitly.
 
 An `explore` artifact is supporting evidence. It is not user approval of scope or a decision to build.
 
@@ -35,7 +29,7 @@ An `explore` artifact is supporting evidence. It is not user approval of scope o
 
 Use `assets/prd-template.md` and save the PRD to `docs/agentic-engineering/prd/<YYYY-MM-DD>/<subject>.md`.
 
-1. If a matching draft exists, offer to resume it before creating another file. When it links a context brief, compare the current exact-file SHA-256 with `context_sha256` before resuming.
+1. If a matching PRD exists, reject it when it does not link a validated context brief with a matching exact-file SHA-256 hash. For a matching draft that passes this check, offer to resume it before creating another file. Compare the current exact-file SHA-256 with `context_sha256` before resuming.
 2. Save the initial document with `status: draft` and `checkpoint: framing` after resolving the input.
 3. Use these checkpoints in order: `framing`, `requirements`, `acceptance`, `awaiting-validation`, `complete`.
 4. On write failure, report the failure and stop.

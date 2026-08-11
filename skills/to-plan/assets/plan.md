@@ -20,7 +20,7 @@ updated: "{{YYYY-MM-DD}}"
 Instructions for any implementing agent, in any session:
 
 1. Start only when this plan's `status` is `validated`, `executing`, or `blocked`.
-2. Compare the exact design and PRD files with `design_sha256` and `prd_sha256`. Also verify the design's PRD hash and the PRD's context hash when present. Stop on any mismatch.
+2. Compare the exact design and PRD files with `design_sha256` and `prd_sha256`. Also require and verify the design's PRD hash and the PRD's validated context brief and exact `context_sha256` hash. Stop on any missing link or mismatch.
 3. Review the plan and current repository before editing. Stop and ask when the plan has a critical gap or material repository drift.
 4. Resume the single `In Progress` task. Otherwise, work from the first task in plan order whose status is not `Done`. Never skip unresolved blocked work.
 5. For production-behavior changes, use test-driven development: observe RED before production code, implement the minimum GREEN behavior, then REFACTOR while tests remain green.

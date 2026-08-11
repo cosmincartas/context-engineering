@@ -4,8 +4,8 @@ artifact: prd
 subject: "{{subject}}"
 status: draft
 checkpoint: framing
-context: "{{validated context brief path or none}}"
-context_sha256: "{{context brief content hash or none}}"
+context: "{{validated context brief path}}"
+context_sha256: "{{context brief content hash}}"
 repository_baseline: "{{commit or unavailable}}"
 created: "{{YYYY-MM-DD}}"
 updated: "{{YYYY-MM-DD}}"

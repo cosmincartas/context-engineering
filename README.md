@@ -1,24 +1,24 @@
 # Context Engineering Workflow
 
-Model-agnostic skills turn an initial development prompt into reusable context, validated requirements, a technical design, and a TDD-ready resumable implementation plan. Exploration and clarification are optional entry points rather than mandatory ceremony.
+Model-agnostic skills turn an initial development prompt into reusable context, validated requirements, a technical design, and a TDD-ready resumable implementation plan.
 
 ## Routing
 
 | Intent | Skill | Output |
 |---|---|---|
 | Understand a concept, compare technologies, inspect implementation impact, or see examples | `explore` | Chat response or optional technical exploration brief |
-| Establish shared understanding from an ambiguous initial request | `clarify` | Validated context brief |
-| Formalize a materially clear request | `requirements` | Validated PRD |
+| Establish shared understanding from an initial development request | `clarify` | Validated context brief |
+| Formalize a validated context brief | `requirements` | Validated PRD |
 | Design a validated PRD | `design` | Validated design specification |
 | Plan a validated design | `to-plan` | Validated, TDD-ready resumable implementation plan |
 
 The delivery path is:
 
 ```text
-clarify (optional) → requirements → design → to-plan
+explore (optional) → clarify → requirements → design → to-plan
 ```
 
-`explore` is standalone. Its findings enter the delivery path only after the user explicitly chooses to formalize the work. A user who already knows what they want can start directly with `requirements`.
+`explore` is standalone. Its findings enter the delivery path only after the user explicitly chooses to formalize the work. Every delivery request starts with `clarify`, including requests that appear clear.
 
 ## Usage
 
@@ -31,7 +31,7 @@ Use clarify to establish shared understanding of this development request.
 ```
 
 ```text
-Use requirements with docs/agentic-engineering/context/<date>/<subject>.md.
+Use requirements with a validated context brief at docs/agentic-engineering/context/<date>/<subject>.md.
 Use design with docs/agentic-engineering/prd/<date>/<subject>.md.
 Use to-plan with docs/agentic-engineering/specs/<date>/<subject>.md.
 ```

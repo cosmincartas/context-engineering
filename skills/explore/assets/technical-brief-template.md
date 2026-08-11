@@ -46,4 +46,4 @@ updated: "{{YYYY-MM-DD}}"
 
 ## Suggested Next Step
 
-{{Stop, run a named spike, use clarify, or proceed to requirements after explicit user confirmation. This is a recommendation, not a commitment.}}
+{{Stop, run a named spike, or use clarify. This is a recommendation, not a commitment to build. An exploration does not replace the required clarification step before delivery work.}}

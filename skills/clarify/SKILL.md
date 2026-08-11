@@ -1,6 +1,6 @@
 ---
 name: clarify
-description: Use when an initial development request is ambiguous or underspecified and needs shared understanding before requirements or design work begins. Produces a user-validated context brief that the requirements skill consumes. Do not use when the user asks for requirements, a design, or an implementation plan.
+description: Use for an initial development request before requirements, design, or implementation planning. Produces a user-validated context brief that the requirements skill consumes. Do not use for exploratory explanations or impact assessments.
 ---
 
 # Clarify
@@ -8,6 +8,8 @@ description: Use when an initial development request is ambiguous or underspecif
 Use ASD-STE100 Simplified Technical English when you ask questions or write output files.
 
 Turn an initial development prompt into a shared, user-validated understanding. Clarification establishes what the request means. It does not decide how to implement it.
+
+This is the required first stage for delivery work. A validated context brief is required before `requirements` can start.
 
 ## Invariants
 
@@ -36,7 +38,7 @@ The output is a context brief based on `assets/context-brief-template.md`.
 5. Ask one focused question at a time. Ask only questions whose answers materially change the brief or unblock requirements.
 6. Keep the brief current during the conversation. Distinguish user statements, repository evidence, inference, and unknowns.
 7. Present the Confirmed Understanding section as a concise restatement. Ask the user to validate it.
-8. On approval, validate the artifact and report its path as optional input to `requirements`.
+8. On approval, validate the artifact and report its path as the required input to `requirements`.
 
 ## Boundaries
 

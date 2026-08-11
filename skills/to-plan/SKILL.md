@@ -22,7 +22,7 @@ These hold in every stage:
 1. Require one saved design document path. If it is absent or unreadable, stop without drafting.
 2. Require `artifact: design` and `status: validated` in the design frontmatter. Pressure cannot waive eligibility.
 3. Read the linked PRD from `prd:` and require `artifact: prd` and `status: validated`. Collect the complete `FR-*`/`NFR-*`/`AC-*` set.
-4. Require `prd_sha256:` in the design and compare it with the exact linked PRD file. If the PRD links a context brief, require and verify its `context_sha256` as well. Stop on any mismatch because the artifact chain is stale.
+4. Require `prd_sha256:` in the design and compare it with the exact linked PRD file. Require the PRD to link a context brief with `context:` and `context_sha256:`; require that file to have `artifact: context-brief` and `status: validated`, and compare its exact-file SHA-256 with the PRD's `context_sha256`. Stop on any missing link, invalid status, unreadable file, or mismatch because the artifact chain is stale.
 5. If a plan already exists at the target path, compare its `design_sha256` and `prd_sha256`. Resume or revise a `draft` only with user approval. Do not rewrite an `executing`, `blocked`, or `completed` plan as a planning artifact; ask whether to create a new revision. Never silently overwrite it or create a collision suffix.
 6. Re-inspect the current repository from scratch: relevant implementation and callers, tests and observable contracts, public interfaces, and working-tree changes. Record the current commit as `repository_baseline`, or `unavailable` when Git metadata is absent.
 7. Compare repository evidence with design assumptions. Prefer current evidence for implementation facts, but never silently change validated product intent.

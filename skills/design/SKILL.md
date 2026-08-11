@@ -20,6 +20,8 @@ Require one saved PRD with `artifact: prd` and `status: validated`. Read it full
 - Rejected options and their provenance, when present.
 - Repository assumptions and the PRD baseline.
 
+Require the PRD to link one saved context brief in `context:` and its exact-file SHA-256 in `context_sha256:`. Read the linked file and require `artifact: context-brief` and `status: validated`. Compare its current exact-file SHA-256 with `context_sha256` and stop on a missing link, invalid status, unreadable file, or mismatch. A PRD without this validated context brief is not eligible for design.
+
 Record the SHA-256 hash of the exact PRD file in the design frontmatter. Stop on unresolved user-owned questions. Resolve design-owned questions as ADRs. If design work exposes a new product requirement, give it a provisional `FR-D*` identifier, record the gap, and ask the user to revise the PRD rather than silently changing scope. Do not validate the design until every `FR-D*` is incorporated into the PRD with normal acceptance traceability or removed from the design.
 
 Re-inspect relevant repository evidence. If material drift contradicts the validated PRD, show the evidence and ask before designing around it.
