@@ -1,22 +1,22 @@
 {
   "name": "agentic-workflow",
   "version": "0.1.0",
-  "description": "Turn development requests into approved specifications and validated implementation plans.",
+  "description": "Turn development requests into shared context, validated specifications, and TDD-ready implementation plans.",
   "author": {
     "name": "cosmincartas",
     "url": "https://github.com/cosmincartas"
   },
-  "homepage": "https://github.com/cosmincartas/agentic-engineering",
-  "repository": "https://github.com/cosmincartas/agentic-engineering",
-  "keywords": ["planning", "specifications", "agentic-engineering"],
+  "homepage": "https://github.com/cosmincartas/context-engineering",
+  "repository": "https://github.com/cosmincartas/context-engineering",
+  "keywords": ["planning", "specifications", "context-engineering"],
   "skills": "./skills/",
   "interface": {
     "displayName": "Agentic Workflow",
-    "shortDescription": "Create approved specifications and validated plans.",
-    "longDescription": "Turn development requests into approved, resumable specifications and validated implementation plans.",
+    "shortDescription": "Create validated context, specifications, and TDD-ready plans.",
+    "longDescription": "Clarify requests, design validated solutions, and produce resumable implementation plans for external TDD execution.",
     "developerName": "cosmincartas",
     "category": "Productivity",
     "capabilities": [],
-    "defaultPrompt": "Clarify this development request and create an approved specification."
+    "defaultPrompt": "Use the workflow to clarify this development request before requirements, design, and implementation planning."
   }
 }

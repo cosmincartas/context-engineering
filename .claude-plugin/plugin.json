@@ -1,13 +1,13 @@
 {
   "name": "agentic-workflow",
   "version": "0.1.0",
-  "description": "Turn development requests into approved specifications and validated implementation plans.",
+  "description": "Turn development requests into shared context, validated specifications, and TDD-ready implementation plans.",
   "author": {
     "name": "cosmincartas",
     "url": "https://github.com/cosmincartas"
   },
-  "homepage": "https://github.com/cosmincartas/agentic-engineering",
-  "repository": "https://github.com/cosmincartas/agentic-engineering",
-  "keywords": ["planning", "specifications", "agentic-engineering"],
+  "homepage": "https://github.com/cosmincartas/context-engineering",
+  "repository": "https://github.com/cosmincartas/context-engineering",
+  "keywords": ["planning", "specifications", "context-engineering"],
   "skills": "./skills/"
 }

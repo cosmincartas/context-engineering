@@ -4,12 +4,12 @@
     "name": "cosmincartas",
     "url": "https://github.com/cosmincartas"
   },
-  "description": "Approved specifications and validated implementation plans.",
+  "description": "Shared context, validated specifications, and TDD-ready implementation plans.",
   "plugins": [
     {
       "name": "agentic-workflow",
       "source": "./",
-      "description": "Turn development requests into approved specifications and validated implementation plans."
+      "description": "Turn development requests into shared context, validated specifications, and TDD-ready implementation plans."
     }
   ]
 }

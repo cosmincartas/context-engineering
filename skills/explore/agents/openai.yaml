@@ -1,0 +1,7 @@
+interface:
+  display_name: "Explore"
+  short_description: "Explain concepts, examples, and implementation impact"
+  default_prompt: "Use $explore to investigate this technical question without assuming implementation."
+
+policy:
+  allow_implicit_invocation: true

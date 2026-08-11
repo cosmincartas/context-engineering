@@ -8,7 +8,7 @@
       "name": "agentic-workflow",
       "source": {
         "source": "url",
-        "url": "https://github.com/cosmincartas/agentic-engineering",
+        "url": "https://github.com/cosmincartas/context-engineering",
         "ref": "main"
       },
       "policy": {
