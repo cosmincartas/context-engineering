@@ -1,6 +1,6 @@
 ---
 name: design
-description: Use when the user wants a technical design, architecture document, or solution specification for a validated PRD. Produce a user-validated design with explicit contracts, behavior, failures, decisions, and bidirectional traceability to every FR, NFR, and acceptance criterion. Do not use for exploratory explanations or visual design.
+description: Use when the user wants a technical design, architecture document, or solution specification, typically from a validated PRD. Produces a user-validated design document that the to-plan skill consumes. Do not use for exploratory explanations or UI/visual design.
 ---
 
 # Solution Design

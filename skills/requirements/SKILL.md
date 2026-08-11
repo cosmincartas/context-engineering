@@ -1,6 +1,6 @@
 ---
 name: requirements
-description: Use when the user wants a PRD, product specification, user stories, or formal requirements. Consume a validated context brief from the clarify skill when one exists, or start directly when the request is already materially clear. Produce a user-validated PRD with stable requirement and acceptance-criterion identifiers and complete traceability.
+description: Use when the user wants a PRD, product specification, user stories, or formal requirements, or wants to formalize a clarified request into requirements. Produces a user-validated PRD that the design skill consumes. Do not use for exploratory questions or technical design.
 ---
 
 # Requirements Definition

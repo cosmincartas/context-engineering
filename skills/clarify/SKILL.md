@@ -1,6 +1,6 @@
 ---
 name: clarify
-description: Use when an initial development request needs shared understanding before requirements or design. Inspect relevant repository evidence, identify ambiguities, assumptions, constraints, scope, and non-goals, ask focused questions, and produce a user-validated context brief. Do not write requirements, solution design, or implementation plans.
+description: Use when an initial development request is ambiguous or underspecified and needs shared understanding before requirements or design work begins. Produces a user-validated context brief that the requirements skill consumes. Do not use when the user asks for requirements, a design, or an implementation plan.
 ---
 
 # Clarify

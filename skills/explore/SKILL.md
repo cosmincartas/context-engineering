@@ -1,6 +1,6 @@
 ---
 name: explore
-description: Use when the user wants to understand a technical concept, compare technical options, see code examples, or assess the impact of adopting something in the current repository. Produces an evidence-backed explanation or optional technical exploration brief without committing to requirements, design, or implementation.
+description: Use when the user wants to understand a technical concept, compare options, see code examples, or assess the impact of adopting something in the current repository. Produces an explanation or exploration brief. Do not use when the user has a settled direction and wants requirements, design, or implementation.
 ---
 
 # Explore
