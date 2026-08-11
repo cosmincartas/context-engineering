@@ -53,6 +53,6 @@ The brief is ready for validation only when it states:
 - The initial request and why it matters.
 - Current behavior with evidence, or a greenfield statement.
 - The desired outcome and affected users.
-- In-scope and out-of-scope boundaries.
+- In-scope and out-of-scope boundaries, with inferred entries confirmed by the user.
 - Known constraints, assumptions, and unresolved questions.
 - A concise Confirmed Understanding that the user can approve or correct.

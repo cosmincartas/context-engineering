@@ -66,7 +66,7 @@ Never silently overwrite a validated PRD. Ask whether the user wants a revision 
 
 **Functional Requirements.** Use stable `FR-*` identifiers. Each row contains one checkable behavior and traces to at least one story. Use “must.” Mark requirements that rely on an unverified assumption.
 
-**Non-Functional Requirements.** Use stable `NFR-*` identifiers. Each requirement has a number, limit, or binary check. Do not disguise features as quality requirements.
+**Non-Functional Requirements.** Use stable `NFR-*` identifiers. Each requirement has a number, limit, or binary check. Do not disguise features as quality requirements. Complete the Category coverage table: give each listed category one or more `NFR-*` rows, or mark it "Not applicable" with a reason. If a numeric limit does not come from a user statement or repository evidence, add a user-owned `Q-*` entry that asks the user to confirm the limit.
 
 **Acceptance Criteria.** Use stable `AC-*` identifiers. Each criterion maps to `US-*` and `FR-*`/`NFR-*` identifiers and contains an observable action and result.
 
@@ -83,6 +83,8 @@ Before validation, make sure that:
 - Every `AC-*` names the requirements it verifies and has an observable result.
 - Every Goal clause answers the Problem, and every in-scope Problem statement has a Goal clause.
 - Every NFR is measurable or binary.
+- Every category in the NFR Category coverage table maps to `NFR-*` rows or has a written reason it does not apply.
+- Every NFR numeric limit has user or repository provenance, or a user-owned `Q-*` entry that asks the user to confirm it.
 - Repository claims cite evidence.
 - Assumptions are marked and unresolved product or scope decisions are not hidden.
 - The prose follows the STE rules unless the user requested standard English.

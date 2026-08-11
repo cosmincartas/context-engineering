@@ -82,7 +82,19 @@ updated: "{{YYYY-MM-DD}}"
 |---|---|---|---|---|
 | F-1 | {{Relevant failure}} | {{detector}} | {{designed response}} | {{observable check}} |
 
-## 8. Architecture Decision Records
+## 8. Cross-Cutting Concerns
+
+<!-- Each row gets a design position or "Not applicable" with a reason. An empty row blocks validation. -->
+
+| Concern | Design position |
+|---|---|
+| Security — authorization | {{Who can do each operation, or "Not applicable" and reason}} |
+| Security — malicious input | {{How the system detects and refuses hostile input, or "Not applicable" and reason}} |
+| Privacy | {{Personal data exposure, retention, and deletion, or "Not applicable" and reason}} |
+| Operability — monitoring | {{How failures become visible in operation, or "Not applicable" and reason}} |
+| Operability — deployment and configuration | {{Rollout and configuration effects, or "Not applicable" and reason}} |
+
+## 9. Architecture Decision Records
 
 ### ADR-1 — {{Decision title}}
 
@@ -92,7 +104,7 @@ updated: "{{YYYY-MM-DD}}"
 - **Reasons:** {{Why it wins and why alternatives lose.}}
 - **Consequences:** {{Accepted effects and risks.}}
 
-## 9. Traceability and Verification Map
+## 10. Traceability and Verification Map
 
 | Source | Design sections | Verification |
 |---|---|---|
@@ -103,7 +115,7 @@ updated: "{{YYYY-MM-DD}}"
 
 A source with no row blocks validation. A design element with no source is scope creep unless it records an existing repository constraint.
 
-## 10. Deferred and Out of Scope
+## 11. Deferred and Out of Scope
 
 - **Deferred:** {{Item and promotion trigger.}}
 - **Never:** {{Excluded item and reason.}}
