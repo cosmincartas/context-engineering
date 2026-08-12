@@ -3,9 +3,9 @@ schema_version: 1
 artifact: implementation-plan
 subject: "{{subject}}"
 status: draft
-design: "{{design path}}"
+design: "design.md"
 design_sha256: "{{design content hash}}"
-prd: "{{prd path}}"
+prd: "prd.md"
 prd_sha256: "{{PRD content hash}}"
 repository_baseline: "{{commit or unavailable}}"
 working_tree: "{{clean or summary of existing changes}}"
@@ -20,7 +20,7 @@ updated: "{{YYYY-MM-DD}}"
 Instructions for any implementing agent, in any session:
 
 1. Start only when this plan's `status` is `validated`, `executing`, or `blocked`.
-2. Compare the exact design and PRD files with `design_sha256` and `prd_sha256`. Also require and verify the design's PRD hash and the PRD's validated context brief and exact `context_sha256` hash. Stop on any missing link or mismatch.
+2. Compare the exact design and PRD files in this folder with `design_sha256` and `prd_sha256`. Also require and verify the design's `prd_sha256` and the PRD's `context_sha256` against their exact files. Stop on any missing link or mismatch.
 3. Review the plan and current repository before editing. Stop and ask when the plan has a critical gap or material repository drift.
 4. Resume the single `In Progress` task. Otherwise, work from the first task in plan order whose status is not `Done`. Never skip unresolved blocked work.
 5. For production-behavior changes, use test-driven development: observe RED before production code, implement the minimum GREEN behavior, then REFACTOR while tests remain green.

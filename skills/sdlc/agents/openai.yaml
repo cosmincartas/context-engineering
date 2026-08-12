@@ -1,0 +1,7 @@
+interface:
+  display_name: "SDLC"
+  short_description: "Plan delivery work through context, requirements, design, and implementation planning"
+  default_prompt: "Use $sdlc to plan this work end to end."
+
+policy:
+  allow_implicit_invocation: true

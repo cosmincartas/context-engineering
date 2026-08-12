@@ -1,7 +1,0 @@
-interface:
-  display_name: "Requirements"
-  short_description: "Create a validated, traceable product requirements document"
-  default_prompt: "Use $requirements to turn this validated context brief into a PRD."
-
-policy:
-  allow_implicit_invocation: true

@@ -1,7 +1,0 @@
-interface:
-  display_name: "To Plan"
-  short_description: "Build resumable implementation plans from validated design docs"
-  default_prompt: "Use $to-plan with the path to a validated design document."
-
-policy:
-  allow_implicit_invocation: false

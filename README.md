@@ -7,18 +7,15 @@ Model-agnostic skills turn an initial development prompt into reusable context, 
 | Intent | Skill | Output |
 |---|---|---|
 | Understand a concept, compare technologies, inspect implementation impact, or see examples | `explore` | Chat response or optional technical exploration brief |
-| Establish shared understanding from an initial development request | `clarify` | Validated context brief |
-| Formalize a validated context brief | `requirements` | Validated PRD |
-| Design a validated PRD | `design` | Validated design specification |
-| Plan a validated design | `to-plan` | Validated, TDD-ready resumable implementation plan |
+| Plan delivery work, from scope isolation to an implementation plan, or resume a planning topic | `sdlc` | Validated context brief, PRD, design specification, and implementation plan |
 
-The delivery path is:
+The delivery pipeline lives in one skill:
 
 ```text
-explore (optional) → clarify → requirements → design → to-plan
+explore (optional) → sdlc: context → requirements → design → plan
 ```
 
-`explore` is standalone. Its findings enter the delivery path only after the user explicitly chooses to formalize the work. Every delivery request starts with `clarify`, including requests that appear clear.
+`explore` is standalone. Its findings enter the delivery path only after the user explicitly chooses to formalize the work. Every delivery topic starts with the context phase, including requests that appear clear. Each phase ends with a user-validated artifact, and the topic can stop and resume at any phase.
 
 ## Usage
 
@@ -27,28 +24,25 @@ Use explore to explain event sourcing and assess what adopting it would affect h
 ```
 
 ```text
-Use clarify to establish shared understanding of this development request.
-```
-
-```text
-Use requirements with a validated context brief at docs/agentic-engineering/context/<date>/<subject>.md.
-Use design with docs/agentic-engineering/prd/<date>/<subject>.md.
-Use to-plan with docs/agentic-engineering/specs/<date>/<subject>.md.
+Use sdlc to plan this development request.
+Use sdlc to resume the payment-retries topic.
 ```
 
 Named-skill invocation syntax varies by runtime.
 
 ## Artifacts
 
-| Artifact | Location | Lifecycle |
+One topic is one folder: `docs/agentic-engineering/<subject>/`.
+
+| Artifact | File | Lifecycle |
 |---|---|---|
 | Technical exploration, when requested | `docs/agentic-engineering/explorations/` | Optional draft → validated |
-| Context brief | `docs/agentic-engineering/context/` | Draft checkpoints → validated |
-| PRD | `docs/agentic-engineering/prd/` | Draft checkpoints → validated |
-| Design specification | `docs/agentic-engineering/specs/` | Draft checkpoints → validated |
-| Implementation plan | `docs/agentic-engineering/plans/` | Draft → validated; task status and evidence during external execution |
+| Context brief | `<subject>/context-brief.md` | Draft checkpoints → validated |
+| PRD | `<subject>/prd.md` | Draft checkpoints → validated |
+| Design specification | `<subject>/design.md` | Draft checkpoints → validated |
+| Implementation plan | `<subject>/plan.md` | Draft → validated; task status and evidence during external execution |
 
-Artifacts are not committed without explicit user consent. Ignored artifacts resume only in the current working copy; commit them when recovery across machines matters.
+Each artifact records the SHA-256 hash of its exact upstream file, so a change to a validated artifact marks everything downstream as stale. Artifacts are not committed without explicit user consent. Ignored artifacts resume only in the current working copy; commit them when recovery across machines matters.
 
 ## Implementation
 
@@ -76,7 +70,7 @@ copilot plugin install cosmincartas/context-engineering
 pi install git:github.com/cosmincartas/context-engineering
 ```
 
-Explicit invocation syntax is host-specific: `$agentic-workflow:explore` in Codex, `/agentic-workflow:explore` in Claude Code, `/agentic-workflow/explore` in Copilot, and `/skill:explore` in Pi.
+Explicit invocation syntax is host-specific: `$agentic-workflow:sdlc` in Codex, `/agentic-workflow:sdlc` in Claude Code, `/agentic-workflow/sdlc` in Copilot, and `/skill:sdlc` in Pi.
 
 ## Releases
 

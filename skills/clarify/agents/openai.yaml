@@ -1,7 +1,0 @@
-interface:
-  display_name: "Clarify"
-  short_description: "Create shared understanding from an initial request"
-  default_prompt: "Use $clarify to establish and save a shared understanding of this development request."
-
-policy:
-  allow_implicit_invocation: true

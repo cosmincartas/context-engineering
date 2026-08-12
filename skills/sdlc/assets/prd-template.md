@@ -4,7 +4,7 @@ artifact: prd
 subject: "{{subject}}"
 status: draft
 checkpoint: framing
-context: "{{validated context brief path}}"
+context: "context-brief.md"
 context_sha256: "{{context brief content hash}}"
 repository_baseline: "{{commit or unavailable}}"
 created: "{{YYYY-MM-DD}}"
@@ -45,9 +45,9 @@ updated: "{{YYYY-MM-DD}}"
 
 ## 6. Non-Functional Requirements
 
-| ID | Category | Requirement | Provenance |
-|---|---|---|---|
-| NFR-1 | {{category}} | The system must {{measurable limit or binary condition}}. | {{source}} |
+| ID | Category | Requirement | Derived from | Provenance |
+|---|---|---|---|---|
+| NFR-1 | {{category}} | The system must {{measurable limit or binary condition}}. | {{Goal clause, scope boundary, US-*, or constraint}} | {{source}} |
 
 ### Category coverage
 

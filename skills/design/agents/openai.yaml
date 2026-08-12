@@ -1,7 +1,0 @@
-interface:
-  display_name: "Design"
-  short_description: "Design a validated PRD with contracts and traceability"
-  default_prompt: "Use $design with the path to a validated PRD."
-
-policy:
-  allow_implicit_invocation: true

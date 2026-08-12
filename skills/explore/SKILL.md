@@ -32,7 +32,7 @@ A request can combine modes. Ask one clarifying question only when the requested
    - Impact: name affected entry points, contracts, data, dependencies, tests, operations, security, and migration concerns when applicable.
    - Comparison: include only viable options. Give the strongest relevant advantage and disadvantage of each.
    - Example: provide the smallest idiomatic example. State whether it was executed or is illustrative.
-4. **Close without manufacturing work.** Summarize what is known, what remains unknown, and the smallest sensible next step: stop, run a named spike, or use `clarify`. An exploration does not replace the required clarification step before delivery work.
+4. **Close without manufacturing work.** Summarize what is known, what remains unknown, and the smallest sensible next step: stop, run a named spike, or use `sdlc`. An exploration does not replace the required context phase before delivery work.
 
 ## Output
 

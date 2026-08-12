@@ -4,7 +4,7 @@ artifact: design
 subject: "{{subject}}"
 status: draft
 checkpoint: scope
-prd: "{{validated PRD path}}"
+prd: "prd.md"
 prd_sha256: "{{PRD content hash}}"
 repository_baseline: "{{commit or unavailable}}"
 created: "{{YYYY-MM-DD}}"
@@ -98,9 +98,9 @@ updated: "{{YYYY-MM-DD}}"
 
 ### ADR-1 — {{Decision title}}
 
-- **Context:** {{Q-* or new technical tension.}}
-- **Options:** {{Realistic options.}}
-- **Decision:** {{Selected option.}}
+- **Context:** {{Q-* or new technical tension. Record a "you decide" delegation here.}}
+- **Options:** {{Realistic options presented at the decision gate.}}
+- **Decision:** {{Selected option and who selected it.}}
 - **Reasons:** {{Why it wins and why alternatives lose.}}
 - **Consequences:** {{Accepted effects and risks.}}
 
