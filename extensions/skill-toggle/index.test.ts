@@ -127,8 +127,8 @@ test("validates command arguments and opens with the current skill list", async 
 	});
 });
 
-test("reloads selection for startup, new, resume, and fork session starts", async () => {
-	for (const reason of ["startup", "new", "resume", "fork"] as const) {
+test("reloads selection for startup, reload, new, resume, and fork session starts", async () => {
+	for (const reason of ["startup", "reload", "new", "resume", "fork"] as const) {
 		await withAgentDir(async (agentDir) => {
 			const statePath = join(agentDir, stateFileName);
 			const discovered = [skill("reloadable")];
