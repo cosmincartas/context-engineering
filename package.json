@@ -1,0 +1,15 @@
+{
+  "name": "pi-session-skill-toggle",
+  "type": "module",
+  "scripts": {
+    "test": "node --test extensions/skill-toggle/index.test.ts extensions/skill-toggle/state/index.test.ts extensions/skill-toggle/ui/index.test.ts"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "@earendil-works/pi-tui": "0.84.2"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "@earendil-works/pi-tui": "0.84.2"
+  }
+}
