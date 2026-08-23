@@ -8,12 +8,16 @@ Model-agnostic skills turn an initial development prompt into reusable context, 
 |---|---|---|
 | Understand a concept, compare technologies, inspect implementation impact, or see examples | `explore` | Chat response or optional technical exploration brief |
 | Plan delivery work, from scope isolation to an implementation plan, or resume a planning topic | `sdlc` | Validated context brief, PRD, design specification, and implementation plan |
+| Pair on delivery work with per-section and per-change review, through planning and execution | `pair-sdlc` | The same validated artifacts, plus an executed plan with recorded evidence |
 
-The delivery pipeline lives in one skill:
+The delivery pipeline lives in one skill, with a paired variant:
 
 ```text
-explore (optional) → sdlc: context → requirements → design → plan
+explore (optional) → sdlc:      context → requirements → design → plan
+explore (optional) → pair-sdlc: context → requirements → design → plan → execute
 ```
+
+`pair-sdlc` is a full fork of `sdlc` for experimenting with different guards per phase; changes to it never affect `sdlc`. It adds a pairing rhythm — the user approves each artifact section as it is drafted and each code change before it is applied — and a fifth phase that executes the validated plan.
 
 `explore` is standalone. Its findings enter the delivery path only after the user explicitly chooses to formalize the work. Every delivery topic starts with the context phase, including requests that appear clear. Each phase ends with a user-validated artifact, and the topic can stop and resume at any phase.
 
@@ -26,6 +30,10 @@ Use explore to explain event sourcing and assess what adopting it would affect h
 ```text
 Use sdlc to plan this development request.
 Use sdlc to resume the payment-retries topic.
+```
+
+```text
+Use pair-sdlc to pair with me on this development request.
 ```
 
 Named-skill invocation syntax varies by runtime.
@@ -46,7 +54,9 @@ Each artifact records the SHA-256 hash of its exact upstream file, so a change t
 
 ## Implementation
 
-This package stops at the validated implementation plan. It does not ship an execution skill.
+The `sdlc` skill stops at the validated implementation plan. The `pair-sdlc` skill continues into paired execution as its fifth phase.
+
+For plans produced by `sdlc`:
 
 With Superpowers, use `superpowers:subagent-driven-development` when subagents are available, or `superpowers:executing-plans` otherwise. Apply `superpowers:test-driven-development` to each production-behavior task. Superpowers is an external package and is not bundled here.
 
