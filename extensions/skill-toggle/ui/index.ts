@@ -39,7 +39,9 @@ export async function showSkillToggle(
 							list.updateValue(id, previous ? "enabled" : "disabled");
 							errorText.setText(`error: ${snapshot.error}`);
 						} else {
-							committed.set(id, newValue === "enabled");
+							const committedValue = snapshot.skills.find((item) => item.name === id)?.selected ?? previous;
+							committed.set(id, committedValue);
+							list.updateValue(id, committedValue ? "enabled" : "disabled");
 							errorText.setText("");
 						}
 					} catch (error) {

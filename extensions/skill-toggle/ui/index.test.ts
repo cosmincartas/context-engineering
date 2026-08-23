@@ -72,6 +72,46 @@ test("shows a failed-write error and restores the committed row", async () => {
 	);
 });
 
+test("renders the committed value after repeated input during a delayed write", async () => {
+	let releaseWrite!: () => void;
+	let writeStarted!: () => void;
+	const started = new Promise<void>((resolve) => {
+		writeStarted = resolve;
+	});
+	const finished = new Promise<void>((resolve) => {
+		releaseWrite = resolve;
+	});
+	const values = { one: true };
+	const selection = {
+		sync() {},
+		isSelected(name: string) { return values[name as keyof typeof values] ?? false; },
+		snapshot() { return { skills: [{ name: "one", selected: values.one }] }; },
+		async setSelected(name: string, selected: boolean) {
+			writeStarted();
+			await finished;
+			values[name as keyof typeof values] = selected;
+		},
+	};
+	let rendered: string[] = [];
+
+	await showSkillToggle(
+		contextFor([skill("one")], async (factory) => {
+			const component = factory({ requestRender() {} }, {}, {}, () => undefined) as { render(width: number): string[]; handleInput(data: string): void };
+			component.handleInput("\r");
+			await started;
+			component.handleInput("\r");
+			releaseWrite();
+			await new Promise((resolve) => setTimeout(resolve, 10));
+			rendered = component.render(100);
+		}),
+		selection,
+	);
+
+	assert.match(rendered.join("\n"), /one/);
+	assert.match(rendered.join("\n"), /disabled/);
+	assert.equal(values.one, false);
+});
+
 test("does not let a second toggle race the first write", async () => {
 	let calls = 0;
 	const values: Record<string, boolean> = { one: true, two: true };

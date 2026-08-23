@@ -181,6 +181,36 @@ test("a successful write recovers from a read failure", async () => {
 	});
 });
 
+test("invalid discovered names are rejected and never serialized", async () => {
+	await withAgentDir(async (agentDir) => {
+		const statePath = join(agentDir, stateFileName);
+		const selection = await loadSkillSelection();
+		selection.sync([skill("valid-skill"), skill("invalid--skill")]);
+
+		await selection.setSelected("valid-skill", false);
+		const persisted = await readFile(statePath, "utf8");
+		assert.deepEqual(JSON.parse(persisted), {
+			version: 1,
+			skills: { "valid-skill": false },
+		});
+
+		await selection.setSelected("invalid--skill", false);
+		assert.equal(selection.isSelected("valid-skill"), false);
+		assert.equal(selection.isSelected("invalid--skill"), true);
+		assert.match(selection.snapshot().error ?? "", /invalid selection/i);
+		assert.equal(await readFile(statePath, "utf8"), persisted);
+
+		const reloaded = await loadSkillSelection();
+		reloaded.sync([skill("valid-skill"), skill("invalid--skill")]);
+		assert.deepEqual(reloaded.snapshot(), {
+			skills: [
+				{ name: "valid-skill", selected: false },
+				{ name: "invalid--skill", selected: true },
+			],
+		});
+	});
+});
+
 test("a temporary write failure keeps the persisted and in-memory selection", async () => {
 	await withAgentDir(async (agentDir) => {
 		const statePath = join(agentDir, stateFileName);

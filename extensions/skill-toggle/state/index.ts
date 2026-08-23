@@ -63,7 +63,9 @@ class FileSkillSelection implements SkillSelection {
 
 		const next = new Map(this.saved);
 		for (const skill of this.skills) {
-			next.set(skill.name, this.resolve(skill.name, skill.disableModelInvocation));
+			if (skillNamePattern.test(skill.name)) {
+				next.set(skill.name, this.resolve(skill.name, skill.disableModelInvocation));
+			}
 		}
 		next.set(name, selected);
 
