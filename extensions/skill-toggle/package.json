@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "test": "node --test extensions/skill-toggle/index.test.ts extensions/skill-toggle/state/index.test.ts extensions/skill-toggle/ui/index.test.ts"
+    "test": "node --test index.test.ts state/index.test.ts ui/index.test.ts"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "0.84.2",
