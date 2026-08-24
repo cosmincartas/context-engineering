@@ -1,0 +1,16 @@
+{
+  "name": "pi-session-skill-toggle",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --test index.test.ts state/index.test.ts ui/index.test.ts"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "@earendil-works/pi-tui": "0.84.2"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "@earendil-works/pi-tui": "0.84.2"
+  }
+}
