@@ -1,11 +1,13 @@
 import {
   Editor,
+  getKeybindings,
   Key,
   matchesKey,
   truncateToWidth,
   type Component,
   type EditorTheme,
   type Focusable,
+  type Keybinding,
   type TUI,
   visibleWidth,
   wrapTextWithAnsi,
@@ -57,6 +59,10 @@ export function createQuestionnaireComponent(
   }
 
   function closeEditor(): void {
+    if (pasteInputActive) {
+      editor.handleInput(BRACKETED_PASTE_END);
+      pasteInputActive = false;
+    }
     editingQuestionIndex = undefined;
     editor.focused = false;
     editor.setText("");
@@ -130,6 +136,11 @@ export function createQuestionnaireComponent(
     if (completed) return;
 
     if (editingQuestionIndex !== undefined) {
+      if (pasteInputActive || data.includes(BRACKETED_PASTE_START)) {
+        editor.handleInput(sanitizeEditorInput(data));
+        refresh();
+        return;
+      }
       if (matchesKey(data, Key.ctrl("c"))) {
         closeEditor();
         dispatch({ type: "cancel" });
@@ -308,43 +319,13 @@ export function createQuestionnaireComponent(
 
 const BRACKETED_PASTE_START = "\x1b[200~";
 const BRACKETED_PASTE_END = "\x1b[201~";
-const EDITOR_CONTROL_KEYS = [
-  Key.escape,
-  Key.enter,
-  Key.return,
-  Key.tab,
-  Key.backspace,
-  Key.delete,
-  Key.insert,
-  Key.clear,
-  Key.home,
-  Key.end,
-  Key.pageUp,
-  Key.pageDown,
-  Key.up,
-  Key.down,
-  Key.left,
-  Key.right,
-  Key.ctrl("a"),
-  Key.ctrl("b"),
-  Key.ctrl("c"),
-  Key.ctrl("d"),
-  Key.ctrl("e"),
-  Key.ctrl("f"),
-  Key.ctrl("h"),
-  Key.ctrl("k"),
-  Key.ctrl("n"),
-  Key.ctrl("p"),
-  Key.ctrl("u"),
-  Key.ctrl("w"),
-  Key.ctrl("y"),
-];
-
 function isEditorControlKey(data: string): boolean {
-  return (
-    data.startsWith("\x1b") ||
-    EDITOR_CONTROL_KEYS.some((key) => matchesKey(data, key))
-  );
+  if (data.startsWith("\x1b")) return true;
+
+  const keybindings = getKeybindings();
+  return Object.keys(keybindings.getResolvedBindings())
+    .filter((keybinding) => keybinding.startsWith("tui."))
+    .some((keybinding) => keybindings.matches(data, keybinding as Keybinding));
 }
 
 function escapeControls(text: string): string {

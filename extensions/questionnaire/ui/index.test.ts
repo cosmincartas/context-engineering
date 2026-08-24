@@ -291,6 +291,49 @@ test("forwards editor arrows and normalizes submitted control characters", () =>
   assert.match(component.render(80).join("\n"), /abX\\u0085c/);
 });
 
+test("forwards the current Pi Editor control bindings", () => {
+  const { component } = makeComponent(questions.slice(0, 1));
+
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.enter);
+  component.handleInput?.("abc");
+  component.handleInput?.("\u001d");
+  component.handleInput?.("a");
+  component.handleInput?.(input.enter);
+  component.handleInput?.(input.enter);
+
+  const reopened = component.render(80).join("\n").split("\n");
+  const editorLine = reopened.find(
+    (line) => line.includes("abc") && !line.includes("Enter a custom answer."),
+  );
+  assert.equal(editorLine?.replace(/\x1b\[[0-9;]*m/g, "").trim(), "abc");
+  assert.doesNotMatch(component.render(80).join("\n"), /\\u001D/);
+});
+
+test("sanitizes fragmented pasted actions before questionnaire routing", () => {
+  const { component, outcomes } = makeComponent(questions.slice(0, 1));
+
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.enter);
+  component.handleInput?.("\x1b[200~");
+  component.handleInput?.("\x1b");
+  component.handleInput?.("\u0003");
+  component.handleInput?.("payload");
+  component.handleInput?.("\x1b[201~");
+
+  const beforeSubmit = component.render(80).join("\n");
+  assert.match(beforeSubmit, /\\u001B\\u0003payload/);
+  assert.deepEqual(outcomes, []);
+
+  component.handleInput?.(input.enter);
+  component.handleInput?.(input.enter);
+  const afterSubmit = component.render(80).join("\n");
+  assert.match(afterSubmit, /\\u001B/);
+  assert.match(afterSubmit, /\\u0003/);
+});
+
 test("sanitizes pasted controls before Editor render and keeps them after submit", () => {
   const { component } = makeComponent(questions.slice(0, 1));
 
