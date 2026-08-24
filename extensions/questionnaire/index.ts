@@ -233,7 +233,7 @@ function renderCall(args: QuestionnaireRequest, theme: Theme): Text {
     .join(", ");
   const suffix = labels.length > 0 ? ` (${labels})` : "";
   return new Text(
-    `${theme.fg("toolTitle", theme.bold("Questionnaire"))} ${theme.fg(
+    `${theme.fg("toolTitle", theme.bold("AskUserQuestion"))} ${theme.fg(
       "muted",
       `${count} question${count === 1 ? "" : "s"}${suffix}`,
     )}`,
@@ -273,8 +273,8 @@ function renderResult(
 
 export default function questionnaire(pi: ExtensionAPI): void {
   pi.registerTool({
-    name: "questionnaire",
-    label: "Questionnaire",
+    name: "AskUserQuestion",
+    label: "AskUserQuestion",
     description: "Ask one to four related questions in a guided terminal flow.",
     executionMode: "sequential",
     parameters: QuestionnaireParameters,

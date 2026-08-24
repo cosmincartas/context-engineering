@@ -108,13 +108,13 @@ function assertSerializedResult(result: any): void {
   assert.deepEqual(resultFromJson(result), result.details);
 }
 
-test("registers exactly one questionnaire tool with a closed bounded schema", () => {
+test("registers exactly one AskUserQuestion tool with a closed bounded schema", () => {
   const tool = registeredTool();
   const questionSchema = tool.parameters.properties.questions.items;
   const optionSchema = questionSchema.properties.options.items;
 
-  assert.equal(tool.name, "questionnaire");
-  assert.equal(tool.label, "Questionnaire");
+  assert.equal(tool.name, "AskUserQuestion");
+  assert.equal(tool.label, "AskUserQuestion");
   assert.equal((tool as any).executionMode, "sequential");
   assert.equal(tool.parameters.additionalProperties, false);
   assert.equal(tool.parameters.properties.questions.minItems, 1);
@@ -352,7 +352,7 @@ test("does not replace a submitted result when abort arrives after completion", 
 test("renders visible call and terminal status components", async () => {
   const tool = registeredTool();
   const callText = tool.renderCall(validRequest, plainTheme, {}).render(120).join("\n");
-  assert.match(callText, /Questionnaire/);
+  assert.match(callText, /AskUserQuestion/);
   assert.match(callText, /1 question/);
 
   for (const details of [

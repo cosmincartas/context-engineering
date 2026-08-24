@@ -10,10 +10,10 @@ These rules apply in every phase. The phase references name their gates; these r
 
 ## Question discipline
 
-4. Ask one focused question at a time. Exception, phases 1 and 2 only: when a structured multi-question tool is available (for example `questionnaire` in Pi or `AskUserQuestion` in Claude Code), batch up to four related questions that deepen one topic into a single call. Never mix unrelated topics in one batch. If no such tool is available, or the call returns cancelled or unsupported, fall back to one question at a time in chat.
+4. In phases 1 and 2, always use `AskUserQuestion` for every user question. Batch up to four related questions that deepen one topic. Never mix unrelated topics in one batch. If the user cancels, stop the phase and wait for direction. In phases 3 and 4, ask one focused question at a time in chat.
 5. Ask the question whose answer most changes the shared understanding or unblocks the current phase.
 6. Do not ask for details that belong to a later phase.
-7. For a genuine choice, offer concrete options and recommend one when evidence supports it; keep an open response available. For a factual question, ask it directly; do not manufacture options.
+7. For a genuine choice, offer concrete options and recommend one when evidence supports it; keep Other available. For a factual question, include only evidence-backed answers. Use `Unknown` and `Skip` when you need two options, and let the user answer through Other. Do not invent domain answers.
 8. If the user does not know, record the unknown and its consequence. Do not force a guess.
 
 ## Challenge duty
