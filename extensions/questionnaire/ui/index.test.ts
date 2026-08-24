@@ -409,3 +409,73 @@ test("keeps embedded Editor lines within every supplied width", () => {
     }
   }
 });
+
+test("final actions focus Confirm first and move between Confirm and Cancel", () => {
+  const { component } = makeComponent(questions.slice(0, 2));
+
+  component.handleInput?.(input.right);
+  component.handleInput?.(input.right);
+  let output = component.render(80).join("\\n");
+  assert.match(output, /> Confirm/);
+  assert.match(output, /  Cancel/);
+
+  component.handleInput?.(input.down);
+  output = component.render(80).join("\\n");
+  assert.match(output, /> Cancel/);
+  assert.doesNotMatch(output, /> Confirm/);
+
+  component.handleInput?.(input.up);
+  assert.match(component.render(80).join("\\n"), /> Confirm/);
+});
+
+test("final Confirm submits ordered answers, defaults missing answers, and shows no summary", () => {
+  const { component, outcomes } = makeComponent(questions.slice(0, 2));
+
+  component.handleInput?.(input.enter);
+  component.handleInput?.(input.right);
+  component.handleInput?.(input.right);
+
+  const finalOutput = component.render(80).join("\\n");
+  assert.doesNotMatch(finalOutput, /Iterative/);
+  assert.doesNotMatch(finalOutput, /Which delivery approach should we use\\?/);
+  for (const width of [1, 2, 5, 12, 24, 40, 80]) {
+    component.invalidate();
+    for (const line of component.render(width)) {
+      assert.ok(
+        visibleWidth(line) <= width,
+        `line width ${visibleWidth(line)} exceeds ${width}: ${JSON.stringify(line)}`,
+      );
+    }
+  }
+
+  component.handleInput?.(input.enter);
+  assert.deepEqual(outcomes, [
+    {
+      status: "submitted",
+      answers: [
+        {
+          questionIndex: 0,
+          question: "Which delivery approach should we use?",
+          value: "Iterative",
+        },
+        {
+          questionIndex: 1,
+          question: "Who is the audience?",
+          value: "Skipped",
+        },
+      ],
+    },
+  ]);
+});
+
+test("final Cancel returns no answers after draft selections", () => {
+  const { component, outcomes } = makeComponent(questions.slice(0, 2));
+
+  component.handleInput?.(input.enter);
+  component.handleInput?.(input.right);
+  component.handleInput?.(input.right);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.enter);
+
+  assert.deepEqual(outcomes, [{ status: "cancelled", answers: [] }]);
+});

@@ -176,7 +176,12 @@ export function createQuestionnaireComponent(
       dispatch({ type: "moveRow", direction: "down" });
       return;
     }
-    if (!matchesKey(data, Key.enter) || state.activeTab >= questions.length) {
+    if (!matchesKey(data, Key.enter)) {
+      return;
+    }
+
+    if (state.activeTab >= questions.length) {
+      dispatch({ type: state.activeRow === 0 ? "confirm" : "cancel" });
       return;
     }
 
@@ -277,8 +282,15 @@ export function createQuestionnaireComponent(
     } else {
       addPrefixed(" ", styled("accent", "Final actions"));
       addLine("");
-      addPrefixed("> ", styled("accent", "Confirm"));
-      addPrefixed("  ", styled("text", "Cancel"));
+      const confirmSelected = state.activeRow === 0;
+      addPrefixed(
+        `${confirmSelected ? "> " : "  "}`,
+        styled(confirmSelected ? "accent" : "text", "Confirm"),
+      );
+      addPrefixed(
+        `${confirmSelected ? "  " : "> "}`,
+        styled(confirmSelected ? "text" : "accent", "Cancel"),
+      );
     }
 
     addLine("");
