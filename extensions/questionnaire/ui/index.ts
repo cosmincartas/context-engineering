@@ -12,6 +12,7 @@ import {
   visibleWidth,
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
+import { decodePrintableKey } from "@earendil-works/pi-tui/dist/keys.js";
 import {
   createQuestionnaireState,
   reduceQuestionnaireState,
@@ -123,6 +124,10 @@ export function createQuestionnaireComponent(
         continue;
       }
 
+      const printable = decodePrintableKey(remaining);
+      if (printable !== undefined) {
+        return sanitized + printable;
+      }
       if (isEditorControlKey(remaining, keybindings)) {
         return sanitized + remaining;
       }
@@ -332,8 +337,6 @@ export function createQuestionnaireComponent(
 const BRACKETED_PASTE_START = "\x1b[200~";
 const BRACKETED_PASTE_END = "\x1b[201~";
 function isEditorControlKey(data: string, keybindings: KeybindingsManager): boolean {
-  if (data.startsWith("\x1b")) return true;
-
   return Object.keys(keybindings.getResolvedBindings())
     .filter(
       (keybinding) =>
