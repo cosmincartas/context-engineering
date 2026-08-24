@@ -19,8 +19,18 @@ Turn an initial development prompt into a shared, user-validated understanding o
 1. Inspect relevant repository files, docs, tests, and recent commits. Read any supplied exploration artifact as evidence, not as a decision. State when there is no repository evidence.
 2. Draft Scope and Confirmed Understanding. Save with `checkpoint: framing`.
 3. Ask only questions whose answers materially change the brief or unblock phase 2. Apply the challenge duty to the stated problem and scope.
-4. Set `checkpoint: awaiting-validation`, present the Confirmed Understanding section, and ask the user to validate it.
+4. Run the **slicing gate**.
+5. Set `checkpoint: awaiting-validation`, present the Confirmed Understanding section, and ask the user to validate it.
+
+### Slicing gate
+
+Run this gate after the material questions are answered and before validation.
+
+1. Propose the thinnest slice of the request that still delivers one user-visible outcome. Never slice below a user-visible outcome.
+2. Present two lists: the slice (stays in scope) and the parked items (everything cut, one line each).
+3. The user approves, adjusts, or rejects the slice. "Keep the full scope" is a valid answer; record it as an explicit decision.
+4. Apply the approved slice to Scope. Record parked items under Parked, each as a candidate subject for a future topic.
 
 ## Completion check
 
-Confirmed Understanding states the problem, who is affected, the desired outcome, evidence or greenfield status, and constraints, with no "(unconfirmed)" entry left. The user has confirmed the inferred scope entries.
+Confirmed Understanding states the problem, who is affected, the desired outcome, evidence or greenfield status, and constraints, with no "(unconfirmed)" entry left. The user has confirmed the inferred scope entries. Scope reflects the approved slice and parked items are recorded.

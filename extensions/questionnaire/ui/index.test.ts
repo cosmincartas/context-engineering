@@ -106,6 +106,21 @@ test("routes arrows between tabs and Enter selects a listed answer", () => {
   assert.match(component.render(120).join("\n"), /> \[·\] Approach/);
 });
 
+test("Enter unticks the selected listed answer", () => {
+  const { component, outcomes } = makeComponent(questions.slice(0, 1));
+
+  component.handleInput?.(input.enter);
+  component.handleInput?.(input.enter);
+
+  const output = component.render(120).join("\n");
+  assert.match(output, /> \[ \] Iterative/);
+  assert.match(output, /> \[·\] Approach/);
+
+  component.handleInput?.(input.right);
+  component.handleInput?.(input.enter);
+  assert.equal(outcomes[0]?.answers[0]?.value, "Skipped");
+});
+
 test("Escape cancels the grouped flow without draft answers", () => {
   const { component, outcomes } = makeComponent();
 

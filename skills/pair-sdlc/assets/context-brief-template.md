@@ -22,6 +22,10 @@ updated: "{{YYYY-MM-DD}}"
 
 - {{Non-goal and reason.}}
 
+### Parked
+
+- {{Item cut from this slice. One line. A candidate subject for a future topic.}}
+
 ## Confirmed Understanding
 
 {{Concise restatement of the problem, who is affected, the desired outcome, evidence or greenfield status, and constraints, for user approval. Mark an unconfirmed entry "(unconfirmed)" until the user confirms it.}}

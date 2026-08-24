@@ -178,11 +178,15 @@ function answerQuestion(
       throw new RangeError(`Invalid option index: ${answer.optionIndex}`);
     }
 
-    answers[questionIndex] = {
-      kind: "option",
-      optionIndex: answer.optionIndex,
-      label: question.options[answer.optionIndex].label,
-    };
+    answers[questionIndex] =
+      state.answers[questionIndex]?.kind === "option" &&
+      state.answers[questionIndex].optionIndex === answer.optionIndex
+        ? undefined
+        : {
+            kind: "option",
+            optionIndex: answer.optionIndex,
+            label: question.options[answer.optionIndex].label,
+          };
   } else {
     answers[questionIndex] = {
       kind: "other",
