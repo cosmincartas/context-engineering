@@ -66,6 +66,14 @@ export type QuestionnaireStateEvent =
       readonly questionIndex: number;
       readonly answer: QuestionnaireAnswerInput;
     }
+  | {
+      readonly type: "moveRow";
+      readonly direction: "up" | "down";
+    }
+  | {
+      readonly type: "moveTab";
+      readonly direction: "left" | "right";
+    }
   | { readonly type: "confirm" }
   | { readonly type: "cancel" };
 
@@ -98,6 +106,10 @@ export function reduceQuestionnaireState(
   switch (event.type) {
     case "answer":
       return answerQuestion(state, event.questionIndex, event.answer);
+    case "moveRow":
+      return moveRow(state, event.direction);
+    case "moveTab":
+      return moveTab(state, event.direction);
     case "confirm":
       return { ...state, outcome: buildSubmittedOutcome(state) };
     case "cancel":
@@ -107,6 +119,44 @@ export function reduceQuestionnaireState(
         outcome: { status: "cancelled", answers: [] },
       };
   }
+}
+
+function moveRow(
+  state: QuestionnaireState,
+  direction: "up" | "down",
+): QuestionnaireState {
+  const maximumRow = rowCount(state) - 1;
+  const offset = direction === "down" ? 1 : -1;
+  const activeRow = Math.min(
+    maximumRow,
+    Math.max(0, state.activeRow + offset),
+  );
+
+  return { ...state, activeRow };
+}
+
+function moveTab(
+  state: QuestionnaireState,
+  direction: "left" | "right",
+): QuestionnaireState {
+  const maximumTab = state.questions.length;
+  const offset = direction === "right" ? 1 : -1;
+  const activeTab = Math.min(
+    maximumTab,
+    Math.max(0, state.activeTab + offset),
+  );
+
+  if (activeTab === state.activeTab) {
+    return state;
+  }
+
+  return { ...state, activeTab, activeRow: 0 };
+}
+
+function rowCount(state: QuestionnaireState): number {
+  return state.activeTab === state.questions.length
+    ? 2
+    : state.questions[state.activeTab].options.length + 1;
 }
 
 function answerQuestion(

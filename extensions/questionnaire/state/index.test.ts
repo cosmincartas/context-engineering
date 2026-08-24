@@ -149,3 +149,119 @@ test("cancel discards draft answers and returns no public answers", () => {
     label: "Blue",
   });
 });
+
+test("row navigation clamps at the first and last question rows", () => {
+  const initial = createQuestionnaireState(questions);
+  const atFirst = reduceQuestionnaireState(initial, {
+    type: "moveRow",
+    direction: "up",
+  });
+  const atSecond = reduceQuestionnaireState(atFirst, {
+    type: "moveRow",
+    direction: "down",
+  });
+  const atOther = reduceQuestionnaireState(atSecond, {
+    type: "moveRow",
+    direction: "down",
+  });
+  const stillAtOther = reduceQuestionnaireState(atOther, {
+    type: "moveRow",
+    direction: "down",
+  });
+
+  assert.equal(atFirst.activeRow, 0);
+  assert.equal(atSecond.activeRow, 1);
+  assert.equal(atOther.activeRow, 2);
+  assert.equal(stillAtOther.activeRow, 2);
+
+  const backAtSecond = reduceQuestionnaireState(atOther, {
+    type: "moveRow",
+    direction: "up",
+  });
+  assert.equal(backAtSecond.activeRow, 1);
+});
+
+test("tab navigation clamps at the first and final tabs", () => {
+  const initial = createQuestionnaireState(questions);
+  const stillFirst = reduceQuestionnaireState(initial, {
+    type: "moveTab",
+    direction: "left",
+  });
+  const second = reduceQuestionnaireState(initial, {
+    type: "moveTab",
+    direction: "right",
+  });
+  const final = reduceQuestionnaireState(second, {
+    type: "moveTab",
+    direction: "right",
+  });
+  const stillFinal = reduceQuestionnaireState(final, {
+    type: "moveTab",
+    direction: "right",
+  });
+
+  assert.equal(stillFirst.activeTab, 0);
+  assert.equal(second.activeTab, 1);
+  assert.equal(final.activeTab, questions.length);
+  assert.equal(stillFinal.activeTab, questions.length);
+});
+
+test("entering the final tab focuses Confirm", () => {
+  const focusedOnOther = reduceQuestionnaireState(
+    reduceQuestionnaireState(createQuestionnaireState(questions), {
+      type: "moveRow",
+      direction: "down",
+    }),
+    { type: "moveRow", direction: "down" },
+  );
+  const second = reduceQuestionnaireState(focusedOnOther, {
+    type: "moveTab",
+    direction: "right",
+  });
+  const final = reduceQuestionnaireState(second, {
+    type: "moveTab",
+    direction: "right",
+  });
+
+  assert.equal(focusedOnOther.activeRow, 2);
+  assert.equal(final.activeTab, questions.length);
+  assert.equal(final.activeRow, 0);
+
+  const cancel = reduceQuestionnaireState(final, {
+    type: "moveRow",
+    direction: "down",
+  });
+  assert.equal(cancel.activeRow, 1);
+
+  const backToQuestion = reduceQuestionnaireState(cancel, {
+    type: "moveTab",
+    direction: "left",
+  });
+  assert.equal(backToQuestion.activeTab, 1);
+  assert.equal(backToQuestion.activeRow, 0);
+});
+
+test("answer selection keeps the selected question active", () => {
+  const focused = reduceQuestionnaireState(
+    reduceQuestionnaireState(createQuestionnaireState(questions), {
+      type: "moveTab",
+      direction: "right",
+    }),
+    { type: "moveRow", direction: "down" },
+  );
+  const selected = reduceQuestionnaireState(focused, {
+    type: "answer",
+    questionIndex: focused.activeTab,
+    answer: { kind: "option", optionIndex: focused.activeRow },
+  });
+
+  assert.equal(focused.activeTab, 1);
+  assert.equal(focused.activeRow, 1);
+  assert.equal(selected.activeTab, 1);
+  assert.equal(selected.activeRow, 1);
+  assert.deepEqual(selected.answers[1], {
+    kind: "option",
+    optionIndex: 1,
+    label: "Large",
+  });
+});
