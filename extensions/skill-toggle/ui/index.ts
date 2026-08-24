@@ -70,5 +70,8 @@ export async function showSkillToggle(
 				tui.requestRender();
 			},
 		};
+	}, {
+		overlay: true,
+		overlayOptions: { anchor: "center", width: "70%", maxHeight: "80%", minWidth: 40 },
 	});
 }

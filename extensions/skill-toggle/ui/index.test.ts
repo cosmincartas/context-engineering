@@ -13,13 +13,32 @@ function skill(name: string, disableModelInvocation = false) {
 
 function contextFor(
 	skills: ReturnType<typeof skill>[],
-	custom: (factory: Function) => Promise<void>,
+	custom: (factory: Function, options?: unknown) => Promise<void>,
 ) {
 	return {
 		getSystemPromptOptions: () => ({ skills }),
 		ui: { custom },
 	};
 }
+
+test("opens as a centered overlay dialog", async () => {
+	let options: unknown;
+	await showSkillToggle(
+		contextFor([], async (_factory, customOptions) => {
+			options = customOptions;
+		}),
+		{
+			sync() {},
+			isSelected() { return false; },
+			snapshot() { return { skills: [] }; },
+			async setSelected() {},
+		},
+	);
+	assert.deepEqual(options, {
+		overlay: true,
+		overlayOptions: { anchor: "center", width: "70%", maxHeight: "80%", minWidth: 40 },
+	});
+});
 
 test("shows searchable textual skill states and persists a toggle", async () => {
 	const agentDir = await mkdtemp(join(tmpdir(), "skill-toggle-ui-"));
