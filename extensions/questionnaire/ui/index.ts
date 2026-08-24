@@ -30,6 +30,7 @@ export function createQuestionnaireComponent(
 ): Component {
   let state = createQuestionnaireState(questions);
   let cachedLines: string[] | undefined;
+  let cachedWidth: number | undefined;
   let completed = false;
 
   function refresh(): void {
@@ -84,9 +85,8 @@ export function createQuestionnaireComponent(
   }
 
   function render(width: number): string[] {
-    if (cachedLines !== undefined) return cachedLines;
-
     const renderWidth = Math.max(1, Math.floor(width));
+    if (cachedLines !== undefined && cachedWidth === renderWidth) return cachedLines;
     const lines: string[] = [];
 
     function fit(line: string): string {
@@ -171,6 +171,7 @@ export function createQuestionnaireComponent(
     addLine(theme.fg("border", "─".repeat(renderWidth)));
 
     cachedLines = lines;
+    cachedWidth = renderWidth;
     return lines;
   }
 
@@ -179,6 +180,7 @@ export function createQuestionnaireComponent(
     handleInput,
     invalidate: () => {
       cachedLines = undefined;
+      cachedWidth = undefined;
     },
   };
 }

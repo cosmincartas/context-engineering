@@ -45,11 +45,13 @@ const input = {
   right: "\u001b[C",
   left: "\u001b[D",
   down: "\u001b[B",
+  up: "\u001b[A",
   enter: "\r",
   escape: "\u001b",
+  ctrlC: "\u0003",
 };
 
-function makeComponent() {
+function makeComponent(testQuestions: readonly QuestionnaireQuestion[] = questions) {
   const tui = {
     requestRender() {},
   };
@@ -57,7 +59,7 @@ function makeComponent() {
   const component = createQuestionnaireComponent(
     tui,
     plainTheme,
-    questions,
+    testQuestions,
     (outcome) => outcomes.push(outcome),
   );
 
@@ -86,6 +88,10 @@ test("routes arrows between tabs and Enter selects a listed answer", () => {
   assert.match(component.render(120).join("\n"), /> \[·\] Q2/);
 
   component.handleInput?.(input.down);
+  assert.match(component.render(120).join("\n"), /> \[ \] Developers/);
+  component.handleInput?.(input.up);
+  assert.match(component.render(120).join("\n"), /> \[ \] Operators/);
+  component.handleInput?.(input.down);
   component.handleInput?.(input.enter);
   const output = component.render(120).join("\n");
 
@@ -106,6 +112,15 @@ test("Escape cancels the grouped flow without draft answers", () => {
   assert.deepEqual(outcomes, [{ status: "cancelled", answers: [] }]);
 });
 
+test("Ctrl+C cancels the grouped flow without draft answers", () => {
+  const { component, outcomes } = makeComponent();
+
+  component.handleInput?.(input.enter);
+  component.handleInput?.(input.ctrlC);
+
+  assert.deepEqual(outcomes, [{ status: "cancelled", answers: [] }]);
+});
+
 test("keeps visible state meaning without color and fits every tested width", () => {
   const { component } = makeComponent();
   component.handleInput?.(input.enter);
@@ -114,6 +129,14 @@ test("keeps visible state meaning without color and fits every tested width", ()
   assert.match(meaningfulOutput, />/);
   assert.match(meaningfulOutput, /✓/);
   assert.match(meaningfulOutput, /\[x\]/);
+
+  const narrowOutput = component.render(1);
+  for (const line of narrowOutput) {
+    assert.ok(
+      visibleWidth(line) <= 1,
+      `line width ${visibleWidth(line)} exceeds 1: ${JSON.stringify(line)}`,
+    );
+  }
 
   for (const width of [1, 2, 5, 12, 24, 40, 80]) {
     component.invalidate();
@@ -124,4 +147,34 @@ test("keeps visible state meaning without color and fits every tested width", ()
       );
     }
   }
+});
+
+test("renders control characters as visible escapes", () => {
+  const unsafeQuestions: QuestionnaireQuestion[] = [
+    {
+      question: "Prompt\u0000 with a C0 control",
+      header: "Header\u0085",
+      options: [
+        { label: "Label\u001b", description: "Description\u009f" },
+        { label: "Safe", description: "Still safe" },
+      ],
+    },
+  ];
+  const { component } = makeComponent(unsafeQuestions);
+  const lines = component.render(80);
+  const output = lines.join("\n");
+
+  assert.match(output, /\\u0000/);
+  assert.match(output, /\\u0085/);
+  assert.match(output, /\\u001B/);
+  assert.match(output, /\\u009F/);
+  assert.equal(
+    lines.some((line) =>
+      [...line].some((character) => {
+        const code = character.charCodeAt(0);
+        return (code >= 0 && code <= 0x1f) || (code >= 0x80 && code <= 0x9f);
+      }),
+    ),
+    false,
+  );
 });
