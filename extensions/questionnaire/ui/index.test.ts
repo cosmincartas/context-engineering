@@ -7,6 +7,7 @@ import {
   createQuestionnaireComponent,
   type QuestionnaireTheme,
 } from "./index.ts";
+import type { TUI } from "@earendil-works/pi-tui";
 import type { QuestionnaireOutcome, QuestionnaireQuestion } from "../state/index.ts";
 
 const questions: QuestionnaireQuestion[] = [
@@ -55,7 +56,7 @@ function makeComponent(testQuestions: readonly QuestionnaireQuestion[] = questio
   const tui = {
     requestRender() {},
     terminal: { rows: 24 },
-  };
+  } as unknown as TUI;
   const outcomes: QuestionnaireOutcome[] = [];
   const component = createQuestionnaireComponent(
     tui,
@@ -194,6 +195,14 @@ test("opens Other, submits trimmed text, and keeps the question active", () => {
   assert.match(edited, /> \[x\] Other/);
   assert.deepEqual(outcomes, []);
 
+  component.handleInput?.(input.enter);
+  const reopened = component.render(80).join("\n").split("\n");
+  const editorLine = reopened.find(
+    (line) => line.includes("custom answer") && !line.includes("Enter a custom answer."),
+  );
+  assert.equal(editorLine?.replace(/\x1b\[[0-9;]*m/g, "").trim(), "custom answer");
+
+  component.handleInput?.(input.escape);
   component.handleInput?.(input.right);
   assert.deepEqual(outcomes, []);
 });
@@ -217,8 +226,26 @@ test("prefills a non-empty Other answer and leaves an empty answer empty", () =>
   empty.handleInput?.(input.enter);
   empty.handleInput?.(input.enter);
   const emptyEditor = empty.render(80).join("\n");
+  assert.match(emptyEditor, /> \[x\] Other/);
   assert.match(emptyEditor, /Your answer/);
+  assert.ok(emptyEditor.includes("\x1b[7m \x1b[0m"));
   assert.doesNotMatch(emptyEditor, /prefilled-value/);
+});
+
+test("whitespace-only Other completes and reopens as an empty answer", () => {
+  const { component } = makeComponent(questions.slice(0, 1));
+
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.enter);
+  component.handleInput?.("   ");
+  component.handleInput?.(input.enter);
+  assert.match(component.render(80).join("\n"), /> \[x\] Other/);
+
+  component.handleInput?.(input.enter);
+  const reopened = component.render(80).join("\n");
+  assert.match(reopened, /Your answer/);
+  assert.ok(reopened.includes("\x1b[7m \x1b[0m"));
 });
 
 test("Escape leaves Other editing without replacing an existing answer", () => {
@@ -262,6 +289,30 @@ test("forwards editor arrows and normalizes submitted control characters", () =>
   component.handleInput?.(input.enter);
 
   assert.match(component.render(80).join("\n"), /abX\\u0085c/);
+});
+
+test("sanitizes pasted controls before Editor render and keeps them after submit", () => {
+  const { component } = makeComponent(questions.slice(0, 1));
+
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.enter);
+  component.handleInput?.("\x1b[200~\u0009leading\u0001\u0085trailing\u0009\x1b[201~");
+
+  const beforeSubmit = component.render(80).join("\n");
+  assert.match(beforeSubmit, /\\u0009/);
+  assert.match(beforeSubmit, /\\u0001/);
+  assert.match(beforeSubmit, /\\u0085/);
+  assert.equal(beforeSubmit.includes("\u0009"), false);
+  assert.equal(beforeSubmit.includes("\u0001"), false);
+  assert.equal(beforeSubmit.includes("\u0085"), false);
+
+  component.handleInput?.(input.enter);
+  component.handleInput?.(input.enter);
+  const afterSubmit = component.render(80).join("\n");
+  assert.match(afterSubmit, /\\u0009/);
+  assert.match(afterSubmit, /\\u0001/);
+  assert.match(afterSubmit, /\\u0085/);
 });
 
 test("propagates focus to the embedded Editor for input methods", () => {

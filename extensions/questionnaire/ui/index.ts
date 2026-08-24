@@ -26,7 +26,7 @@ export interface QuestionnaireTheme {
 }
 
 export function createQuestionnaireComponent(
-  tui: Pick<TUI, "requestRender">,
+  tui: TUI,
   theme: QuestionnaireTheme,
   questions: readonly QuestionnaireQuestion[],
   done: (outcome: QuestionnaireOutcome) => void,
@@ -37,6 +37,7 @@ export function createQuestionnaireComponent(
   let completed = false;
   let focused = false;
   let editingQuestionIndex: number | undefined;
+  let pasteInputActive = false;
 
   const editorTheme: EditorTheme = {
     borderColor: (text) => theme.fg("accent", text),
@@ -48,7 +49,7 @@ export function createQuestionnaireComponent(
       noMatch: (text) => theme.fg("warning", text),
     },
   };
-  const editor = new Editor(tui as TUI, editorTheme);
+  const editor = new Editor(tui, editorTheme);
 
   function refresh(): void {
     cachedLines = undefined;
@@ -90,6 +91,41 @@ export function createQuestionnaireComponent(
     });
   };
 
+  function sanitizeEditorInput(data: string): string {
+    let remaining = data;
+    let sanitized = "";
+
+    while (remaining.length > 0) {
+      if (pasteInputActive) {
+        const end = remaining.indexOf(BRACKETED_PASTE_END);
+        if (end === -1) {
+          return sanitized + escapeControls(remaining);
+        }
+        sanitized += escapeControls(remaining.slice(0, end));
+        sanitized += BRACKETED_PASTE_END;
+        remaining = remaining.slice(end + BRACKETED_PASTE_END.length);
+        pasteInputActive = false;
+        continue;
+      }
+
+      const start = remaining.indexOf(BRACKETED_PASTE_START);
+      if (start !== -1) {
+        sanitized += escapeControls(remaining.slice(0, start));
+        sanitized += BRACKETED_PASTE_START;
+        remaining = remaining.slice(start + BRACKETED_PASTE_START.length);
+        pasteInputActive = true;
+        continue;
+      }
+
+      if (isEditorControlKey(remaining)) {
+        return sanitized + remaining;
+      }
+      return sanitized + escapeControls(remaining);
+    }
+
+    return sanitized;
+  }
+
   function handleInput(data: string): void {
     if (completed) return;
 
@@ -104,7 +140,7 @@ export function createQuestionnaireComponent(
         refresh();
         return;
       }
-      editor.handleInput(data);
+      editor.handleInput(sanitizeEditorInput(data));
       refresh();
       return;
     }
@@ -268,6 +304,47 @@ export function createQuestionnaireComponent(
       editor.invalidate();
     },
   };
+}
+
+const BRACKETED_PASTE_START = "\x1b[200~";
+const BRACKETED_PASTE_END = "\x1b[201~";
+const EDITOR_CONTROL_KEYS = [
+  Key.escape,
+  Key.enter,
+  Key.return,
+  Key.tab,
+  Key.backspace,
+  Key.delete,
+  Key.insert,
+  Key.clear,
+  Key.home,
+  Key.end,
+  Key.pageUp,
+  Key.pageDown,
+  Key.up,
+  Key.down,
+  Key.left,
+  Key.right,
+  Key.ctrl("a"),
+  Key.ctrl("b"),
+  Key.ctrl("c"),
+  Key.ctrl("d"),
+  Key.ctrl("e"),
+  Key.ctrl("f"),
+  Key.ctrl("h"),
+  Key.ctrl("k"),
+  Key.ctrl("n"),
+  Key.ctrl("p"),
+  Key.ctrl("u"),
+  Key.ctrl("w"),
+  Key.ctrl("y"),
+];
+
+function isEditorControlKey(data: string): boolean {
+  return (
+    data.startsWith("\x1b") ||
+    EDITOR_CONTROL_KEYS.some((key) => matchesKey(data, key))
+  );
 }
 
 function escapeControls(text: string): string {
