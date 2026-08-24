@@ -324,7 +324,10 @@ function isEditorControlKey(data: string): boolean {
 
   const keybindings = getKeybindings();
   return Object.keys(keybindings.getResolvedBindings())
-    .filter((keybinding) => keybinding.startsWith("tui."))
+    .filter(
+      (keybinding) =>
+        keybinding.startsWith("tui.editor.") || keybinding.startsWith("tui.input."),
+    )
     .some((keybinding) => keybindings.matches(data, keybinding as Keybinding));
 }
 

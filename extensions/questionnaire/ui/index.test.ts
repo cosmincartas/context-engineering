@@ -311,6 +311,24 @@ test("forwards the current Pi Editor control bindings", () => {
   assert.doesNotMatch(component.render(80).join("\n"), /\\u001D/);
 });
 
+test("escapes non-Editor TUI controls before and after submit", () => {
+  const { component } = makeComponent(questions.slice(0, 1));
+
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.enter);
+  component.handleInput?.("\u0007");
+
+  const beforeSubmit = component.render(80).join("\n");
+  assert.match(beforeSubmit, /\\u0007/);
+  assert.equal(beforeSubmit.includes("\u0007"), false);
+
+  component.handleInput?.(input.enter);
+  component.handleInput?.(input.enter);
+  const afterSubmit = component.render(80).join("\n");
+  assert.match(afterSubmit, /\\u0007/);
+});
+
 test("sanitizes fragmented pasted actions before questionnaire routing", () => {
   const { component, outcomes } = makeComponent(questions.slice(0, 1));
 
