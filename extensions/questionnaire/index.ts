@@ -2,6 +2,7 @@ import type {
   AgentToolResult,
   ExtensionAPI,
   ExtensionContext,
+  KeybindingsManager,
   Theme,
 } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
@@ -134,7 +135,7 @@ function validateRequest(value: unknown): asserts value is QuestionnaireRequest 
 function normalizeQuestions(request: QuestionnaireRequest): readonly QuestionnaireQuestion[] {
   return request.questions.map((question, questionIndex) => ({
     question: question.question,
-    header: question.header?.trim() || `Q${questionIndex + 1}`,
+    header: question.header?.trim() ? question.header : `Q${questionIndex + 1}`,
     options: question.options.map((option) => ({
       label: option.label,
       description: option.description,
@@ -153,13 +154,6 @@ function cancelledOutcome(): QuestionnaireOutcome {
   return { status: "cancelled", answers: [] };
 }
 
-function abortError(signal: AbortSignal): Error {
-  const reason = signal.reason;
-  return reason instanceof Error
-    ? reason
-    : new DOMException("The questionnaire was aborted", "AbortError");
-}
-
 async function executeQuestionnaire(
   params: unknown,
   signal: AbortSignal | undefined,
@@ -175,9 +169,7 @@ async function executeQuestionnaire(
     });
   }
 
-  if (signal?.aborted) {
-    throw abortError(signal);
-  }
+  signal?.throwIfAborted();
 
   const questions = normalizeQuestions(params);
   let aborted = false;
@@ -192,7 +184,7 @@ async function executeQuestionnaire(
   signal?.addEventListener("abort", onAbort, { once: true });
 
   try {
-    const outcome = await ctx.ui.custom<QuestionnaireOutcome>((tui, theme, _keybindings, done) => {
+    const outcome = await ctx.ui.custom<QuestionnaireOutcome>((tui, theme, keybindings, done) => {
       const complete = (value: QuestionnaireOutcome) => {
         if (completed) return;
         completed = true;
@@ -200,13 +192,19 @@ async function executeQuestionnaire(
       };
       finish = complete;
 
-      const component = createQuestionnaireComponent(tui, theme, questions, complete);
+      const component = createQuestionnaireComponent(
+        tui,
+        theme,
+        questions,
+        complete,
+        keybindings,
+      );
       if (aborted) complete(cancelledOutcome());
       return component;
     });
 
-    if (aborted || signal?.aborted) {
-      throw abortError(signal ?? new AbortController().signal);
+    if (aborted) {
+      signal?.throwIfAborted();
     }
 
     return serializedResult({
@@ -229,7 +227,9 @@ function renderCall(args: QuestionnaireRequest, theme: Theme): Text {
   const questions = Array.isArray(args?.questions) ? args.questions : [];
   const count = questions.length;
   const labels = questions
-    .map((question, index) => escapeControls(question.header?.trim() || `Q${index + 1}`))
+    .map((question, index) =>
+      escapeControls(question.header?.trim() ? question.header : `Q${index + 1}`),
+    )
     .join(", ");
   const suffix = labels.length > 0 ? ` (${labels})` : "";
   return new Text(

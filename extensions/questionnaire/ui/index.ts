@@ -1,6 +1,5 @@
 import {
   Editor,
-  getKeybindings,
   Key,
   matchesKey,
   truncateToWidth,
@@ -8,11 +7,11 @@ import {
   type EditorTheme,
   type Focusable,
   type Keybinding,
+  type KeybindingsManager,
   type TUI,
   visibleWidth,
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
-
 import {
   createQuestionnaireState,
   reduceQuestionnaireState,
@@ -32,6 +31,7 @@ export function createQuestionnaireComponent(
   theme: QuestionnaireTheme,
   questions: readonly QuestionnaireQuestion[],
   done: (outcome: QuestionnaireOutcome) => void,
+  keybindings: KeybindingsManager,
 ): Component & Focusable {
   let state = createQuestionnaireState(questions);
   let cachedLines: string[] | undefined;
@@ -123,7 +123,7 @@ export function createQuestionnaireComponent(
         continue;
       }
 
-      if (isEditorControlKey(remaining)) {
+      if (isEditorControlKey(remaining, keybindings)) {
         return sanitized + remaining;
       }
       return sanitized + escapeControls(remaining);
@@ -237,7 +237,7 @@ export function createQuestionnaireComponent(
     const tabs = questions.map((question, index) => {
       const active = state.activeTab === index;
       const answered = state.answers[index] !== undefined;
-      const header = question.header?.trim() || `Q${index + 1}`;
+      const header = question.header?.trim() ? question.header : `Q${index + 1}`;
       return `${active ? ">" : " "} [${answered ? "✓" : "·"}] ${escapeControls(header)}`;
     });
     const finalActive = state.activeTab === questions.length;
@@ -331,10 +331,9 @@ export function createQuestionnaireComponent(
 
 const BRACKETED_PASTE_START = "\x1b[200~";
 const BRACKETED_PASTE_END = "\x1b[201~";
-function isEditorControlKey(data: string): boolean {
+function isEditorControlKey(data: string, keybindings: KeybindingsManager): boolean {
   if (data.startsWith("\x1b")) return true;
 
-  const keybindings = getKeybindings();
   return Object.keys(keybindings.getResolvedBindings())
     .filter(
       (keybinding) =>

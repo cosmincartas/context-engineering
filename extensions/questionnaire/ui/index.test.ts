@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { CURSOR_MARKER, visibleWidth } from "@earendil-works/pi-tui";
+import { CURSOR_MARKER, getKeybindings, visibleWidth } from "@earendil-works/pi-tui";
 
 import {
   createQuestionnaireComponent,
@@ -63,6 +63,7 @@ function makeComponent(testQuestions: readonly QuestionnaireQuestion[] = questio
     plainTheme,
     testQuestions,
     (outcome) => outcomes.push(outcome),
+    getKeybindings(),
   );
 
   return { component, outcomes };

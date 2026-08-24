@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { visibleWidth, type Component, type TUI } from "@earendil-works/pi-tui";
+import {
+  getKeybindings,
+  visibleWidth,
+  type Component,
+  type TUI,
+} from "@earendil-works/pi-tui";
 import questionnaire from "./index.ts";
 
 interface RegisteredTool {
@@ -22,6 +27,7 @@ const plainTheme = {
 
 const input = {
   right: "\u001b[C",
+  down: "\u001b[B",
   enter: "\r",
   escape: "\u001b",
 };
@@ -61,6 +67,7 @@ function makeTui(): TUI {
 function makeContext(
   mode: "tui" | "rpc" | "json" | "print",
   onComponent?: (component: Component) => void,
+  keybindings = getKeybindings(),
 ) {
   let customCalls = 0;
   let doneCalls = 0;
@@ -74,7 +81,7 @@ function makeContext(
             doneCalls += 1;
             resolve(outcome);
           };
-          const component = factory(makeTui(), plainTheme, {}, done);
+          const component = factory(makeTui(), plainTheme, keybindings, done);
           onComponent?.(component);
         });
       },
@@ -252,6 +259,24 @@ test("normalizes headers, runs the TUI component, and serializes submitted resul
   assert.equal(harness.customCalls, 1);
 });
 
+test("preserves printable whitespace around supplied headers", async () => {
+  const tool = registeredTool();
+  let firstRender = "";
+  const request = {
+    questions: [{ ...validRequest.questions[0], header: "  Deployment  " }],
+  };
+  const harness = makeContext("tui", (component) => {
+    firstRender = component.render(100).join("\n");
+    component.handleInput?.(input.escape);
+  });
+
+  await tool.execute("call", request, undefined, undefined, harness.context);
+
+  assert.ok(firstRender.includes("  Deployment  "));
+  const callText = tool.renderCall(request, plainTheme, {}).render(100).join("\n");
+  assert.ok(callText.includes("  Deployment  "));
+});
+
 test("returns an answer-free cancelled result from the TUI", async () => {
   const tool = registeredTool();
   const harness = makeContext("tui", (component) => {
@@ -266,17 +291,62 @@ test("returns an answer-free cancelled result from the TUI", async () => {
   assert.equal(harness.customCalls, 1);
 });
 
-test("tears down the custom UI and reports the abort reason", async () => {
+test("forwards the injected keybindings to the questionnaire editor", async () => {
+  const tool = registeredTool();
+  let matchesCalls = 0;
+  const injectedKeybindings = {
+    getResolvedBindings: () => ({ "tui.editor.synthetic": "\u001d" }),
+    matches: (data: string) => {
+      matchesCalls += 1;
+      return data === "\u001d";
+    },
+  };
+  const harness = makeContext(
+    "tui",
+    (component) => {
+      component.handleInput?.(input.down);
+      component.handleInput?.(input.down);
+      component.handleInput?.(input.enter);
+      component.handleInput?.("\u001d");
+      component.handleInput?.(input.escape);
+      component.handleInput?.(input.escape);
+    },
+    injectedKeybindings as any,
+  );
+
+  const result = await tool.execute("call", validRequest, undefined, undefined, harness.context);
+
+  assert.deepEqual(result.details, { status: "cancelled", answers: [] });
+  assert.ok(matchesCalls > 0, "the injected keybindings manager was not consulted");
+});
+
+test("tears down the custom UI and preserves an arbitrary abort reason", async () => {
   const tool = registeredTool();
   const controller = new AbortController();
+  const reason = { code: "questionnaire-aborted" };
   const harness = makeContext("tui");
   const pending = tool.execute("call", validRequest, controller.signal, undefined, harness.context);
 
-  controller.abort(new Error("questionnaire aborted"));
+  controller.abort(reason);
 
-  await assert.rejects(pending, /questionnaire aborted/);
+  await assert.rejects(pending, (error) => error === reason);
   assert.equal(harness.customCalls, 1);
   assert.equal(harness.doneCalls, 1);
+});
+
+test("does not replace a submitted result when abort arrives after completion", async () => {
+  const tool = registeredTool();
+  const controller = new AbortController();
+  const harness = makeContext("tui", (component) => {
+    component.handleInput?.(input.enter);
+    component.handleInput?.(input.right);
+    component.handleInput?.(input.enter);
+    controller.abort(new Error("late abort"));
+  });
+
+  const result = await tool.execute("call", validRequest, controller.signal, undefined, harness.context);
+
+  assert.equal(result.details.status, "submitted");
 });
 
 test("renders visible call and terminal status components", async () => {
