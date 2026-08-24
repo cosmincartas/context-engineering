@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { visibleWidth } from "@earendil-works/pi-tui";
+import { CURSOR_MARKER, visibleWidth } from "@earendil-works/pi-tui";
 
 import {
   createQuestionnaireComponent,
@@ -54,6 +54,7 @@ const input = {
 function makeComponent(testQuestions: readonly QuestionnaireQuestion[] = questions) {
   const tui = {
     requestRender() {},
+    terminal: { rows: 24 },
   };
   const outcomes: QuestionnaireOutcome[] = [];
   const component = createQuestionnaireComponent(
@@ -177,4 +178,122 @@ test("renders control characters as visible escapes", () => {
     ),
     false,
   );
+});
+
+test("opens Other, submits trimmed text, and keeps the question active", () => {
+  const { component, outcomes } = makeComponent(questions.slice(0, 1));
+
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.enter);
+  assert.match(component.render(80).join("\n"), /Your answer/);
+
+  component.handleInput?.("  custom answer  ");
+  component.handleInput?.(input.enter);
+  const edited = component.render(80).join("\n");
+  assert.match(edited, /> \[x\] Other/);
+  assert.deepEqual(outcomes, []);
+
+  component.handleInput?.(input.right);
+  assert.deepEqual(outcomes, []);
+});
+
+test("prefills a non-empty Other answer and leaves an empty answer empty", () => {
+  const { component } = makeComponent(questions.slice(0, 1));
+
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.enter);
+  component.handleInput?.("prefilled-value");
+  component.handleInput?.(input.enter);
+  component.handleInput?.(input.enter);
+  assert.match(component.render(80).join("\n"), /prefilled-value/);
+  component.handleInput?.(input.escape);
+
+  const empty = makeComponent(questions.slice(0, 1)).component;
+  empty.handleInput?.(input.down);
+  empty.handleInput?.(input.down);
+  empty.handleInput?.(input.enter);
+  empty.handleInput?.(input.enter);
+  empty.handleInput?.(input.enter);
+  const emptyEditor = empty.render(80).join("\n");
+  assert.match(emptyEditor, /Your answer/);
+  assert.doesNotMatch(emptyEditor, /prefilled-value/);
+});
+
+test("Escape leaves Other editing without replacing an existing answer", () => {
+  const { component } = makeComponent(questions.slice(0, 1));
+
+  component.handleInput?.(input.enter);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.enter);
+  component.handleInput?.("draft");
+  component.handleInput?.(input.escape);
+  const output = component.render(80).join("\n");
+
+  assert.match(output, /\[x\] Iterative/);
+  assert.match(output, /> \[ \] Other/);
+  assert.doesNotMatch(output, /draft/);
+});
+
+test("Ctrl+C cancels from Other editing without returning a draft", () => {
+  const { component, outcomes } = makeComponent(questions.slice(0, 1));
+
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.enter);
+  component.handleInput?.("draft");
+  component.handleInput?.(input.ctrlC);
+
+  assert.deepEqual(outcomes, [{ status: "cancelled", answers: [] }]);
+});
+
+test("forwards editor arrows and normalizes submitted control characters", () => {
+  const { component } = makeComponent(questions.slice(0, 1));
+
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.enter);
+  component.handleInput?.("abc");
+  component.handleInput?.(input.left);
+  component.handleInput?.("X\u0085");
+  component.handleInput?.(input.enter);
+  component.handleInput?.(input.enter);
+
+  assert.match(component.render(80).join("\n"), /abX\\u0085c/);
+});
+
+test("propagates focus to the embedded Editor for input methods", () => {
+  const { component } = makeComponent(questions.slice(0, 1));
+
+  component.focused = true;
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.enter);
+
+  assert.equal(component.focused, true);
+  assert.ok(component.render(80).some((line) => line.includes(CURSOR_MARKER)));
+
+  component.focused = false;
+  assert.equal(component.render(80).some((line) => line.includes(CURSOR_MARKER)), false);
+});
+
+test("keeps embedded Editor lines within every supplied width", () => {
+  const { component } = makeComponent(questions.slice(0, 1));
+
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.enter);
+  component.handleInput?.("a long custom answer that must wrap safely");
+
+  for (const width of [1, 2, 5, 12, 24, 40, 80]) {
+    component.invalidate();
+    for (const line of component.render(width)) {
+      assert.ok(
+        visibleWidth(line) <= width,
+        `line width ${visibleWidth(line)} exceeds ${width}: ${JSON.stringify(line)}`,
+      );
+    }
+  }
 });

@@ -1,8 +1,11 @@
 import {
+  Editor,
   Key,
   matchesKey,
   truncateToWidth,
   type Component,
+  type EditorTheme,
+  type Focusable,
   type TUI,
   visibleWidth,
   wrapTextWithAnsi,
@@ -27,15 +30,43 @@ export function createQuestionnaireComponent(
   theme: QuestionnaireTheme,
   questions: readonly QuestionnaireQuestion[],
   done: (outcome: QuestionnaireOutcome) => void,
-): Component {
+): Component & Focusable {
   let state = createQuestionnaireState(questions);
   let cachedLines: string[] | undefined;
   let cachedWidth: number | undefined;
   let completed = false;
+  let focused = false;
+  let editingQuestionIndex: number | undefined;
+
+  const editorTheme: EditorTheme = {
+    borderColor: (text) => theme.fg("accent", text),
+    selectList: {
+      selectedPrefix: (text) => theme.fg("accent", text),
+      selectedText: (text) => theme.fg("accent", text),
+      description: (text) => theme.fg("muted", text),
+      scrollInfo: (text) => theme.fg("dim", text),
+      noMatch: (text) => theme.fg("warning", text),
+    },
+  };
+  const editor = new Editor(tui as TUI, editorTheme);
 
   function refresh(): void {
     cachedLines = undefined;
     tui.requestRender();
+  }
+
+  function closeEditor(): void {
+    editingQuestionIndex = undefined;
+    editor.focused = false;
+    editor.setText("");
+  }
+
+  function openEditor(questionIndex: number): void {
+    const answer = state.answers[questionIndex];
+    editor.setText(answer?.kind === "other" ? answer.text : "");
+    editingQuestionIndex = questionIndex;
+    editor.focused = focused;
+    refresh();
   }
 
   function dispatch(event: QuestionnaireStateEvent): void {
@@ -47,8 +78,36 @@ export function createQuestionnaireComponent(
     }
   }
 
+  editor.onSubmit = (text) => {
+    if (editingQuestionIndex === undefined) return;
+
+    const questionIndex = editingQuestionIndex;
+    closeEditor();
+    dispatch({
+      type: "answer",
+      questionIndex,
+      answer: { kind: "other", text },
+    });
+  };
+
   function handleInput(data: string): void {
     if (completed) return;
+
+    if (editingQuestionIndex !== undefined) {
+      if (matchesKey(data, Key.ctrl("c"))) {
+        closeEditor();
+        dispatch({ type: "cancel" });
+        return;
+      }
+      if (matchesKey(data, Key.escape)) {
+        closeEditor();
+        refresh();
+        return;
+      }
+      editor.handleInput(data);
+      refresh();
+      return;
+    }
 
     if (matchesKey(data, Key.escape) || matchesKey(data, Key.ctrl("c"))) {
       dispatch({ type: "cancel" });
@@ -81,6 +140,8 @@ export function createQuestionnaireComponent(
         questionIndex: state.activeTab,
         answer: { kind: "option", optionIndex: state.activeRow },
       });
+    } else {
+      openEditor(state.activeTab);
     }
   }
 
@@ -156,6 +217,16 @@ export function createQuestionnaireComponent(
         styled(otherSelected ? "accent" : "text", "Other"),
       );
       addPrefixed("      ", styled("muted", "Enter a custom answer."));
+
+      if (editingQuestionIndex === state.activeTab) {
+        addLine("");
+        addPrefixed(" ", styled("muted", "Your answer:"));
+        const editorWidth = Math.max(1, renderWidth - 2);
+        for (const line of editor.render(editorWidth)) {
+          addLine(`  ${line}`);
+        }
+        addPrefixed(" ", styled("dim", "Enter submit • Esc leave • Ctrl+C cancel"));
+      }
     } else {
       addPrefixed(" ", styled("accent", "Final actions"));
       addLine("");
@@ -166,7 +237,12 @@ export function createQuestionnaireComponent(
     addLine("");
     addPrefixed(
       " ",
-      styled("dim", "←/→ tabs • ↑/↓ choices • Enter select • Esc cancel"),
+      styled(
+        "dim",
+        editingQuestionIndex === undefined
+          ? "←/→ tabs • ↑/↓ choices • Enter select • Esc cancel"
+          : "Type your answer",
+      ),
     );
     addLine(theme.fg("border", "─".repeat(renderWidth)));
 
@@ -178,9 +254,18 @@ export function createQuestionnaireComponent(
   return {
     render,
     handleInput,
+    get focused(): boolean {
+      return focused;
+    },
+    set focused(value: boolean) {
+      focused = value;
+      editor.focused = editingQuestionIndex !== undefined && value;
+      refresh();
+    },
     invalidate: () => {
       cachedLines = undefined;
       cachedWidth = undefined;
+      editor.invalidate();
     },
   };
 }
