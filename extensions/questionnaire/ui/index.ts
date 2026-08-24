@@ -126,7 +126,7 @@ export function createQuestionnaireComponent(
 
       const printable = decodePrintableKey(remaining);
       if (printable !== undefined) {
-        return sanitized + printable;
+        return sanitized + escapeControls(printable);
       }
       if (isEditorControlKey(remaining, keybindings)) {
         return sanitized + remaining;

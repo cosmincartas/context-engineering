@@ -365,6 +365,26 @@ test("preserves Pi printable keyboard protocols in Other input", () => {
   assert.equal(outcomes[0]?.answers[0]?.value, "ab");
 });
 
+test("escapes C1 characters decoded from Pi printable keyboard protocols", () => {
+  const { component, outcomes } = makeComponent(questions.slice(0, 1));
+
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.enter);
+  component.handleInput?.("\x1b[133u");
+  component.handleInput?.("\x1b[27;1;133~");
+
+  const beforeSubmit = component.render(80).join("\n");
+  assert.equal(beforeSubmit.includes("\u0085"), false);
+  assert.match(beforeSubmit, /\\u0085\\u0085/);
+
+  component.handleInput?.(input.enter);
+  component.handleInput?.(input.right);
+  component.handleInput?.(input.enter);
+  assert.equal(outcomes[0]?.status, "submitted");
+  assert.equal(outcomes[0]?.answers[0]?.value, "\\u0085\\u0085");
+});
+
 test("sanitizes fragmented pasted actions before questionnaire routing", () => {
   const { component, outcomes } = makeComponent(questions.slice(0, 1));
 
