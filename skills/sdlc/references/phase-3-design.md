@@ -1,85 +1,71 @@
 # Phase 3 — Design
 
-Turn the validated PRD into a validated technical design. The design preserves existing interfaces, constraints, conventions, and verification seams.
+Turn the validated PRD into a validated technical design. The design preserves existing interfaces, constraints, conventions, and verification seams. This phase is pair programming on the design surface: you and the user define models, interfaces, function signatures, and contracts together, one element at a time, as code.
 
 ## Input contract
 
 1. Require `docs/agentic-engineering/<subject>/prd.md` with `artifact: prd` and `status: validated`. If it is a draft, return to phase 2.
-2. Read it fully and collect every `FR-*`, `NFR-*`, and `AC-*` identifier, every `Q-*` item and its owner, rejected options when present, and the repository assumptions.
-3. Compare the current context-brief file with the PRD's `context_sha256`. Stop on a mismatch; the chain is stale.
-4. Record the SHA-256 hash of the exact PRD file in the design frontmatter as `prd_sha256`.
-5. Stop on unresolved user-owned questions. Resolve design-owned questions at the decision gate.
-6. Re-inspect relevant repository evidence. If material drift contradicts the validated PRD, show the evidence and ask before you design around it.
+2. Collect every `FR-*` and `NFR-*`, and every `Q-*` with its owner. Stop on an unresolved user-owned question; resolve design-owned questions at the decision gate.
+3. Re-inspect relevant repository evidence: the implementation language, existing types and interfaces the design must fit, and naming conventions. If material drift contradicts the PRD, show the evidence and ask before you design around it.
 
-If design work exposes a new product requirement, give it a provisional `FR-D*` identifier, record the gap, and ask the user to revise the PRD rather than silently changing scope. Do not validate the design until every `FR-D*` is incorporated into the PRD with normal acceptance traceability or removed from the design.
+If design work exposes a new product requirement, give it a provisional `FR-D*` identifier and ask the user to revise the PRD. Do not validate the design while an `FR-D*` remains.
 
-## Artifact lifecycle
+## Artifact
 
-The output is `docs/agentic-engineering/<subject>/design.md`, based on `assets/design-spec-template.md`.
-
-1. If a draft exists, offer to resume it. Compare the current PRD hash with `prd_sha256` before you resume.
-2. Save the initial document with `status: draft` and `checkpoint: scope`.
-3. Use these checkpoints in order: `scope`, `decisions`, `contracts`, `behavior`, `traceability`, `awaiting-validation`, `complete`. The decisions checkpoint is a gate; do not advance past it without a user response.
-4. Before validation, compare the PRD with `prd_sha256` again. Stop on mismatch or any remaining `FR-D*`.
-5. Present the completed draft with `checkpoint: awaiting-validation`.
-6. Apply requested changes until approved. Then set `status: validated` and `checkpoint: complete`.
-
-Never silently overwrite a validated design. A revised PRD makes the design stale until its scope and traceability are checked again.
+`docs/agentic-engineering/<subject>/design.md` from `assets/design-spec-template.md`. Checkpoints in order: `decisions`, `surface`, `drafting`, `awaiting-validation`, `complete`. The decisions checkpoint is a gate; the surface checkpoint is the pairing loop.
 
 ## Workflow
 
-1. Resolve the input contract and record the current repository baseline.
-2. Fill Scope and PRD Linkage. Save, then run the **decision gate**.
-3. Fill Design Rules → Contracts → Architecture → Components → Behavior → Failure Model → Cross-Cutting Concerns → ADRs → Traceability → Deferred. Define contracts before components; components consume or produce named contracts rather than inventing private interpretations of shared data.
-4. Run the self-checks and complete the user-validation loop.
+1. Save the document with `checkpoint: decisions`, then run the **decision gate**.
+2. Set `checkpoint: surface`. Run the **pairing loop** over Models → Interfaces → Functions → Contracts.
+3. Set `checkpoint: drafting`. Draft Architecture → Behavior → Failure Model → Traceability, one element at a time per the **element review** rule.
+4. Run the self-checks.
+5. Set `checkpoint: awaiting-validation`, present a recap per pairing rule 18, and ask the user to validate. Apply changes until approved, then set `status: validated` and `checkpoint: complete`.
 
 ### Decision gate
 
-Run this gate before you write contracts or architecture, so the user shapes the design instead of reviewing it after the fact.
+Run this gate before you write any design element, so the user shapes the design instead of reviewing it after the fact.
 
-1. Collect every design-owned `Q-*` from the PRD and every new consequential technical choice you can already see: architecture shape, technology or library selection, data model direction, integration approach.
-2. For each, present two or three realistic options with their trade-offs, and recommend one with reasons, per the facilitation rules. Ask one decision at a time.
-3. Always ask the user for decisions involving product scope, public compatibility, security policy, cost, or irreversible data behavior. A decision involves cost when a realistic option adds a paid service or a material recurring cost.
-4. Record each resolved decision as an ADR: context, options, decision, reasons, and accepted consequences. Record an explicit "you decide" delegation in the ADR context.
-5. A consequential choice that only becomes visible later in the workflow returns to this gate before it is baked into the design.
+1. Collect every design-owned `Q-*` and every consequential technical choice you can already see: architecture shape, technology or library selection, data model direction, integration approach. For a greenfield repository with no evident implementation language, the language is a decision here.
+2. For each, present two or three realistic options with trade-offs and recommend one. Ask one decision at a time.
+3. Always ask for decisions involving product scope, public compatibility, security policy, cost (a paid service or material recurring cost), or irreversible data behavior.
+4. Apply each decision directly in the design sections. A consequential choice that only becomes visible later returns to this gate before it is baked into the design.
+
+### Pairing loop
+
+The unit of work is one design element: one model, one interface or abstraction, one function signature, or one external contract. You drive; the user navigates.
+
+1. Pick the next element in dependency order: a type before the interface that uses it, an interface before the function that takes it, functions before the external contract that exposes them. Within a section, start with the element the most requirements depend on.
+2. Propose the element as a code block in the repository language. Write only declarations: type fields, interface members, function name, parameters with types, return type, raised or returned errors. Never write a function body. After the code block, give one line on why it has this shape and, if you have one, one open question. The whole proposal fits in 15 lines.
+3. Wait. The user answers with one of: accept, edit (a changed version), counter (a different shape), or "you decide". Treat an edit or a counter as the new proposal: apply challenge duty once (rule 10), then record the result. "You decide" is an explicit delegation; record it.
+4. Save the agreed element to `design.md` before you propose the next one. One element per turn; do not batch.
+5. When the user proposes an element before you do, critique it by the same rules and record the result.
+6. When a new element would need a decision that belongs to the gate, return to the gate first.
+
+### Element review
+
+In `drafting`, present each Behavior flow, Failure row, and Traceability row one at a time for approval, in the same turn rhythm as the pairing loop. The architecture diagram is one element.
 
 ## Section rules
 
-**Scope and PRD Linkage.** List every `FR-*`, `NFR-*`, and `AC-*`. Name uncovered or provisional requirements explicitly.
-
-**Design Rules.** Write four to six priority-ordered tie-breakers derived from NFRs. Keep only rules that implementers can apply without interpretation.
-
-**Contracts.** Define externally shared schemas, formats, interfaces, versions, ownership, and invariants. A contract has exactly one writer.
-
-**Architecture Overview.** Use one simple diagram. Name components and the contracts between them.
-
-**Component Designs.** State functions, deliberate non-functions, and externally meaningful interfaces. Include exit codes only for command-line interfaces.
-
-**Behavior.** Describe important flows and state transitions. Include write ordering and sudden-stop recovery only where related persistent writes exist.
-
-**Failure Model.** Cover failures relevant to this system, their detectors, responses, and verification identifiers. Do not invent optional dependencies, corruption paths, or persistence failures for systems that do not have them.
-
-**Cross-Cutting Concerns.** State the design position for each row: security (authorization and malicious input), privacy (personal data exposure, retention, and deletion), and operability (monitoring, configuration, and deployment). Write "Not applicable" with a reason when a concern does not apply to this system. An empty row blocks validation.
-
-**Architecture Decision Records.** Every design-owned `Q-*` and every consequential technical choice has an ADR resolved at the decision gate.
-
-**Traceability and Verification Map.** Map every `FR-*`, `NFR-*`, and `AC-*` to design sections and observable verification. Map each failure `F-*` to a verification row as well.
-
-**Deferred and Out of Scope.** Record deferred items with the trigger that would promote each item.
+- **Models.** Types and records the design introduces or changes, as code. Each field has a type; a constraint that the type cannot express is a one-line invariant under the block.
+- **Interfaces.** Abstractions as code: interface, protocol, trait, or abstract class, with member signatures. One line after the block names what the abstraction is deliberately not responsible for.
+- **Functions.** Signatures grouped by owner (module, class, or component). Each signature has one line stating its effect and its error behavior. A function references only models and interfaces in this design or already in the repository.
+- **Contracts.** Externally shared schemas, formats, and interfaces. A contract has exactly one writer, a version, and invariants.
+- **Architecture.** One simple diagram. Name components by the interface they implement or the functions they own. Exit codes only for command-line interfaces.
+- **Behavior.** Important flows and state transitions, naming the functions they call in order. Write ordering and sudden-stop recovery only where related persistent writes exist.
+- **Failure Model.** Failures relevant to this system, with detector, response, and observable verification. Do not invent optional dependencies, corruption paths, or persistence failures for systems that do not have them.
+- **Traceability.** Every `FR-*` and `NFR-*` maps to design elements. A design element with no requirement or existing repository constraint is scope creep.
+- Consider security (authorization, malicious input), privacy (personal data, retention, deletion), and operability (monitoring, configuration, deployment). Add a contract, failure row, or behavior where one applies; do not write "not applicable" entries.
 
 ## Self-checks
 
 Before validation, make sure that:
 
-- Every `FR-*`, `NFR-*`, and `AC-*` appears in Scope and Traceability.
-- No provisional `FR-D*` remains.
-- Every design-owned `Q-*` has an ADR and no user-owned question remains.
-- Every ADR records a user decision or an explicit delegation from the decision gate.
+- Every `FR-*` and `NFR-*` has a traceability row, and no `FR-D*` remains.
+- Every design-owned `Q-*` was decided at the gate, and no user-owned question remains open.
+- Every element in Models, Interfaces, Functions, and Contracts received a user response in the pairing loop.
+- Every function signature references only designed or existing types; every interface has at least one designed implementer or consumer; no code block contains a function body.
 - Every contract has one writer, a version, and invariants.
-- Every component has deliberate non-functions.
-- Persistent write pairs have a recoverable ordering analysis when applicable.
-- Every relevant failure has an observable verification row.
-- Every cross-cutting concern row has a design position or a written reason it does not apply.
-- Every design element traces to a requirement, acceptance criterion, failure, or stated repository constraint.
-- Repository and technology choices are either existing constraints or recorded decisions.
-- The prose follows the STE rules unless the user requested standard English.
+- Every failure has an observable verification.
+- Technology and repository choices are existing constraints or decisions from the gate.

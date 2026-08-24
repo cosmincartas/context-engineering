@@ -1,13 +1,13 @@
 ---
 name: sdlc
-description: Use when the user wants to plan delivery work end to end or in part — clarify or scope a feature request, write a PRD, user stories, or formal requirements, create a technical design or architecture document, produce an implementation plan — or resume a planning topic that was left in progress. Do not use for exploratory questions (use explore) or for executing a validated plan.
+description: Use when the user wants to pair on delivery work and review each section and decision as it is made — clarify a request, write a PRD, create a design, or produce a plan together — or resume a paired topic left in progress. Do not use for exploratory questions (use explore).
 ---
 
-# SDLC Planning Pipeline
+# SDLC Pipeline
 
-Use ASD-STE100 Simplified Technical English when you ask questions or write output files. Read `references/ste-writing-rules.md` before you write an artifact.
+Write artifacts in ASD-STE100 Simplified Technical English: sentences of at most 20 words (instructions) or 25 (descriptions), active voice, imperative for steps, one meaning for each word, requirements use "must" (never "shall" or "should"). Chat stays in natural conversational language.
 
-Take one topic through four phases. Each phase produces one validated artifact in the topic folder. The pipeline ends with a validated implementation plan. Execution belongs to other skills.
+Take one topic through four phases. Each phase produces one validated artifact in the topic folder. The pipeline ends with a validated implementation plan; execution belongs to other skills. The pairing rhythm in `references/facilitation-rules.md` applies in phases 1–3: the user reviews each section and decision as it is made. In phase 4, draft the complete plan before presenting it for validation.
 
 | Phase | Name | Artifact | Reference |
 |---|---|---|---|
@@ -20,7 +20,7 @@ Take one topic through four phases. Each phase produces one validated artifact i
 
 These hold in every phase:
 
-- Never write production code. This skill plans; it does not implement.
+- Never write production code. This skill plans; it does not implement. Type declarations, interface definitions, and function signatures inside `design.md` are design; never write a function body.
 - Never run `git commit`, create branches, or push changes.
 - The artifacts are the state. Save the draft before you ask questions. Update it after each material answer. A stopped session must be resumable from the artifacts alone.
 - Facilitate; do not transcribe. Read `references/facilitation-rules.md` before each phase and apply its gates.
@@ -33,7 +33,6 @@ A topic is one folder: `docs/agentic-engineering/<subject>/`. Use a short kebab-
 
 1. If the user names no topic, scan `docs/agentic-engineering/*/` and read the frontmatter of the four artifact files. Present a table with subject, active phase, status, and checkpoint. Ask the user to resume a topic or start a new one.
 2. If the user names a topic, match it to an existing folder and offer to resume. If no folder matches, create a new topic.
-3. If the user supplies an artifact from the old date-based layout (`docs/agentic-engineering/context/`, `prd/`, `specs/`, or `plans/`), copy it unchanged into the topic folder with the standard file name before you continue.
 
 ## Phase detection
 
@@ -53,7 +52,7 @@ Each artifact records the SHA-256 hash of the exact upstream file: `prd.md` reco
 ## Phase execution
 
 1. Resolve the topic and detect the active phase.
-2. Read `references/facilitation-rules.md`, `references/ste-writing-rules.md`, and the active phase reference file.
+2. Read `references/facilitation-rules.md` and the active phase reference file.
 3. Follow the phase reference fully, including its interaction gates and self-checks.
 4. When the user validates the artifact, set `status: validated` and `checkpoint: complete`. Then offer one choice: continue to the next phase now, or stop. The topic resumes later from the artifacts.
 5. After phase 4 validates, report the plan path as the input for an external plan-execution skill.

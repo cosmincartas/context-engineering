@@ -1,7 +1,0 @@
-interface:
-  display_name: "Pair SDLC"
-  short_description: "Pair on delivery work through context, requirements, design, and planning"
-  default_prompt: "Use $pair-sdlc to pair on this work end to end."
-
-policy:
-  allow_implicit_invocation: true
