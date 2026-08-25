@@ -26,9 +26,9 @@ test("static task widget shows every status, identifier, text, summary, and unsa
   const output = lines.join("\n");
 
   assert.equal(lines[0], "● 3 tasks (1 completed, 1 active, 1 pending) [unsaved]");
-  assert.match(output, /  ✔ #1 Completed task/);
-  assert.match(output, /  ◼ #2 Active task/);
-  assert.match(output, /  ◻ #3 Pending task/);
+  assert.match(output, /  ✓ #1 Completed task/);
+  assert.match(output, /  ▪ #2 Active task/);
+  assert.match(output, /  ▫ #3 Pending task/);
 
   const savedLines = renderTaskWidget(tasks, false, false, 0, plainTheme, 100);
   assert.equal(savedLines[0].includes("[unsaved]"), false);
@@ -144,16 +144,16 @@ test("task widget lifecycle refreshes, animates one active task, stops, and disp
   const component = registeredFactory!({ requestRender: () => { renderRequests += 1; } }, plainTheme);
 
   widget.refresh();
-  assert.match(component.render(100).join("\n"), /◼ #1 Active task/);
+  assert.match(component.render(100).join("\n"), /▪ #1 Active task/);
   const beforeAnimation = renderRequests;
 
   widget.setAgentRunning(true);
-  assert.match(component.render(100).join("\n"), /✳ #1 Active task/);
+  assert.match(component.render(100).join("\n"), /⠋ #1 Active task/);
   await new Promise((resolve) => setTimeout(resolve, 180));
   assert.ok(renderRequests > beforeAnimation);
 
   widget.setAgentRunning(false);
-  assert.match(component.render(100).join("\n"), /◼ #1 Active task/);
+  assert.match(component.render(100).join("\n"), /▪ #1 Active task/);
   const afterStop = renderRequests;
   await new Promise((resolve) => setTimeout(resolve, 180));
   assert.equal(renderRequests, afterStop);
@@ -164,7 +164,7 @@ test("task widget lifecycle refreshes, animates one active task, stops, and disp
   const beforeCompletedWait = renderRequests;
   await new Promise((resolve) => setTimeout(resolve, 180));
   assert.equal(renderRequests, beforeCompletedWait);
-  assert.match(component.render(100).join("\n"), /✔ #1 Active task/);
+  assert.match(component.render(100).join("\n"), /✓ #1 Active task/);
 
   widget.dispose();
   assert.equal(widgetCalls, 2);

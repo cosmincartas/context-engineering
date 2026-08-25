@@ -325,13 +325,13 @@ test("widget synchronization restores, refreshes mutations and tree navigation, 
     ctx,
   );
   await handlers.get("agent_start")!({ type: "agent_start" }, ctx);
-  assert.match(component.render(100).join("\\n"), /✳ #1 Visible task/);
+  assert.match(component.render(100).join("\\n"), /⠋ #1 Visible task/);
   const afterAgentStart = renderRequests;
   await new Promise((resolve) => setTimeout(resolve, 180));
   assert.ok(renderRequests > afterAgentStart);
 
   await handlers.get("agent_settled")!({ type: "agent_settled" }, ctx);
-  assert.match(component.render(100).join("\\n"), /◼ #1 Visible task/);
+  assert.match(component.render(100).join("\\n"), /▪ #1 Visible task/);
   const afterSettled = renderRequests;
   await new Promise((resolve) => setTimeout(resolve, 180));
   assert.equal(renderRequests, afterSettled);
