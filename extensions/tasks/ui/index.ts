@@ -4,7 +4,7 @@ import { truncateToWidth, visibleWidth, type Component } from "@earendil-works/p
 import { TaskStore, type Task, type TaskStatus } from "../state/index.ts";
 
 const WIDGET_KEY = "tasks";
-const ACTIVE_FRAMES = ["✳", "✴", "✵", "✶", "✷", "✸", "✹", "✺", "✻", "✼", "✽"] as const;
+const ACTIVE_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
 const WRITE_FAILURE_CHOICES = ["Continue in memory", "Cancel"] as const;
 
 type WidgetTheme = Pick<Theme, "fg" | "bold">;
@@ -45,15 +45,15 @@ export function renderTaskWidget(
     let glyph: string;
     let color: "success" | "accent" | "muted";
     if (task.status === "completed") {
-      glyph = "✔";
+      glyph = "✓";
       color = "success";
     } else if (task.status === "active") {
       glyph = agentRunning
         ? ACTIVE_FRAMES[((frame % ACTIVE_FRAMES.length) + ACTIVE_FRAMES.length) % ACTIVE_FRAMES.length]!
-        : "◼";
+        : "▪";
       color = "accent";
     } else {
-      glyph = "◻";
+      glyph = "▫";
       color = "muted";
     }
 
