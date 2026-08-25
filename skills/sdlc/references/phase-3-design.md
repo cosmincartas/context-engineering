@@ -44,7 +44,7 @@ The unit of work is one design element: one model, one interface or abstraction,
 
 ### Element review
 
-In workflow step 3, present each Behavior flow, Failure row, and Traceability row one at a time for approval, in the same turn rhythm as the pairing loop. The architecture diagram is one element.
+In workflow step 3, present each Behavior flow, Failure entry, and Traceability entry one at a time for approval, in the same turn rhythm as the pairing loop. The architecture diagram is one element.
 
 ## Section rules
 
@@ -56,13 +56,13 @@ In workflow step 3, present each Behavior flow, Failure row, and Traceability ro
 - **Behavior.** Important flows and state transitions, naming the functions they call in order. Write ordering and sudden-stop recovery only where related persistent writes exist.
 - **Failure Model.** Failures relevant to this system, with detector, response, and observable verification. Do not invent optional dependencies, corruption paths, or persistence failures for systems that do not have them.
 - **Traceability.** Every `FR-*` and `NFR-*` maps to design elements. A design element with no requirement or existing repository constraint is scope creep.
-- Consider security (authorization, malicious input), privacy (personal data, retention, deletion), and operability (monitoring, configuration, deployment). Add a contract, failure row, or behavior where one applies; do not write "not applicable" entries.
+- Consider security (authorization, malicious input), privacy (personal data, retention, deletion), and operability (monitoring, configuration, deployment). Add a contract, failure entry, or behavior where one applies; do not write "not applicable" entries.
 
 ## Self-checks
 
 Before validation, make sure that:
 
-- Every `FR-*` and `NFR-*` has a traceability row, and no `FR-D*` remains.
+- Every `FR-*` and `NFR-*` has a traceability entry, and no `FR-D*` remains.
 - Every design-owned `Q-*` was decided at the gate, and no user-owned question remains open.
 - Every element in Models, Interfaces, Functions, and Contracts received a user response in the pairing loop.
 - Every function signature references only designed or existing types; every interface has at least one designed implementer or consumer; no code block contains a function body.

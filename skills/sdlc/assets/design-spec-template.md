@@ -51,9 +51,7 @@ updated: "{{YYYY-MM-DD}}"
 - **Writer:** {{one owner}}
 - **Readers:** {{consumers}}
 
-| Field or operation | Type | Required | Description |
-|---|---|---|---|
-| {{name}} | {{type}} | {{yes/no}} | {{meaning}} |
+- `{{name}}` ({{type}}, {{required/optional}}) — {{meaning}}
 
 **Invariants:**
 
@@ -75,13 +73,12 @@ updated: "{{YYYY-MM-DD}}"
 
 ## 7. Failure Model
 
-| ID | Failure | Detector | Response | Verification |
-|---|---|---|---|---|
-| F-1 | {{Relevant failure}} | {{detector}} | {{designed response}} | {{observable check}} |
+- **F-1** — {{Relevant failure}}
+  - Detector: {{detector}}
+  - Response: {{designed response}}
+  - Verification: {{observable check}}
 
 ## 8. Traceability
 
-| Requirement | Design elements |
-|---|---|
-| FR-1 | {{section numbers or element names}} |
-| NFR-1 | {{section numbers or element names}} |
+- **FR-1** → {{section numbers or element names}}
+- **NFR-1** → {{section numbers or element names}}

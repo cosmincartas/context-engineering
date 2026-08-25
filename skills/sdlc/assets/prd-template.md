@@ -22,18 +22,16 @@ updated: "{{YYYY-MM-DD}}"
 
 ## 3. Functional Requirements
 
-| ID | Requirement | Verification | Source |
-|---|---|---|---|
-| FR-1 | The system must {{one checkable behavior}}. | {{Observable action and expected result.}} | {{brief, repository evidence, user statement, or assumption}} |
+- **FR-1** — The system must {{one checkable behavior}}.
+  - Verification: {{observable action and expected result}}
+  - Source: {{brief, repository evidence, user statement, or assumption}}
 
 ## 4. Non-Functional Requirements
 
-| ID | Category | Requirement | Verification | Source |
-|---|---|---|---|---|
-| NFR-1 | {{category}} | The system must {{measurable limit or binary condition}}. | {{Observable check.}} | {{source}} |
+- **NFR-1** ({{category}}) — The system must {{measurable limit or binary condition}}.
+  - Verification: {{observable check}}
+  - Source: {{source}}
 
 ## 5. Open Questions
 
-| ID | Question and options | Owner |
-|---|---|---|
-| Q-1 | {{Question with concrete options.}} | {{user or design}} |
+- **Q-1** ({{user or design}}) — {{Question with concrete options.}}
