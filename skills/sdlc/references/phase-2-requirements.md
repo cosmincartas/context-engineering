@@ -12,14 +12,14 @@ An `explore` artifact is supporting evidence, not approval of scope or a decisio
 
 ## Artifact
 
-`docs/agentic-engineering/<subject>/prd.md` from `assets/prd-template.md`. Checkpoints in order: `framing`, `requirements`, `awaiting-validation`, `complete`. The framing and requirements checkpoints end with a gate.
+`docs/agentic-engineering/<subject>/prd.md` from `assets/prd-template.md`, written once at the end of the phase.
 
 ## Workflow
 
-1. Draft Problem and Goal. Save with `checkpoint: framing`, then run the **framing gate**.
-2. Draft Functional and Non-Functional Requirements with their verifications. Save with `checkpoint: requirements`, then run the **requirements gate**.
+1. Draft Problem and Goal in conversation, then run the **framing gate**.
+2. Draft Functional and Non-Functional Requirements with their verifications in conversation, then run the **requirements gate**.
 3. Draft Open Questions. Run the self-checks.
-4. Set `checkpoint: awaiting-validation`, present a recap per pairing rule 18, and ask the user to validate. Apply changes until approved, then set `status: validated` and `checkpoint: complete`.
+4. Write `prd.md` with `status: draft` — the first and only write. Present a recap per pairing rule 18 and ask the user to validate. Apply changes to the file until approved, then set `status: validated`.
 
 ### Framing gate
 

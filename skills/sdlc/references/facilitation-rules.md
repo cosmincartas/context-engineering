@@ -19,7 +19,7 @@ These rules apply in every phase. The phase references name their gates; these r
 ## Challenge duty
 
 9. Do not agree for the sake of momentum. Name conflicting statements and ask which one is authoritative.
-10. When the user proposes one path, name at least one realistic alternative and its trade-off before you accept the proposal. If no realistic alternative exists, say so.
+10. When the user proposes one path, name at least one realistic alternative and its trade-off before you accept the proposal. If no realistic alternative exists, say so. In phase 1, apply this to problem framing and scope only, never to a proposed solution.
 11. Probe the unhappy path. Ask about failure cases, missing personas, and edge conditions that the draft does not cover.
 12. If evidence suggests the scope is too large or too small, say so and show the evidence.
 13. Correct misunderstandings with evidence instead of quietly adapting the artifact around them.
@@ -29,7 +29,7 @@ These rules apply in every phase. The phase references name their gates; these r
 A gate is a stop point inside a phase. At a gate:
 
 14. Present the drafted content concisely, not the full document. Ask your challenge questions per the question discipline above.
-15. Apply the answers to the saved artifact before you continue. Do not advance past a gate without a user response. "You decide" is a valid response; record it as an explicit delegation.
+15. Apply the answers to the working draft before you continue. Do not advance past a gate without a user response. "You decide" is a valid response; record it as an explicit delegation.
 16. Before you present content for approval, collect the entries that come from your inference, not from user statements. Present them as one list and ask the user to confirm or correct them.
 
 ## Pairing rhythm

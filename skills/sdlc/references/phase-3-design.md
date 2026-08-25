@@ -12,15 +12,15 @@ If design work exposes a new product requirement, give it a provisional `FR-D*` 
 
 ## Artifact
 
-`docs/agentic-engineering/<subject>/design.md` from `assets/design-spec-template.md`. Checkpoints in order: `decisions`, `surface`, `drafting`, `awaiting-validation`, `complete`. The decisions checkpoint is a gate; the surface checkpoint is the pairing loop.
+`docs/agentic-engineering/<subject>/design.md` from `assets/design-spec-template.md`, written once at the end of the phase.
 
 ## Workflow
 
-1. Save the document with `checkpoint: decisions`, then run the **decision gate**.
-2. Set `checkpoint: surface`. Run the **pairing loop** over Models → Interfaces → Functions → Contracts.
-3. Set `checkpoint: drafting`. Draft Architecture → Behavior → Failure Model → Traceability, one element at a time per the **element review** rule.
+1. Run the **decision gate**.
+2. Run the **pairing loop** over Models → Interfaces → Functions → Contracts.
+3. Draft Architecture → Behavior → Failure Model → Traceability, one element at a time per the **element review** rule.
 4. Run the self-checks.
-5. Set `checkpoint: awaiting-validation`, present a recap per pairing rule 18, and ask the user to validate. Apply changes until approved, then set `status: validated` and `checkpoint: complete`.
+5. Write `design.md` with `status: draft` — the first and only write. Present a recap per pairing rule 18 and ask the user to validate. Apply changes to the file until approved, then set `status: validated`.
 
 ### Decision gate
 
@@ -38,13 +38,13 @@ The unit of work is one design element: one model, one interface or abstraction,
 1. Pick the next element in dependency order: a type before the interface that uses it, an interface before the function that takes it, functions before the external contract that exposes them. Within a section, start with the element the most requirements depend on.
 2. Propose the element as a code block in the repository language. Write only declarations: type fields, interface members, function name, parameters with types, return type, raised or returned errors. Never write a function body. After the code block, give one line on why it has this shape and, if you have one, one open question. The whole proposal fits in 15 lines.
 3. Wait. The user answers with one of: accept, edit (a changed version), counter (a different shape), or "you decide". Treat an edit or a counter as the new proposal: apply challenge duty once (rule 10), then record the result. "You decide" is an explicit delegation; record it.
-4. Save the agreed element to `design.md` before you propose the next one. One element per turn; do not batch.
+4. Record the agreed element in the working draft before you propose the next one. One element per turn; do not batch.
 5. When the user proposes an element before you do, critique it by the same rules and record the result.
 6. When a new element would need a decision that belongs to the gate, return to the gate first.
 
 ### Element review
 
-In `drafting`, present each Behavior flow, Failure row, and Traceability row one at a time for approval, in the same turn rhythm as the pairing loop. The architecture diagram is one element.
+In workflow step 3, present each Behavior flow, Failure row, and Traceability row one at a time for approval, in the same turn rhythm as the pairing loop. The architecture diagram is one element.
 
 ## Section rules
 

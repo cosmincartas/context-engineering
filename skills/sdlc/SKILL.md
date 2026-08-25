@@ -22,7 +22,7 @@ These hold in every phase:
 
 - Never write production code. This skill plans; it does not implement. Type declarations, interface definitions, and function signatures inside `design.md` are design; never write a function body.
 - Never run `git commit`, create branches, or push changes.
-- The artifacts are the state. Save the draft before you ask questions. Update it after each material answer. A stopped session must be resumable from the artifacts alone.
+- Validated artifacts are the state. Work each phase in conversation; write the artifact file once, when you present it for validation, with `status: draft`. Set `status: validated` when the user approves. A session interrupted before the write restarts its phase from the validated upstream artifacts; do not reconstruct partial phase work from chat history.
 - Facilitate; do not transcribe. Read `references/facilitation-rules.md` before each phase and apply its gates.
 - Load only the reference file for the active phase.
 - Never inspect, edit, or ask about `.gitignore`. After you save an artifact, you can say exactly: `Consider adding docs/agentic-engineering/ to .gitignore manually.`
@@ -31,7 +31,7 @@ These hold in every phase:
 
 A topic is one folder: `docs/agentic-engineering/<subject>/`. Use a short kebab-case subject.
 
-1. If the user names no topic, scan `docs/agentic-engineering/*/` and read the frontmatter of the four artifact files. Present a table with subject, active phase, status, and checkpoint. Ask the user to resume a topic or start a new one.
+1. If the user names no topic, scan `docs/agentic-engineering/*/` and read the frontmatter of the four artifact files. Present a table with subject, active phase, and status. Ask the user to resume a topic or start a new one.
 2. If the user names a topic, match it to an existing folder and offer to resume. If no folder matches, create a new topic.
 
 ## Phase detection
@@ -54,5 +54,5 @@ Each artifact records the SHA-256 hash of the exact upstream file: `prd.md` reco
 1. Resolve the topic and detect the active phase.
 2. Read `references/facilitation-rules.md` and the active phase reference file.
 3. Follow the phase reference fully, including its interaction gates and self-checks.
-4. When the user validates the artifact, set `status: validated` and `checkpoint: complete`. Then offer one choice: continue to the next phase now, or stop. The topic resumes later from the artifacts.
+4. When the user validates the artifact, set `status: validated`. Then offer one choice: continue to the next phase now, or stop. The topic resumes later from the artifacts.
 5. After phase 4 validates, report the plan path as the input for an external plan-execution skill.

@@ -3,7 +3,6 @@ schema_version: 1
 artifact: prd
 subject: "{{subject}}"
 status: draft
-checkpoint: framing
 context: "context-brief.md"
 context_sha256: "{{context brief content hash}}"
 repository_baseline: "{{commit or unavailable}}"

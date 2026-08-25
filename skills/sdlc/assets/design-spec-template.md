@@ -3,7 +3,6 @@ schema_version: 1
 artifact: design
 subject: "{{subject}}"
 status: draft
-checkpoint: decisions
 prd: "prd.md"
 prd_sha256: "{{PRD content hash}}"
 repository_baseline: "{{commit or unavailable}}"

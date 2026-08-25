@@ -46,4 +46,4 @@ updated: "{{YYYY-MM-DD}}"
 
 ## Suggested Next Step
 
-{{Stop, run a named spike, or use clarify. This is a recommendation, not a commitment to build. An exploration does not replace the required clarification step before delivery work.}}
+{{Stop, run a named spike, or use sdlc. This is a recommendation, not a commitment to build. An exploration does not replace the required context phase before delivery work.}}
