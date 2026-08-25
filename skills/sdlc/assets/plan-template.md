@@ -3,7 +3,6 @@ schema_version: 1
 artifact: implementation-plan
 subject: "{{subject}}"
 status: draft
-checkpoint: drafting
 design: "design.md"
 design_sha256: "{{design content hash}}"
 prd: "prd.md"

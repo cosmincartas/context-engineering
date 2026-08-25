@@ -11,11 +11,11 @@ Turn the validated design into an implementation plan that any agent can execute
 
 ## Artifact
 
-`docs/agentic-engineering/<subject>/plan.md` from `assets/plan-template.md`. Checkpoints: `drafting` → `awaiting-validation` → `complete`.
+`docs/agentic-engineering/<subject>/plan.md` from `assets/plan-template.md`, written once at the end of the phase.
 
 ## Drafting rules
 
-- Draft and save the complete plan before you present any plan content. Do not present task or section drafts. Ask only factual questions that block drafting.
+- Draft the complete plan in conversation before you present any plan content. Do not present task or section drafts. Ask only factual questions that block drafting.
 - Give each task a stable `Task N` identifier and exactly one independently verifiable outcome, small enough for one red-green-refactor cycle when behavior changes.
 - Give each task one `file:symbol` entry point: a current symbol, or a symbol the design defines when it does not exist yet; else one file path. Use the designed signatures as written; do not redefine them in the plan. Tell implementers to trace downstream from it; do not freeze a downstream file map or include production-code listings.
 - Declare exact task identifiers under `Depends on:` or `none`. Order tasks so the project builds and its tests pass after every completed task.
@@ -26,5 +26,5 @@ Turn the validated design into an implementation plan that any agent can execute
 ## Validation loop
 
 1. Complete the full draft and check every drafting rule.
-2. Set `checkpoint: awaiting-validation`. Report the saved path, present a recap per pairing rule 18, and ask the user to validate. If task order or grouping involves a real trade-off, include the options and a recommendation.
-3. Apply requested changes to the complete plan, repeat the checks, and ask for validation again. When approved, set `status: validated` and `checkpoint: complete`. Report the plan path as the input for an external plan-execution skill.
+2. Write `plan.md` with `status: draft` — the first and only write. Report the saved path, present a recap per pairing rule 18, and ask the user to validate. If task order or grouping involves a real trade-off, include the options and a recommendation.
+3. Apply requested changes to the complete plan, repeat the checks, and ask for validation again. When approved, set `status: validated`. Report the plan path as the input for an external plan-execution skill.

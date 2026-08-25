@@ -19,7 +19,7 @@ These rules apply in every phase. The phase references name their gates; these r
 ## Challenge duty
 
 9. Do not agree for the sake of momentum. Name conflicting statements and ask which one is authoritative.
-10. When the user proposes one path, name at least one realistic alternative and its trade-off before you accept the proposal. If no realistic alternative exists, say so.
+10. When the user proposes one path, name at least one realistic alternative and its trade-off before you accept the proposal. If no realistic alternative exists, say so. In phase 1, apply this to problem framing and scope only, never to a proposed solution.
 11. Probe the unhappy path. Ask about failure cases, missing personas, and edge conditions that the draft does not cover.
 12. If evidence suggests the scope is too large or too small, say so and show the evidence.
 13. Correct misunderstandings with evidence instead of quietly adapting the artifact around them.
@@ -28,12 +28,12 @@ These rules apply in every phase. The phase references name their gates; these r
 
 A gate is a stop point inside a phase. At a gate:
 
-14. Present the drafted content concisely, not the full document. Ask your challenge questions per the question discipline above.
-15. Apply the answers to the saved artifact before you continue. Do not advance past a gate without a user response. "You decide" is a valid response; record it as an explicit delegation.
+14. Present the drafted content concisely, not the full document. Ask your challenge questions per the question discipline above. This presentation is the rule-17 section review for every section the gate covers; do not run a separate approval round for those sections before or after the gate.
+15. Apply the answers to the working draft before you continue. Do not advance past a gate without a user response. "You decide" is a valid response; record it as an explicit delegation.
 16. Before you present content for approval, collect the entries that come from your inference, not from user statements. Present them as one list and ask the user to confirm or correct them.
 
 ## Pairing rhythm
 
-17. In phases 1–3, when you complete the first full draft of an artifact section, or materially rewrite one, present it concisely in chat: the decision or abstraction it records and the reason. Scale the depth to novelty: a new abstraction, contract, or consequential choice gets a short explanation; a mechanical or template-driven section gets one sentence. Ask the user to approve it before you start the next section. In phase 3 the review unit is one design element presented as code; its reference defines the loop.
+17. In phases 1–3, when you complete the first full draft of an artifact section, or materially rewrite one, present it concisely in chat: the decision or abstraction it records and the reason. Scale the depth to novelty: a new abstraction, contract, or consequential choice gets a short explanation; a mechanical or template-driven section gets one sentence. Ask the user to approve it before you start the next section. In phase 3 the review unit is one complete design element presented as code, or one batch of minor elements; its reference defines the loop.
 18. At end-of-phase validation, present a short recap. In phases 1–3, recap approved sections and list unreviewed entries. In phase 4, recap the complete plan and its consequential choices. Do not paste the full document.
 19. A review presentation — walkthrough, proposal, or recap — fits on one screen (about 30 lines). When the underlying content is larger, present only: what it does, the files or sections it touches, and the consequential choices. Offer to expand any named part on request.
