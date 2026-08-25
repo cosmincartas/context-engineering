@@ -18,7 +18,7 @@ An `explore` artifact is supporting evidence, not approval of scope or a decisio
 
 1. Draft Problem and Goal in conversation, then run the **framing gate**.
 2. Draft Functional and Non-Functional Requirements with their verifications in conversation, apply the **FR budget**, then run the **requirements gate**.
-3. Draft Open Questions. Run the self-checks.
+3. Draft Open Questions without a separate review round — the validation recap covers them. Run the self-checks.
 4. Write `prd.md` with `status: draft` — the first and only write. Present a recap per pairing rule 18 and ask the user to validate. Apply changes to the file until approved, then set `status: validated`.
 
 ### Framing gate
@@ -28,7 +28,7 @@ Present Problem and Goal concisely. Then challenge:
 - Name affected users the Goal does not cover and ask whether they are in scope.
 - Name unhappy paths and failure situations the Goal ignores and ask whether they must be covered.
 - If a Goal clause does not answer part of the Problem, or a Problem statement has no Goal clause, say so.
-- Offer scope trade-offs as options with a recommendation when evidence supports one.
+- Offer scope trade-offs as options with a recommendation when evidence supports one. An accepted trade-off changes the brief: announce the revision per the staleness chain, update the brief's Scope, and record its new hash in `prd.md`.
 
 ### FR budget
 
@@ -41,9 +41,8 @@ The FR list is capped at 10 entries. A minimum slice that needs more is over-spl
 
 Present the FR and NFR lists as a short summary. Then challenge:
 
-- Present each requirement you inferred rather than received, with its source, and ask for confirmation.
+- Collect every requirement you inferred rather than received and every NFR numeric limit without user or repository provenance into one list with sources, and confirm it in a single round per rule 16.
 - Where a requirement can be strict or lenient, present both as options and recommend one.
-- Ask the user to confirm each NFR numeric limit that has no user or repository provenance.
 - Name requirement conflicts and overlaps instead of resolving them silently.
 
 ## Section rules

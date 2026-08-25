@@ -13,9 +13,17 @@ updated: "{{YYYY-MM-DD}}"
 
 # {{Subject}} Design Specification
 
-## 1. Models
+## 1. Architecture
 
-### 1.1 `{{TypeName}}`
+```text
+{{Component diagram; components named by the interface they implement or the functions they own}}
+```
+
+- {{Architectural flow: how a request or event moves through the components, in a few lines.}}
+
+## 2. Models
+
+### 2.1 `{{TypeName}}`
 
 ```{{lang}}
 {{type or record declaration with typed fields}}
@@ -23,9 +31,9 @@ updated: "{{YYYY-MM-DD}}"
 
 - {{Invariant the type cannot express, or omit.}}
 
-## 2. Interfaces
+## 3. Interfaces
 
-### 2.1 `{{InterfaceName}}`
+### 3.1 `{{InterfaceName}}`
 
 ```{{lang}}
 {{interface, protocol, trait, or abstract class with member signatures}}
@@ -33,9 +41,9 @@ updated: "{{YYYY-MM-DD}}"
 
 - **Not responsible for:** {{one line}}
 
-## 3. Functions
+## 4. Functions
 
-### 3.1 `{{owner: module, class, or component}}`
+### 4.1 `{{owner: module, class, or component}}`
 
 ```{{lang}}
 {{function signature}}
@@ -43,9 +51,9 @@ updated: "{{YYYY-MM-DD}}"
 
 - {{Effect in one line; error behavior.}}
 
-## 4. Contracts
+## 5. Contracts
 
-### 4.1 `{{contract name}}`
+### 5.1 `{{contract name}}`
 
 - **Version:** {{version}}
 - **Writer:** {{one owner}}
@@ -56,12 +64,6 @@ updated: "{{YYYY-MM-DD}}"
 **Invariants:**
 
 - {{Rule that is always true.}}
-
-## 5. Architecture
-
-```text
-{{Component diagram; components named by the interface they implement or the functions they own}}
-```
 
 ## 6. Behavior
 
