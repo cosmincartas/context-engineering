@@ -271,7 +271,7 @@ function renderResult(
   return new Text(escapeControls(text), 0, 0);
 }
 
-export default function questionnaire(pi: ExtensionAPI): void {
+export default function askUserQuestion(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "AskUserQuestion",
     label: "AskUserQuestion",

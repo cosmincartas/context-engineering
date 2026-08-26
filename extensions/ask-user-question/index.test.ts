@@ -7,7 +7,7 @@ import {
   type Component,
   type TUI,
 } from "@earendil-works/pi-tui";
-import questionnaire from "./index.ts";
+import askUserQuestion from "./index.ts";
 
 interface RegisteredTool {
   name: string;
@@ -47,9 +47,9 @@ const validRequest = {
 
 function registeredTool(): RegisteredTool {
   let captured: RegisteredTool | undefined;
-  questionnaire({
+  askUserQuestion({
     registerTool(tool: RegisteredTool) {
-      assert.equal(captured, undefined, "questionnaire must register one tool");
+      assert.equal(captured, undefined, "ask-user-question must register one tool");
       captured = tool;
     },
   } as any);
