@@ -76,7 +76,7 @@ Explicit invocation syntax is host-specific: `$agentic-workflow:sdlc` in Codex, 
 
 ## Releases
 
-Keep the versions in `.codex-plugin/plugin.json` and `.claude-plugin/plugin.json` equal, tag the commit as `v<version>`, and publish a GitHub Release.
+Keep the versions in `package.json`, `.codex-plugin/plugin.json`, and `.claude-plugin/plugin.json` equal, tag the commit as `v<version>`, and publish a GitHub Release.
 
 ## Validation
 
