@@ -1,0 +1,7 @@
+interface:
+  display_name: "Quickie"
+  short_description: "Plan one small change in a single session"
+  default_prompt: "Use $quickie to plan this small change without the full delivery pipeline."
+
+policy:
+  allow_implicit_invocation: true

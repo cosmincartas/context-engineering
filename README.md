@@ -8,14 +8,18 @@ Model-agnostic skills turn an initial development prompt into reusable context, 
 |---|---|---|
 | Understand a concept, compare technologies, inspect implementation impact, or see examples | `explore` | Chat response or optional technical exploration brief |
 | Plan delivery work, from scope isolation to an implementation plan, or resume a planning topic | `sdlc` | Validated context brief, PRD, design specification, and implementation plan, reviewed section by section |
+| Plan one small and clear change in a single session | `quickie` | Validated quick plan: understanding, scope, acceptance criteria, and tasks |
 
 The delivery pipeline lives in one skill:
 
 ```text
 explore (optional) → sdlc: context → requirements → design → plan
+explore (optional) → quickie: align → plan
 ```
 
 `sdlc` uses a pairing rhythm: the user approves each artifact section as it is drafted, and in the design phase the pair defines models, interfaces, and function signatures one element at a time as code.
+
+`quickie` covers one deliverable that fits five tasks or fewer, changes no public contract, and has no open design decision. When a criterion fails, it stops and hands the confirmed understanding to `sdlc`.
 
 `explore` is standalone. Its findings enter the delivery path only after the user explicitly chooses to formalize the work. Every delivery topic starts with the context phase, including requests that appear clear. Each phase ends with a user-validated artifact, and the topic can stop and resume at any phase.
 
@@ -30,6 +34,10 @@ Use sdlc to pair with me on this development request.
 Use sdlc to resume the payment-retries topic.
 ```
 
+```text
+Use quickie to plan this small change.
+```
+
 Named-skill invocation syntax varies by runtime.
 
 ## Artifacts
@@ -39,16 +47,17 @@ One topic is one folder: `docs/agentic-engineering/<subject>/`.
 | Artifact | File | Lifecycle |
 |---|---|---|
 | Technical exploration, when requested | `docs/agentic-engineering/explorations/` | Optional draft → validated |
+| Quick plan | `quickie/<YYYY-MM-DD>-<subject>.md` | Draft → validated; no upstream hash |
 | Context brief | `<subject>/context-brief.md` | Draft checkpoints → validated |
 | PRD | `<subject>/prd.md` | Draft checkpoints → validated |
 | Design specification | `<subject>/design.md` | Draft checkpoints → validated |
 | Implementation plan | `<subject>/plan.md` | Draft → validated; task status and evidence during external execution |
 
-Each artifact records the SHA-256 hash of its exact upstream file, so a change to a validated artifact marks everything downstream as stale. Artifacts are not committed without explicit user consent. Ignored artifacts resume only in the current working copy; commit them when recovery across machines matters.
+Each `sdlc` artifact records the SHA-256 hash of its exact upstream file, so a change to a validated artifact marks everything downstream as stale. Artifacts are not committed without explicit user consent. Ignored artifacts resume only in the current working copy; commit them when recovery across machines matters.
 
 ## Implementation
 
-`sdlc` stops at the validated implementation plan. It does not ship an execution skill.
+`sdlc` and `quickie` stop at a validated implementation plan. Neither ships an execution skill.
 
 With Superpowers, use `superpowers:subagent-driven-development` when subagents are available, or `superpowers:executing-plans` otherwise. Apply `superpowers:test-driven-development` to each production-behavior task. Superpowers is an external package and is not bundled here.
 
