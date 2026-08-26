@@ -5,6 +5,7 @@ import { TaskStore, type Task, type TaskStatus } from "../state/index.ts";
 
 const WIDGET_KEY = "tasks";
 const ACTIVE_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
+const ACTIVE_FRAME_INTERVAL_MS = 80; // matches pi-tui Loader default
 const WRITE_FAILURE_CHOICES = ["Continue in memory", "Cancel"] as const;
 
 type WidgetTheme = Pick<Theme, "fg" | "bold">;
@@ -150,7 +151,7 @@ export class TaskWidget {
       }
       this.frame = (this.frame + 1) % ACTIVE_FRAMES.length;
       this.tui?.requestRender();
-    }, 150);
+    }, ACTIVE_FRAME_INTERVAL_MS);
   }
 
   private stopTimer(): void {

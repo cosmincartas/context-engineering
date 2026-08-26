@@ -27,11 +27,14 @@ Goals, in order: build a common and complete understanding of the subject, then 
 
 ### Slicing gate
 
-1. Propose the thinnest slice of the request that still delivers one user-visible outcome. Never slice below a user-visible outcome.
-2. Present two lists: the slice (stays in scope) and the parked items (everything cut, one line each).
-3. The user approves, adjusts, or rejects the slice. "Keep the full scope" is a valid answer; record it as an explicit decision.
-4. Apply the approved slice to Scope. Record parked items under Parked, each as a candidate subject for a future topic.
+1. Split a broad request into deliverables that can ship independently. Select one deliverable for this topic and park the rest.
+2. Propose the smallest slice of the deliverable you select that can ship independently and delivers one user-visible outcome. Never slice below a user-visible outcome.
+3. If the proposed deliverable may exceed either the FR or NFR budget, prefer a smaller slice that can ship independently.
+4. Present two lists: the slice in scope and items to park (one line each).
+5. Ask the user to approve, adjust, or reject the slice.
+6. Accept and record full scope only within both budgets: five FRs and five NFRs. Never bypass either budget.
+7. Apply the slice the user approves to Scope. Record items you park under Parked, each as a candidate subject for a future topic.
 
 ## Completion check
 
-Confirmed Understanding states the problem, who is affected, the desired outcome, evidence or greenfield status, and constraints. The user has confirmed the inferred entries. Scope reflects the approved slice and parked items are recorded.
+Confirmed Understanding states the problem, who is affected, the desired outcome, evidence or greenfield status, and constraints. The user has confirmed the inferred entries. Scope names one deliverable that can ship independently, moves other deliverables and out-of-slice items to Parked, and records full-scope decisions within both budgets.

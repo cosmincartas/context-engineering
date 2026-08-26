@@ -14,10 +14,14 @@ An `explore` artifact is supporting evidence, not approval of scope or a decisio
 
 `docs/agentic-engineering/<subject>/prd.md` from `assets/prd-template.md`, written once at the end of the phase.
 
+## PRD invariant
+
+The PRD must cover one deliverable that can ship independently. It must contain no more than five FRs and five NFRs.
+
 ## Workflow
 
 1. Draft Problem and Goal in conversation, then run the **framing gate**.
-2. Draft Functional and Non-Functional Requirements with their verifications in conversation, apply the **FR budget**, then run the **requirements gate**.
+2. Draft Functional and Non-Functional Requirements with verifications in conversation. Apply both budgets, then run the **requirements gate**.
 3. Draft Open Questions without a separate review round — the validation recap covers them. Run the self-checks.
 4. Write `prd.md` with `status: draft` — the first and only write. Present a recap per pairing rule 18 and ask the user to validate. Apply changes to the file until approved, then set `status: validated`.
 
@@ -28,18 +32,51 @@ Present Problem and Goal concisely. Then challenge:
 - Name affected users the Goal does not cover and ask whether they are in scope.
 - Name unhappy paths and failure situations the Goal ignores and ask whether they must be covered.
 - If a Goal clause does not answer part of the Problem, or a Problem statement has no Goal clause, say so.
-- Offer scope trade-offs as options with a recommendation when evidence supports one. An accepted trade-off changes the brief: announce the revision per the staleness chain, update the brief's Scope, and record its new hash in `prd.md`.
+- Offer scope trade-offs as options with a recommendation when evidence supports one. When a trade-off is accepted, run the scope-revision process only if it changes scope.
 
 ### FR budget
 
-The FR list is capped at 10 entries. A minimum slice that needs more is over-split or mis-sliced. When a draft exceeds the cap, resolve it before the requirements gate:
+The FR list has a maximum of five entries. Give each distinct functional behavior one FR. Never merge behaviors to meet the cap.
 
-1. Merge: one FR per user-visible behavior; fold edge cases, variants, and failure paths into that FR's Verification field instead of adding entries.
-2. If still over the cap, the slice is too big: propose which FRs to park as future topics and apply the user's decision. The requirements gate does not run until the list is within budget.
+1. Fold only edge cases, variants, and failure paths of the same behavior into its Verification field. Never hide a separate behavior in Verification.
+2. If the draft exceeds five FRs, return to phase 1's slicing gate. Select a smaller deliverable that can ship independently.
+3. Apply the user's scope decision.
+4. Park deliverables and behaviors that leave scope before the requirements gate.
+5. Run the scope-revision process only after an over-budget draft changes scope.
+6. Do not run the requirements gate until the revised brief passes validation and the FR list fits the budget.
+
+### Scope revision
+
+Run this process for NFR deferral; run it for FR overflow or mandatory NFR overflow only when they change scope.
+
+1. Announce the scope revision.
+2. Follow the staleness process and warn about downstream staleness.
+3. Update the brief's Scope and Parked sections. Send every NFR candidate you defer to the context brief's Parked section.
+4. Revalidate the revised context brief.
+5. Refresh the PRD context hash before continuing.
+
+### NFR budget
+
+The NFR list has a maximum of five entries. Consider candidates from every category: performance, capacity, security, privacy, availability and recovery, compliance, accessibility, and observability.
+
+1. Infer candidates from the validated brief, user statements, and repository evidence.
+2. Rank candidates contextually in this order:
+   - mandatory obligations from any category, such as legal, security, privacy, accessibility, and data-loss obligations;
+   - explicit user or repository constraints;
+   - risks to the core outcome.
+3. Keep at most five candidates. Run the scope-revision process after you defer any candidate.
+4. If mandatory NFRs exceed five, return to phase 1's slicing gate and reduce feature scope until all mandatory NFRs fit.
+5. After mandatory overflow reduces scope, run the scope-revision process. Never defer a mandatory NFR.
+6. Skip scope revision when the unchanged list has five or fewer candidates.
+7. Do not run the requirements gate until the NFR list fits the budget.
 
 ### Requirements gate
 
-Present the FR and NFR lists as a short summary. Then challenge:
+Summarize the FR and NFR lists.
+
+Confirm the PRD invariant: one deliverable that can ship independently, five FRs maximum, and five NFRs maximum.
+
+Challenge the requirements:
 
 - Collect every requirement you inferred rather than received and every NFR numeric limit without user or repository provenance into one list with sources, and confirm it in a single round per rule 16.
 - Where a requirement can be strict or lenient, present both as options and recommend one.
@@ -58,7 +95,9 @@ Present the FR and NFR lists as a short summary. Then challenge:
 Before validation, make sure that:
 
 - Every Goal clause answers the Problem, and every in-scope Problem statement has a Goal clause.
-- The FR list is within the FR budget, and no FR restates or rephrases another.
+- The PRD covers one deliverable that can ship independently.
+- The FR list has no more than five entries. Each distinct functional behavior has its own FR; no FR hides a separate behavior in Verification.
+- The NFR list has no more than five entries. Rank candidates from every category contextually. Park lower-priority candidates and keep all mandatory NFRs in scope.
 - Every FR and NFR has an observable verification and a source, and every NFR is measurable or binary.
 - Every NFR numeric limit has user or repository provenance, or a user-owned `Q-*` entry.
 - Both gates received a user response.
