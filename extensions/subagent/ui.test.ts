@@ -152,10 +152,10 @@ test("renders standard footer rows before at most three subagents with title and
   assert.match(initial[1], /20\.0%\/100/);
   assert.match(initial[1], /\(fake\) parent • medium/);
   assert.match(initial[2], /MCP Servers: context7.*ponytail: full/);
-  assert.match(initial[3], /subagent 1.*Child one.*↑12.*↓7.*ctx 40/);
-  assert.match(initial[4], /subagent 2.*Child two.*↑12.*↓7.*ctx 40/);
-  assert.match(initial[5], /subagent 3.*Child three.*↑12.*↓7.*ctx 40/);
-  assert.doesNotMatch(initial.join("\n"), /orchestrator|Child four|#1/);
+  assert.match(initial[3], /○ subagent 1.*Child one.*↑12.*↓7.*ctx 40/);
+  assert.match(initial[4], /○ subagent 2.*Child two.*↑12.*↓7.*ctx 40/);
+  assert.match(initial[5], /○ subagent 3.*Child three.*↑12.*↓7.*ctx 40/);
+  assert.doesNotMatch(initial.join("\n"), /orchestrator|Child four|#1|›/);
   assert.ok(initial.some((line) => line.includes("\x1b[31m")));
 
   for (const width of [1, 20, 32, 120]) {
@@ -173,7 +173,7 @@ test("keeps subagent usage visible when a task title is too long", () => {
   const footer = new AgentFooter(footerTui(), plainTheme, footerData(), registry, footerContext());
 
   const row = footer.render(40).find((line) => /subagent 1/.test(line))!;
-  assert.match(row, /subagent 1.*↑12.*↓7.*ctx 40/);
+  assert.match(row, /○ subagent 1.*↑12.*↓7.*ctx 40/);
   assert.ok(visibleWidth(row) <= 40);
   footer.dispose();
 });
@@ -187,8 +187,9 @@ test("scrolls vertically through four children with bounded Up/Down and ignores 
   const up = "\x1b[A";
   for (let index = 0; index < 4; index++) footer.handleInput(down);
   const atEnd = footer.render(120);
-  assert.match(atEnd.join("\n"), /subagent 4.*Child four/);
-  assert.doesNotMatch(atEnd.join("\n"), /Child one/);
+  assert.match(atEnd.join("\n"), /○ subagent 4.*Child four/);
+  assert.doesNotMatch(atEnd.join("\n"), /Child one|›/);
+  assert.ok(atEnd.filter((line) => /subagent/.test(line)).every((line) => line.startsWith("○ subagent ")));
   assert.equal(atEnd.filter((line) => /subagent/.test(line)).length, 3);
 
   const endSelection = atEnd.find((line) => /Child four/.test(line));
@@ -221,12 +222,12 @@ test("keeps the fallback child selected after removing the selected and precedin
   footer.focus();
 
   footer.handleInput("\x1b[B");
-  assert.match(footer.render(120).find((line) => /^› subagent/.test(line))!, /Child two/);
+  assert.match(footer.render(120).find((line) => /^◉ subagent/.test(line))!, /Child two/);
 
   registry.remove("two");
-  assert.match(footer.render(120).find((line) => /^› subagent/.test(line))!, /Child three/);
+  assert.match(footer.render(120).find((line) => /^◉ subagent/.test(line))!, /Child three/);
   registry.remove("one");
-  assert.match(footer.render(120).find((line) => /^› subagent/.test(line))!, /Child three/);
+  assert.match(footer.render(120).find((line) => /^◉ subagent/.test(line))!, /Child three/);
 
   footer.dispose();
 });
@@ -242,9 +243,13 @@ test("marks the focused selected row without changing its state", () => {
   const focused = footer.render(80).find((line) => /Child one/.test(line))!;
 
   assert.notEqual(focused, unfocused);
-  assert.doesNotMatch(unfocused, /^› /);
-  assert.match(unfocused, /subagent 1/);
-  assert.match(focused, /^› subagent 1/);
+  assert.match(unfocused, /^○ subagent 1/);
+  assert.match(focused, /^◉ subagent 1/);
+
+  footer.blur();
+  const blurred = footer.render(80).find((line) => /Child one/.test(line))!;
+  assert.match(blurred, /^○ subagent 1/);
+  assert.doesNotMatch(blurred, /◉|›/);
   footer.dispose();
 });
 

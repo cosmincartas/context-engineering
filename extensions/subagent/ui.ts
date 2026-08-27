@@ -1091,7 +1091,7 @@ function stateText(state: SubagentRun["state"]): string {
 }
 
 function subagentLine(run: SubagentRun, number: number, selected: boolean, width: number): string {
-  const left = `${selected ? "› " : ""}subagent ${number}`;
+  const left = `${selected ? "◉ " : "○ "}subagent ${number}`;
   const usage = totalUsage(run);
   const right = `${formatDuration(run)} ↑${formatTokens(usage.inputTokens)} ↓${formatTokens(usage.outputTokens)} ctx ${formatTokens(usage.contextTokens)}`;
   const availableTitle = width - visibleWidth(left) - visibleWidth(right) - 2;
