@@ -121,6 +121,7 @@ type MutableAttempt = {
   stderr: string;
   exitCode: number | null;
   error?: string;
+  providerError?: string;
 };
 
 type MutableRun = {
@@ -307,6 +308,12 @@ export async function executeSubagent(
       }
 
       run.error = outcome.error || attempt.stderr || "Subagent failed";
+      if (number === 1 && outcome.retryable !== false && startedWork(attempt) && mutatesWorkspace(definition)) {
+        attempt.activity.push(
+          `Not retried: ${definition.name} can change files and had already started work.`,
+        );
+        outcome.retryable = false;
+      }
       emit();
       if (number === 1 && outcome.retryable !== false) {
         run.state = "retrying";
@@ -546,6 +553,14 @@ function failedRun(request: SubagentRequest, error: unknown): SubagentRun {
   };
 }
 
+function mutatesWorkspace(definition: AgentDefinition): boolean {
+  return definition.tools.some((tool) => tool === "edit" || tool === "write" || tool === "bash");
+}
+
+function startedWork(attempt: MutableAttempt): boolean {
+  return attempt.messages.some((message) => message.role === "assistant");
+}
+
 function resolveModel(
   definition: AgentDefinition,
   ctx: ExtensionContext,
@@ -676,6 +691,7 @@ async function runAttempt(
         attempt.stderr += stderrDecoder.end();
         if (buffer.trim()) processLine(buffer);
         attempt.exitCode = code;
+        if (!attempt.error && attempt.providerError) attempt.error = attempt.providerError;
         try {
           await discoverSessionFile();
         } catch (error) {
@@ -773,7 +789,8 @@ async function runAttempt(
             refreshAttemptUsage(attempt, usage.contextTokens);
           }
           if (update?.type === "error") {
-            attempt.error = update.error?.errorMessage ?? `Provider stopped with ${update.reason}`;
+            attempt.providerError = update.error?.errorMessage ?? `Provider stopped with ${update.reason}`;
+            attempt.activity.push(`provider error: ${attempt.providerError}`);
             emit();
             return;
           }
@@ -823,7 +840,10 @@ async function runAttempt(
             message.stopReason === "aborted" ||
             Boolean(message.errorMessage)
           ) {
-            attempt.error = message.errorMessage ?? `Provider stopped with ${message.stopReason}`;
+            attempt.providerError = message.errorMessage ?? `Provider stopped with ${message.stopReason}`;
+            attempt.activity.push(`provider error: ${attempt.providerError}`);
+          } else {
+            attempt.providerError = undefined;
           }
         }
         emit();
