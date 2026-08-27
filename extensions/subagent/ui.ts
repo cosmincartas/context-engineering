@@ -56,6 +56,7 @@ export type FooterAction =
   | { readonly type: "openChild"; readonly run: MonitoredRun };
 
 const ZERO_USAGE = { inputTokens: 0, outputTokens: 0, contextTokens: 0 };
+const MAX_VISIBLE_CHILDREN = 3;
 
 type CursorAwareEditor = EditorComponent & {
   getLines(): string[];
@@ -179,6 +180,7 @@ export class AgentFooter implements Component, Focusable {
   private readonly ctx: ExtensionContext;
   private selectedIndex = 0;
   private selectedRunId?: string;
+  private childOffset = 0;
   private readonly unsubscribe: () => void;
   private readonly unsubscribeBranch: () => void;
   private readonly timer: ReturnType<typeof setInterval>;
@@ -233,24 +235,21 @@ export class AgentFooter implements Component, Focusable {
   }
 
   handleInput(data: string): FooterAction {
-    const count = this.itemCount();
-    if (matchesKey(data, Key.left)) {
-      this.selectedIndex = (this.selectedIndex - 1 + count) % count;
-      this.rememberSelection();
-      this.invalidate();
-      this.tui.requestRender();
+    if (matchesKey(data, Key.left) || matchesKey(data, Key.right)) return { type: "none" };
+    if (matchesKey(data, Key.up) || matchesKey(data, Key.down)) {
+      const children = this.registry.list();
+      const direction = matchesKey(data, Key.up) ? -1 : 1;
+      const nextIndex = Math.max(0, Math.min(children.length, this.selectedIndex + direction));
+      if (nextIndex !== this.selectedIndex) {
+        this.selectedIndex = nextIndex;
+        this.rememberSelection();
+        this.syncChildViewport(children.length);
+        this.invalidate();
+        this.tui.requestRender();
+      }
       return { type: "none" };
     }
-    if (matchesKey(data, Key.right)) {
-      this.selectedIndex = (this.selectedIndex + 1) % count;
-      this.rememberSelection();
-      this.invalidate();
-      this.tui.requestRender();
-      return { type: "none" };
-    }
-    if (matchesKey(data, Key.up) || matchesKey(data, Key.escape)) {
-      return this.dispatch({ type: "focusEditor" });
-    }
+    if (matchesKey(data, Key.escape)) return this.dispatch({ type: "focusEditor" });
     if (matchesKey(data, Key.enter)) {
       const selected = this.registry.list()[this.selectedIndex - 1];
       return this.dispatch(
@@ -263,30 +262,32 @@ export class AgentFooter implements Component, Focusable {
   render(width: number): string[] {
     const safeWidth = Math.max(1, Math.floor(width));
     const children = this.registry.list();
+    this.syncChildViewport(children.length);
     const selected = children[this.selectedIndex - 1];
-    const focusPrefix = this.focused ? "› " : "";
-    const processWidth = Math.max(1, safeWidth - visibleWidth(focusPrefix));
-    let processRow: string;
-    let telemetry: string | undefined;
-    if (selected) {
-      const usage = totalUsage(selected.run);
-      telemetry = telemetryLine(selected.run, this.selectedIndex, usage, safeWidth);
-      const radioWidth = processWidth - visibleWidth(telemetry) - 1;
-      const compactSelectedLabel = `${displayTitle(selected.run.title)} ${stateWord(selected.run.state)}`;
-      if (radioWidth >= 1 && visibleWidth(`◉ ${compactSelectedLabel}`) <= radioWidth) {
-        const radio = radioGroup(children, this.selectedIndex, radioWidth);
-        processRow = `${focusPrefix}${radio}${" ".repeat(processWidth - visibleWidth(radio) - visibleWidth(telemetry))}${telemetry}`;
-        telemetry = undefined;
-      } else {
-        processRow = `${focusPrefix}${radioGroup(children, this.selectedIndex, processWidth)}`;
-      }
-    } else {
-      processRow = `${focusPrefix}${radioGroup(children, this.selectedIndex, processWidth)}`;
+    const lines = [this.line(
+      `${this.focused && this.selectedIndex === 0 ? "› " : ""}${this.selectedIndex === 0 ? "◉" : "○"} orchestrator`,
+      "muted",
+      safeWidth,
+    )];
+
+    for (const [offset, child] of children.slice(this.childOffset, this.childOffset + MAX_VISIBLE_CHILDREN).entries()) {
+      const childIndex = this.childOffset + offset + 1;
+      const isSelected = childIndex === this.selectedIndex;
+      const prefix = this.focused && isSelected ? "› " : "";
+      const marker = isSelected ? "◉" : "○";
+      const label = isSelected
+        ? selectedProcessLabel(child.run, Math.max(0, safeWidth - visibleWidth(prefix)))
+        : `${displayTitle(child.run.title)} ${stateWord(child.run.state)}`;
+      lines.push(this.line(`${prefix}${marker}${label ? ` ${label}` : ""}`, "muted", safeWidth));
     }
 
-    const lines = [this.line(processRow, "muted", safeWidth)];
-    if (telemetry) lines.push(this.line(telemetry, "text", safeWidth));
-
+    if (selected) {
+      lines.push(this.line(
+        telemetryLine(selected.run, this.selectedIndex, totalUsage(selected.run), safeWidth),
+        "text",
+        safeWidth,
+      ));
+    }
     lines.push(this.line(this.defaultInfo(), "dim", safeWidth));
     const statuses = [...this.footerData.getExtensionStatuses().entries()]
       .sort(([left], [right]) => left.localeCompare(right));
@@ -313,10 +314,6 @@ export class AgentFooter implements Component, Focusable {
     return action;
   }
 
-  private itemCount(): number {
-    return this.registry.list().length + 1;
-  }
-
   private rememberSelection(): void {
     this.selectedRunId = this.registry.list()[this.selectedIndex - 1]?.runId;
   }
@@ -327,11 +324,28 @@ export class AgentFooter implements Component, Focusable {
       const index = children.findIndex((run) => run.runId === this.selectedRunId);
       if (index >= 0) {
         this.selectedIndex = index + 1;
+        this.syncChildViewport(children.length);
         return;
       }
       this.selectedRunId = undefined;
     }
     this.selectedIndex = Math.min(this.selectedIndex, children.length);
+    this.selectedRunId = children[this.selectedIndex - 1]?.runId;
+    this.syncChildViewport(children.length);
+  }
+
+  private syncChildViewport(childCount: number): void {
+    const maxOffset = Math.max(0, childCount - MAX_VISIBLE_CHILDREN);
+    if (this.selectedIndex === 0) {
+      this.childOffset = 0;
+      return;
+    }
+    const selectedChild = this.selectedIndex - 1;
+    if (selectedChild < this.childOffset) this.childOffset = selectedChild;
+    else if (selectedChild >= this.childOffset + MAX_VISIBLE_CHILDREN) {
+      this.childOffset = selectedChild - MAX_VISIBLE_CHILDREN + 1;
+    }
+    this.childOffset = Math.max(0, Math.min(this.childOffset, maxOffset));
   }
 
   private line(text: string, color: string, width: number): string {
@@ -1051,44 +1065,6 @@ function stateText(state: SubagentRun["state"]): string {
     case "retrying": return "↻ retrying";
     default: return "… running";
   }
-}
-
-function radioGroup(
-  children: readonly MonitoredRun[],
-  selectedIndex: number,
-  width: number,
-): string {
-  type Option = { readonly selected: boolean; label: string };
-  const options: Option[] = [
-    { selected: selectedIndex === 0, label: "orchestrator" },
-    ...children.map((run, index) => ({
-      selected: index + 1 === selectedIndex,
-      label: index + 1 === selectedIndex
-        ? selectedProcessLabel(run.run, width)
-        : `${displayTitle(run.run.title)} ${stateWord(run.run.state)}`,
-    })),
-  ];
-  const compose = (): string => options
-    .map((option) => `${option.selected ? "◉" : "○"}${option.label ? ` ${option.label}` : ""}`)
-    .join(" ");
-
-  let row = compose();
-  for (let index = options.length - 1; index >= 0 && visibleWidth(row) > width; index--) {
-    const option = options[index];
-    if (option.selected || !option.label) continue;
-    const overflow = visibleWidth(row) - width;
-    options[index] = {
-      ...option,
-      label: truncateToWidth(option.label, Math.max(0, visibleWidth(option.label) - overflow), ""),
-    };
-    row = compose();
-  }
-  for (let index = options.length - 1; index >= 0 && visibleWidth(row) > width; index--) {
-    if (options[index].selected) continue;
-    options.splice(index, 1);
-    row = compose();
-  }
-  return truncateToWidth(row, width, "");
 }
 
 function selectedProcessLabel(run: SubagentRun, width: number): string {

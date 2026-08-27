@@ -78,6 +78,11 @@ const plainTheme: any = {
   strikethrough: (text: string) => text,
 };
 
+const ansiTheme: any = {
+  ...plainTheme,
+  fg: (_color: string, text: string) => `\x1b[31m${text}\x1b[39m`,
+};
+
 function footerContext(): any {
   return {
     cwd: "/tmp/project",
@@ -127,60 +132,114 @@ function child(runId: string, state = "running"): any {
   return value;
 }
 
-test("renders the orchestrator and selected child telemetry at narrow widths", () => {
+test("renders a fixed orchestrator row and at most three child rows with selected telemetry", () => {
   const registry = new SubagentRegistry();
   for (const runId of ["one", "two", "three", "four"]) {
     const run = child(runId);
     run.run.startedAt = Date.now();
     registry.add(run);
   }
-  const footer = new AgentFooter(footerTui(), plainTheme, footerData(), registry, footerContext());
+  const footer = new AgentFooter(
+    footerTui(),
+    ansiTheme,
+    footerDataWithStatuses(["alpha", "omega"]),
+    registry,
+    footerContext(),
+  );
 
-  const parentLines = footer.render(20);
-  assert.match(parentLines.join("\n"), /orchestrator/);
-  assert.doesNotMatch(parentLines.join("\n"), /runtime|inputTokens|contextTokens/);
-  footer.handleInput("\x1b[C");
-  const narrowChildText = footer.render(20).join("\n");
-  assert.match(narrowChildText, /40/);
-  const childText = footer.render(32).join("\n");
-  assert.match(childText, /Child one/);
-  assert.match(childText, /scout/);
-  assert.match(childText, /running/);
-  assert.match(childText, /12|7|40/);
-  assert.match(childText, /◉/);
-  for (const width of [20, 32]) {
+  const initial = footer.render(120);
+  const processLines = initial.filter((line) => /orchestrator|Child/.test(line));
+  assert.equal(processLines.length, 4);
+  assert.match(processLines[0], /orchestrator/);
+  assert.match(processLines[1], /Child one/);
+  assert.match(processLines[2], /Child two/);
+  assert.match(processLines[3], /Child three/);
+  assert.doesNotMatch(initial.join("\n"), /Child four/);
+  assert.doesNotMatch(initial.join("\n"), /#1/);
+  assert.ok(initial.join("\n").indexOf("alpha") < initial.join("\n").indexOf("omega"));
+  assert.ok(initial.some((line) => line.includes("\x1b[31m")));
+
+  footer.handleInput("\x1b[B");
+  const selected = footer.render(120).join("\n");
+  assert.match(selected, /Child one/);
+  assert.match(selected, /scout/);
+  assert.match(selected, /running/);
+  assert.match(selected, /#1/);
+  assert.match(selected, /↑12/);
+  assert.match(selected, /↓7/);
+  assert.match(selected, /ctx 40/);
+
+  for (const width of [1, 20, 32, 120]) {
     for (const line of footer.render(width)) assert.ok(visibleWidth(line) <= width, `${line} > ${width}`);
   }
   footer.dispose();
 });
 
-test("renders processes as one compact radio row and preserves selected state when narrow", () => {
+test("scrolls vertically through four children with bounded Up/Down and ignores Left/Right", () => {
   const registry = new SubagentRegistry();
   for (const runId of ["one", "two", "three", "four"]) registry.add(child(runId));
   const footer = new AgentFooter(footerTui(), plainTheme, footerData(), registry, footerContext());
 
-  const processLines = footer.render(32).filter((line) => /orchestrator|Child/.test(line));
-  assert.equal(processLines.length, 1);
-  assert.match(processLines[0], /◉|○/);
+  const down = "\x1b[B";
+  const up = "\x1b[A";
+  for (let index = 0; index < 4; index++) footer.handleInput(down);
+  let atEnd = footer.render(120);
+  assert.match(atEnd[0], /orchestrator/);
+  assert.match(atEnd.join("\n"), /Child four/);
+  assert.doesNotMatch(atEnd.join("\n"), /Child one/);
+  assert.equal(atEnd.filter((line) => /Child/.test(line)).length, 3);
+  assert.match(atEnd.find((line) => /Child four/.test(line))!, /◉/);
 
+  const endSelection = atEnd.find((line) => /Child four/.test(line));
+  footer.handleInput("\x1b[D");
   footer.handleInput("\x1b[C");
-  for (const width of [20, 32]) {
-    const text = footer.render(width).join("\n");
-    assert.match(text, /Child one/);
-    assert.match(text, /running/);
-  }
+  assert.equal(footer.render(120).find((line) => /Child four/.test(line)), endSelection);
+  footer.handleInput(down);
+  assert.equal(footer.render(120).find((line) => /Child four/.test(line)), endSelection);
+
+  footer.handleInput(up);
+  const afterUp = footer.render(120).join("\n");
+  assert.match(afterUp, /Child three/);
+  assert.doesNotMatch(afterUp, /Child one/);
+  for (let index = 0; index < 3; index++) footer.handleInput(up);
+  const atStart = footer.render(120);
+  assert.match(atStart[0], /◉ orchestrator/);
+  assert.doesNotMatch(atStart.join("\n"), /Child four/);
+  const startSelection = atStart[0];
+  footer.handleInput(up);
+  footer.handleInput("\x1b[D");
+  footer.handleInput("\x1b[C");
+  assert.equal(footer.render(120)[0], startSelection);
+
   footer.dispose();
 });
 
-test("marks the focused process row without color while retaining selection and state", () => {
+test("keeps the fallback child selected after removing the selected and preceding children", () => {
+  const registry = new SubagentRegistry();
+  for (const runId of ["one", "two", "three", "four"]) registry.add(child(runId));
+  const footer = new AgentFooter(footerTui(), plainTheme, footerData(), registry, footerContext());
+
+  footer.handleInput("\x1b[B");
+  footer.handleInput("\x1b[B");
+  assert.match(footer.render(120).find((line) => /◉ Child/.test(line))!, /Child two/);
+
+  registry.remove("two");
+  assert.match(footer.render(120).find((line) => /◉ Child/.test(line))!, /Child three/);
+  registry.remove("one");
+  assert.match(footer.render(120).find((line) => /◉ Child/.test(line))!, /Child three/);
+
+  footer.dispose();
+});
+
+test("marks the focused selected row without changing its state", () => {
   const registry = new SubagentRegistry();
   registry.add(child("one"));
   const footer = new AgentFooter(footerTui(), plainTheme, footerData(), registry, footerContext());
 
-  footer.handleInput("\x1b[C");
-  const unfocused = footer.render(80)[0];
+  footer.handleInput("\x1b[B");
+  const unfocused = footer.render(80).find((line) => /Child one/.test(line))!;
   footer.focus();
-  const focused = footer.render(80)[0];
+  const focused = footer.render(80).find((line) => /Child one/.test(line))!;
 
   assert.notEqual(focused, unfocused);
   assert.match(unfocused, /◉/);
@@ -197,12 +256,18 @@ test("returns read-only navigation actions and identifies every terminal state",
     registry.add(child(state, state));
   }
   const footer = new AgentFooter(footerTui(), plainTheme, footerData(), registry, footerContext());
-  const text = footer.render(120).join("\n");
-  for (const state of ["running", "succeeded", "failed", "cancelled"]) assert.match(text, new RegExp(state));
   assert.deepEqual(footer.handleInput("\r"), { type: "openOrchestrator" });
-  footer.handleInput("\x1b[C");
+  const seen = new Set<string>();
+  for (let index = 0; index <= 4; index++) {
+    const text = footer.render(120).join("\n");
+    for (const state of ["running", "succeeded", "failed", "cancelled"]) {
+      if (text.includes(state)) seen.add(state);
+    }
+    footer.handleInput("\x1b[B");
+  }
+  assert.deepEqual(seen, new Set(["running", "succeeded", "failed", "cancelled"]));
   assert.equal(footer.handleInput("\r").type, "openChild");
-  assert.equal(footer.handleInput("\x1b[A").type, "focusEditor");
+  assert.equal(footer.handleInput("\x1b").type, "focusEditor");
   footer.dispose();
 });
 
@@ -224,7 +289,7 @@ test("shows a child process number only when child telemetry is selected", () =>
   const footer = new AgentFooter(footerTui(), plainTheme, footerData(), registry, footerContext());
 
   assert.doesNotMatch(footer.render(120).join("\n"), /#1/);
-  footer.handleInput("\x1b[C");
+  footer.handleInput("\x1b[B");
   assert.match(footer.render(120).join("\n"), /#1/);
   footer.dispose();
 });
@@ -307,7 +372,7 @@ test("moves focus to the footer only at the final visual line", () => {
   assert.equal(footerTuiInstance.focused, undefined);
   assert.deepEqual(base.calls, []);
 
-  footer.handleInput("\x1b[A");
+  footer.handleInput("\x1b");
   assert.equal(footer.isFocused(), false);
   assert.equal(actions.at(-1).type, "focusEditor");
   assert.equal(footerTuiInstance.focused, editor);
@@ -404,7 +469,7 @@ test("returns focus through the footer TUI without requiring a private editor fi
   const editor = createAgentNavigationEditor(base, footer, registry, () => {});
 
   footer.focus();
-  footer.handleInput("\x1b[A");
+  footer.handleInput("\x1b");
   assert.equal(tui.focused, editor);
   footer.dispose();
 });
@@ -779,7 +844,7 @@ test("reserves the rendered footer and header before scrolling narrow child tran
   }
 });
 
-test("advances running telemetry and freezes its duration after completion", () => {
+test("advances running and retrying telemetry while active", () => {
   mock.timers.enable({ apis: ["Date", "setInterval"], now: 0 });
   try {
     let renders = 0;
@@ -789,7 +854,7 @@ test("advances running telemetry and freezes its duration after completion", () 
     run.run.startedAt = 0;
     registry.add(run);
     const footer = new AgentFooter(tui, plainTheme, footerData(), registry, footerContext());
-    footer.handleInput("\x1b[C");
+    footer.handleInput("\x1b[B");
     assert.match(footer.render(120).join("\n"), /0s/);
     const before = renders;
     mock.timers.tick(999);
@@ -798,12 +863,14 @@ test("advances running telemetry and freezes its duration after completion", () 
     assert.equal(renders, before + 1);
     assert.match(footer.render(120).join("\n"), /1s/);
 
-    const ended = { ...run, run: { ...run.run, state: "succeeded", endedAt: 1_000 } };
-    registry.update(ended);
-    const endedText = footer.render(120).join("\n");
-    assert.match(endedText, /1s/);
-    mock.timers.tick(5_000);
-    assert.equal(footer.render(120).join("\n"), endedText);
+    registry.update({ ...run, run: { ...run.run, state: "retrying" } });
+    const afterRetry = renders;
+    assert.match(footer.render(120).join("\n"), /retrying/);
+    mock.timers.tick(999);
+    assert.equal(renders, afterRetry);
+    mock.timers.tick(1);
+    assert.equal(renders, afterRetry + 1);
+    assert.match(footer.render(120).join("\n"), /2s/);
 
     footer.focus();
     footer.dispose();

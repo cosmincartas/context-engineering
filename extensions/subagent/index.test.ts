@@ -289,7 +289,12 @@ const timer = setInterval(() => {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
     const activeText = testHarness.uiState.footer.render(120).join("\n");
-    for (let index = 0; index < 4; index++) assert.match(activeText, new RegExp(`Child ${index}`));
+    for (let index = 0; index < 3; index++) assert.match(activeText, new RegExp(`Child ${index}`));
+    assert.doesNotMatch(activeText, /Child 3/);
+    for (let index = 0; index < 4; index++) testHarness.uiState.footer.handleInput("\x1b[B");
+    const scrolledText = testHarness.uiState.footer.render(120).join("\n");
+    assert.match(scrolledText, /Child 3/);
+    assert.doesNotMatch(scrolledText, /Child 0/);
     await writeFile(release, "release");
     await pending;
     const finishedText = testHarness.uiState.footer.render(120).join("\n");
