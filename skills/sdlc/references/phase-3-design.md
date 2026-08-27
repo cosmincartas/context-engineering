@@ -26,7 +26,7 @@ If design work exposes a new product requirement, give it a provisional `FR-D*` 
 
 ### HLD step
 
-1. Propose one simple component diagram. Add concise component responsibilities, architectural flow, and important assumptions.
+1. Propose one simple component diagram as a Mermaid diagram in a ```mermaid block. Add concise component responsibilities, architectural flow, and important assumptions.
 2. Ask the user to accept, edit, or counter the HLD. Do not continue without approval.
 3. Use the approved HLD as the map for every later design element. Preserve it in the final Architecture section.
 4. Return here when a later decision changes the HLD or an element fits no component.
@@ -81,7 +81,7 @@ Present Behavior, Failure Model, and Traceability as one batch per section. List
 
 ## Section rules
 
-- **Architecture.** Preserve the approved HLD diagram, responsibilities, flow, and assumptions. Name components by their implemented interfaces or owned functions. Use exit codes only for command-line interfaces.
+- **Architecture.** Preserve the approved HLD Mermaid diagram, responsibilities, flow, and assumptions. Name components by their implemented interfaces or owned functions. Use exit codes only for command-line interfaces.
 - **Models.** Types and records the design introduces or changes, as code. Each field has a type; a constraint that the type cannot express is a one-line invariant under the block.
 - **Interfaces.** Abstractions as code: interface, protocol, trait, or abstract class, with member signatures. One line after the block names what the abstraction is deliberately not responsible for.
 - **Functions.** Signatures grouped by owner (module, class, or component). Each signature has one line stating its effect and its error behavior. A function references only models and interfaces in this design or already in the repository.

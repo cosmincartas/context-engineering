@@ -690,6 +690,89 @@ test("retries a provider failure once and preserves its diagnostic", async () =>
   assert.equal(result.details.attempts[1].state, "succeeded");
 });
 
+test("keeps a run that recovered from a transient provider error", async () => {
+  const result = await withScenario("recovered-provider-error", () =>
+    executeSubagent("scout", "recover from a dropped stream", bundledAgents, makeContext(), undefined),
+  );
+
+  assert.equal(result.details.attempts.length, 1);
+  assert.equal(result.details.state, "succeeded");
+  assert.equal(result.details.attempts[0].state, "succeeded");
+  assert.equal(result.details.attempts[0].exitCode, 0);
+  assert.equal(result.details.attempts[0].error, undefined);
+  assert.match(result.content[0].text, /recovered final output/);
+});
+
+test("fails a run whose last provider state is an error even after an earlier recovery", async () => {
+  const result = await withScenario("recovered-then-failed", () =>
+    executeSubagent("scout", "recover then fail", bundledAgents, makeContext(), undefined),
+  );
+
+  assert.equal(result.details.attempts.length, 2);
+  assert.match(result.details.attempts[0].error, /second drop/);
+  assert.doesNotMatch(result.details.attempts[0].error, /first drop/);
+  assert.equal(result.details.attempts[1].state, "succeeded");
+});
+
+test("records a recovered provider error as attempt activity", async () => {
+  const result = await withScenario("recovered-provider-error", () =>
+    executeSubagent("scout", "recover from a dropped stream", bundledAgents, makeContext(), undefined),
+  );
+
+  assert.equal(result.details.state, "succeeded");
+  assert.ok(
+    result.details.attempts[0].activity.some((item: string) => /WebSocket closed 1006/.test(item)),
+    `expected a provider-error breadcrumb, got ${JSON.stringify(result.details.attempts[0].activity)}`,
+  );
+});
+
+test("keeps a run that recovered from a streaming provider error", async () => {
+  const result = await withScenario("stream-error-recovered", () =>
+    executeSubagent("scout", "recover from a stream error", bundledAgents, makeContext(), undefined),
+  );
+
+  assert.equal(result.details.attempts.length, 1);
+  assert.equal(result.details.state, "succeeded");
+  assert.equal(result.details.attempts[0].error, undefined);
+  assert.match(result.content[0].text, /recovered after stream error/);
+});
+
+test("fails a run whose streaming error is never followed by a completed message", async () => {
+  const result = await withScenario("stream-error-terminal", () =>
+    executeSubagent("scout", "terminal stream error", bundledAgents, makeContext(), undefined),
+  );
+
+  assert.equal(result.details.attempts.length, 2);
+  assert.equal(result.details.attempts[0].state, "failed");
+  assert.equal(result.details.attempts[0].exitCode, 0);
+  assert.match(result.details.attempts[0].error, /stream died for good/);
+  assert.equal(result.details.attempts[1].state, "succeeded");
+});
+
+test("does not retry a mutating agent that already started work", async () => {
+  const result = await withScenario("retry-provider-worker", () =>
+    executeSubagent("worker", "edit files then fail", bundledAgents, makeContext(), undefined),
+  );
+
+  assert.equal(result.details.attempts.length, 1);
+  assert.equal(result.details.state, "failed");
+  assert.match(result.details.attempts[0].error, /provider unavailable/);
+  assert.ok(
+    result.details.attempts[0].activity.some((item: string) => /not retried/i.test(item)),
+    `expected a suppressed-retry note, got ${JSON.stringify(result.details.attempts[0].activity)}`,
+  );
+});
+
+test("still retries a mutating agent that failed before producing any message", async () => {
+  const result = await withScenario("retry-startup-worker", () =>
+    executeSubagent("worker", "fail at startup", bundledAgents, makeContext(), undefined),
+  );
+
+  assert.equal(result.details.attempts.length, 2);
+  assert.equal(result.details.attempts[1].state, "succeeded");
+  assert.equal(result.details.state, "succeeded");
+});
+
 test("retries malformed protocol once", async () => {
   const result = await withScenario("retry-malformed", () =>
     executeSubagent("scout", "retry malformed protocol", bundledAgents, makeContext(), undefined),
@@ -959,7 +1042,7 @@ if (scenario === "late-session") {
 } else if (scenario === "hang") {
   process.on("SIGTERM", () => { recordSignal("SIGTERM"); });
   setInterval(() => {}, 1000);
-} else if ((scenario === "retry-startup" && attemptNumber === 1) || scenario === "fail-twice" || scenario === "batch-fail-twice") {
+} else if (((scenario === "retry-startup" || scenario === "retry-startup-worker") && attemptNumber === 1) || scenario === "fail-twice" || scenario === "batch-fail-twice") {
   process.stderr.write("failure attempt " + attemptNumber + "\\n");
   process.exitCode = 1;
 } else if (scenario === "telemetry-retry-no-usage" && attemptNumber === 1) {
@@ -968,6 +1051,18 @@ if (scenario === "late-session") {
 } else if (scenario === "telemetry-retry-no-usage") {
   process.stderr.write("retry attempt without usage\\n");
   process.exitCode = 1;
+} else if (scenario === "recovered-provider-error") {
+  emit({ type: "message_end", message: assistant("stream dropped", "error", "WebSocket closed 1006 Connection ended") });
+  emit({ type: "message_end", message: assistant("recovered final output") });
+} else if (scenario === "recovered-then-failed" && attemptNumber === 1) {
+  emit({ type: "message_end", message: assistant("stream dropped", "error", "first drop") });
+  emit({ type: "message_end", message: assistant("recovered for a while") });
+  emit({ type: "message_end", message: assistant("stream dropped again", "error", "second drop") });
+} else if (scenario === "stream-error-recovered") {
+  emit({ type: "message_update", usage, assistantMessageEvent: { type: "error", reason: "error", error: { errorMessage: "stream dropped mid-flight" } } });
+  emit({ type: "message_end", message: assistant("recovered after stream error") });
+} else if (scenario === "stream-error-terminal" && attemptNumber === 1) {
+  emit({ type: "message_update", usage, assistantMessageEvent: { type: "error", reason: "error", error: { errorMessage: "stream died for good" } } });
 } else if ((scenario === "telemetry-retry" || (typeof scenario === "string" && scenario.startsWith("retry-provider"))) && attemptNumber === 1) {
   emit({ type: "message_end", message: assistant("provider failed", "error", "provider unavailable") });
 } else if (scenario === "retry-malformed" && attemptNumber === 1) {
