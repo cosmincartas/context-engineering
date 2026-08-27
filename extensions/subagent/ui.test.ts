@@ -132,7 +132,7 @@ function child(runId: string, state = "running"): any {
   return value;
 }
 
-test("renders a fixed orchestrator row and at most three child rows with selected telemetry", () => {
+test("renders standard footer rows before at most three subagents with title and usage", () => {
   const registry = new SubagentRegistry();
   for (const runId of ["one", "two", "three", "four"]) {
     const run = child(runId);
@@ -142,36 +142,39 @@ test("renders a fixed orchestrator row and at most three child rows with selecte
   const footer = new AgentFooter(
     footerTui(),
     ansiTheme,
-    footerDataWithStatuses(["alpha", "omega"]),
+    footerDataWithStatuses(["MCP Servers: context7", "ponytail: full"]),
     registry,
     footerContext(),
   );
 
   const initial = footer.render(120);
-  const processLines = initial.filter((line) => /orchestrator|Child/.test(line));
-  assert.equal(processLines.length, 4);
-  assert.match(processLines[0], /orchestrator/);
-  assert.match(processLines[1], /Child one/);
-  assert.match(processLines[2], /Child two/);
-  assert.match(processLines[3], /Child three/);
-  assert.doesNotMatch(initial.join("\n"), /Child four/);
-  assert.doesNotMatch(initial.join("\n"), /#1/);
-  assert.ok(initial.join("\n").indexOf("alpha") < initial.join("\n").indexOf("omega"));
+  assert.match(initial[0], /^\x1b\[31m\/tmp\/project \(main\)/);
+  assert.match(initial[1], /20\.0%\/100/);
+  assert.match(initial[1], /\(fake\) parent • medium/);
+  assert.match(initial[2], /MCP Servers: context7.*ponytail: full/);
+  assert.match(initial[3], /subagent 1.*Child one.*↑12.*↓7.*ctx 40/);
+  assert.match(initial[4], /subagent 2.*Child two.*↑12.*↓7.*ctx 40/);
+  assert.match(initial[5], /subagent 3.*Child three.*↑12.*↓7.*ctx 40/);
+  assert.doesNotMatch(initial.join("\n"), /orchestrator|Child four|#1/);
   assert.ok(initial.some((line) => line.includes("\x1b[31m")));
-
-  footer.handleInput("\x1b[B");
-  const selected = footer.render(120).join("\n");
-  assert.match(selected, /Child one/);
-  assert.match(selected, /scout/);
-  assert.match(selected, /running/);
-  assert.match(selected, /#1/);
-  assert.match(selected, /↑12/);
-  assert.match(selected, /↓7/);
-  assert.match(selected, /ctx 40/);
 
   for (const width of [1, 20, 32, 120]) {
     for (const line of footer.render(width)) assert.ok(visibleWidth(line) <= width, `${line} > ${width}`);
   }
+  footer.dispose();
+});
+
+test("keeps subagent usage visible when a task title is too long", () => {
+  const registry = new SubagentRegistry();
+  const run = child("long-title");
+  run.run.title = "Inspect a deliberately long task title that cannot fit";
+  run.run.startedAt = Date.now();
+  registry.add(run);
+  const footer = new AgentFooter(footerTui(), plainTheme, footerData(), registry, footerContext());
+
+  const row = footer.render(40).find((line) => /subagent 1/.test(line))!;
+  assert.match(row, /subagent 1.*↑12.*↓7.*ctx 40/);
+  assert.ok(visibleWidth(row) <= 40);
   footer.dispose();
 });
 
@@ -183,12 +186,10 @@ test("scrolls vertically through four children with bounded Up/Down and ignores 
   const down = "\x1b[B";
   const up = "\x1b[A";
   for (let index = 0; index < 4; index++) footer.handleInput(down);
-  let atEnd = footer.render(120);
-  assert.match(atEnd[0], /orchestrator/);
-  assert.match(atEnd.join("\n"), /Child four/);
+  const atEnd = footer.render(120);
+  assert.match(atEnd.join("\n"), /subagent 4.*Child four/);
   assert.doesNotMatch(atEnd.join("\n"), /Child one/);
-  assert.equal(atEnd.filter((line) => /Child/.test(line)).length, 3);
-  assert.match(atEnd.find((line) => /Child four/.test(line))!, /◉/);
+  assert.equal(atEnd.filter((line) => /subagent/.test(line)).length, 3);
 
   const endSelection = atEnd.find((line) => /Child four/.test(line));
   footer.handleInput("\x1b[D");
@@ -202,14 +203,13 @@ test("scrolls vertically through four children with bounded Up/Down and ignores 
   assert.match(afterUp, /Child three/);
   assert.doesNotMatch(afterUp, /Child one/);
   for (let index = 0; index < 3; index++) footer.handleInput(up);
-  const atStart = footer.render(120);
-  assert.match(atStart[0], /◉ orchestrator/);
-  assert.doesNotMatch(atStart.join("\n"), /Child four/);
-  const startSelection = atStart[0];
+  const atStart = footer.render(120).join("\n");
+  assert.match(atStart, /subagent 1.*Child one/);
+  assert.doesNotMatch(atStart, /Child four/);
   footer.handleInput(up);
   footer.handleInput("\x1b[D");
   footer.handleInput("\x1b[C");
-  assert.equal(footer.render(120)[0], startSelection);
+  assert.equal(footer.render(120).join("\n"), atStart);
 
   footer.dispose();
 });
@@ -218,15 +218,15 @@ test("keeps the fallback child selected after removing the selected and precedin
   const registry = new SubagentRegistry();
   for (const runId of ["one", "two", "three", "four"]) registry.add(child(runId));
   const footer = new AgentFooter(footerTui(), plainTheme, footerData(), registry, footerContext());
+  footer.focus();
 
   footer.handleInput("\x1b[B");
-  footer.handleInput("\x1b[B");
-  assert.match(footer.render(120).find((line) => /◉ Child/.test(line))!, /Child two/);
+  assert.match(footer.render(120).find((line) => /^› subagent/.test(line))!, /Child two/);
 
   registry.remove("two");
-  assert.match(footer.render(120).find((line) => /◉ Child/.test(line))!, /Child three/);
+  assert.match(footer.render(120).find((line) => /^› subagent/.test(line))!, /Child three/);
   registry.remove("one");
-  assert.match(footer.render(120).find((line) => /◉ Child/.test(line))!, /Child three/);
+  assert.match(footer.render(120).find((line) => /^› subagent/.test(line))!, /Child three/);
 
   footer.dispose();
 });
@@ -242,30 +242,18 @@ test("marks the focused selected row without changing its state", () => {
   const focused = footer.render(80).find((line) => /Child one/.test(line))!;
 
   assert.notEqual(focused, unfocused);
-  assert.match(unfocused, /◉/);
-  assert.match(unfocused, /running/);
-  assert.match(focused, /^› /);
-  assert.match(focused, /◉/);
-  assert.match(focused, /running/);
+  assert.doesNotMatch(unfocused, /^› /);
+  assert.match(unfocused, /subagent 1/);
+  assert.match(focused, /^› subagent 1/);
   footer.dispose();
 });
 
-test("returns read-only navigation actions and identifies every terminal state", () => {
+test("returns read-only navigation actions", () => {
   const registry = new SubagentRegistry();
-  for (const state of ["running", "succeeded", "failed", "cancelled"]) {
-    registry.add(child(state, state));
-  }
+  for (const runId of ["one", "two", "three", "four"]) registry.add(child(runId));
   const footer = new AgentFooter(footerTui(), plainTheme, footerData(), registry, footerContext());
   assert.deepEqual(footer.handleInput("\r"), { type: "openOrchestrator" });
-  const seen = new Set<string>();
-  for (let index = 0; index <= 4; index++) {
-    const text = footer.render(120).join("\n");
-    for (const state of ["running", "succeeded", "failed", "cancelled"]) {
-      if (text.includes(state)) seen.add(state);
-    }
-    footer.handleInput("\x1b[B");
-  }
-  assert.deepEqual(seen, new Set(["running", "succeeded", "failed", "cancelled"]));
+  for (let index = 0; index < 4; index++) footer.handleInput("\x1b[B");
   assert.equal(footer.handleInput("\r").type, "openChild");
   assert.equal(footer.handleInput("\x1b").type, "focusEditor");
   footer.dispose();
@@ -283,33 +271,50 @@ test("sanitizes legacy child titles before rendering footer rows", () => {
   footer.dispose();
 });
 
-test("shows a child process number only when child telemetry is selected", () => {
+test("labels every visible child with its subagent number", () => {
   const registry = new SubagentRegistry();
   registry.add(child("one"));
+  registry.add(child("two"));
   const footer = new AgentFooter(footerTui(), plainTheme, footerData(), registry, footerContext());
 
-  assert.doesNotMatch(footer.render(120).join("\n"), /#1/);
-  footer.handleInput("\x1b[B");
-  assert.match(footer.render(120).join("\n"), /#1/);
+  const text = footer.render(120).join("\n");
+  assert.match(text, /subagent 1.*Child one/);
+  assert.match(text, /subagent 2.*Child two/);
   footer.dispose();
 });
 
-test("preserves default footer status ordering and context information", () => {
+test("keeps project, statistics, model, and sorted extension statuses on dedicated rows", () => {
   const registry = new SubagentRegistry();
   const data = {
     ...footerData(),
     getExtensionStatuses: () => new Map([["z-status", "alpha"], ["a-status", "omega"]]),
   };
   const footer = new AgentFooter(footerTui(), plainTheme, data, registry, footerContext());
-  const text = footer.render(120).join("\n");
-  assert.match(text, /main/);
-  assert.match(text, /parent/);
-  assert.match(text, /20\/100/);
-  assert.ok(text.indexOf("omega") < text.indexOf("alpha"));
+  const lines = footer.render(120);
+  assert.equal(lines[0], "/tmp/project (main)");
+  assert.match(lines[1], /^20\.0%\/100\s+\(fake\) parent • medium$/);
+  assert.equal(lines[2], "omega alpha");
   footer.dispose();
 });
 
-test("does not add parent process usage to the subagent footer", () => {
+test("keeps the branch visible when the project path is too long", () => {
+  const registry = new SubagentRegistry();
+  const context = {
+    ...footerContext(),
+    cwd: "/tmp/a/very/long/project/path",
+    sessionManager: {
+      ...footerContext().sessionManager,
+      getCwd: () => "/tmp/a/very/long/project/path",
+    },
+  };
+  const footer = new AgentFooter(footerTui(), plainTheme, footerData(), registry, context);
+
+  assert.match(footer.render(16)[0], /\(main\)$/);
+  assert.match(footer.render(4)[0], /main/);
+  footer.dispose();
+});
+
+test("shows parent process usage in the statistics row", () => {
   const context = {
     ...footerContext(),
     sessionManager: {
@@ -326,8 +331,8 @@ test("does not add parent process usage to the subagent footer", () => {
   };
   const registry = new SubagentRegistry();
   const footer = new AgentFooter(footerTui(), plainTheme, footerData(), registry, context);
-  const text = footer.render(120).join("\n");
-  assert.doesNotMatch(text, /R30|W4|↑12|↓7/);
+  const lines = footer.render(120);
+  assert.match(lines[1], /↑12.*↓7.*R30.*W4.*CH65\.2%/);
   footer.dispose();
 });
 
@@ -865,7 +870,6 @@ test("advances running and retrying telemetry while active", () => {
 
     registry.update({ ...run, run: { ...run.run, state: "retrying" } });
     const afterRetry = renders;
-    assert.match(footer.render(120).join("\n"), /retrying/);
     mock.timers.tick(999);
     assert.equal(renders, afterRetry);
     mock.timers.tick(1);

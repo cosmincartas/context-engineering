@@ -218,6 +218,10 @@ export class AgentFooter implements Component, Focusable {
 
   focus(): void {
     this.focused = true;
+    if (this.selectedIndex === 0 && this.registry.list().length > 0) {
+      this.selectedIndex = 1;
+      this.rememberSelection();
+    }
     this.tui.requestRender();
   }
 
@@ -239,7 +243,8 @@ export class AgentFooter implements Component, Focusable {
     if (matchesKey(data, Key.up) || matchesKey(data, Key.down)) {
       const children = this.registry.list();
       const direction = matchesKey(data, Key.up) ? -1 : 1;
-      const nextIndex = Math.max(0, Math.min(children.length, this.selectedIndex + direction));
+      const minimum = children.length > 0 ? 1 : 0;
+      const nextIndex = Math.max(minimum, Math.min(children.length, this.selectedIndex + direction));
       if (nextIndex !== this.selectedIndex) {
         this.selectedIndex = nextIndex;
         this.rememberSelection();
@@ -263,37 +268,24 @@ export class AgentFooter implements Component, Focusable {
     const safeWidth = Math.max(1, Math.floor(width));
     const children = this.registry.list();
     this.syncChildViewport(children.length);
-    const selected = children[this.selectedIndex - 1];
-    const lines = [this.line(
-      `${this.focused && this.selectedIndex === 0 ? "› " : ""}${this.selectedIndex === 0 ? "◉" : "○"} orchestrator`,
-      "muted",
-      safeWidth,
-    )];
+    const lines = [
+      this.line(this.projectLine(safeWidth), "dim", safeWidth),
+      this.line(this.statisticsLine(safeWidth), "dim", safeWidth),
+    ];
+    const statuses = [...this.footerData.getExtensionStatuses().entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([, text]) => sanitizeStatusText(text))
+      .filter(Boolean);
+    if (statuses.length > 0) lines.push(this.line(statuses.join(" "), "dim", safeWidth));
 
     for (const [offset, child] of children.slice(this.childOffset, this.childOffset + MAX_VISIBLE_CHILDREN).entries()) {
       const childIndex = this.childOffset + offset + 1;
-      const isSelected = childIndex === this.selectedIndex;
-      const prefix = this.focused && isSelected ? "› " : "";
-      const marker = isSelected ? "◉" : "○";
-      const label = isSelected
-        ? selectedProcessLabel(child.run, Math.max(0, safeWidth - visibleWidth(prefix)))
-        : `${displayTitle(child.run.title)} ${stateWord(child.run.state)}`;
-      lines.push(this.line(`${prefix}${marker}${label ? ` ${label}` : ""}`, "muted", safeWidth));
-    }
-
-    if (selected) {
+      const isSelected = this.focused && childIndex === this.selectedIndex;
       lines.push(this.line(
-        telemetryLine(selected.run, this.selectedIndex, totalUsage(selected.run), safeWidth),
-        "text",
+        subagentLine(child.run, childIndex, isSelected, safeWidth),
+        isSelected ? "accent" : "muted",
         safeWidth,
       ));
-    }
-    lines.push(this.line(this.defaultInfo(), "dim", safeWidth));
-    const statuses = [...this.footerData.getExtensionStatuses().entries()]
-      .sort(([left], [right]) => left.localeCompare(right));
-    for (const [, text] of statuses) {
-      const status = sanitizeStatusText(text);
-      if (status) lines.push(this.line(status, "dim", safeWidth));
     }
     return lines;
   }
@@ -352,24 +344,59 @@ export class AgentFooter implements Component, Focusable {
     return this.theme.fg(color as never, truncateToWidth(text, width, ""));
   }
 
-  private defaultInfo(): string {
+  private projectLine(width: number): string {
     const branch = sanitizeStatusText(this.footerData.getGitBranch() ?? "");
-    const sessionName = sanitizeStatusText(this.ctx.sessionManager.getSessionName() ?? "");
     const cwd = sanitizeStatusText(this.ctx.sessionManager.getCwd() || this.ctx.cwd);
-    const location = `${cwd}${branch ? ` (${branch})` : ""}${sessionName ? ` • ${sessionName}` : ""}`;
-    const model = this.ctx.model?.id ?? "no-model";
-    const providerCount = this.footerData.getAvailableProviderCount();
-    const provider = providerCount > 1 && this.ctx.model?.provider
-      ? `(${this.ctx.model.provider}) `
-      : "";
-    const contextUsage = this.ctx.getContextUsage();
-    const contextText = contextUsage
-      ? ` ctx ${contextUsage.tokens == null ? "?" : formatTokens(contextUsage.tokens)}/${formatTokens(contextUsage.contextWindow ?? 0)}`
-      : "";
-    const thinking = this.ctx.thinkingLevel && this.ctx.thinkingLevel !== "off"
+    const suffix = branch ? ` (${branch})` : "";
+    const availablePath = width - visibleWidth(suffix);
+    return availablePath > 0
+      ? `${truncateToWidth(cwd, availablePath, "")}${suffix}`
+      : truncateToWidth(branch || cwd, width, "");
+  }
+
+  private statisticsLine(width: number): string {
+    let input = 0;
+    let output = 0;
+    let cacheRead = 0;
+    let cacheWrite = 0;
+    let cost = 0;
+    let latestCacheHitRate: number | undefined;
+    for (const entry of this.ctx.sessionManager.getEntries()) {
+      const usage = usageFromEntry(entry);
+      if (!usage) continue;
+      input += usage.input;
+      output += usage.output;
+      cacheRead += usage.cacheRead;
+      cacheWrite += usage.cacheWrite;
+      cost += usage.cost;
+      if (entry.type === "message" && entry.message.role === "assistant") {
+        const promptTokens = usage.input + usage.cacheRead + usage.cacheWrite;
+        latestCacheHitRate = promptTokens > 0 ? usage.cacheRead / promptTokens * 100 : undefined;
+      }
+    }
+
+    const parts: string[] = [];
+    if (input) parts.push(`↑${formatTokens(input)}`);
+    if (output) parts.push(`↓${formatTokens(output)}`);
+    if (cacheRead) parts.push(`R${formatTokens(cacheRead)}`);
+    if (cacheWrite) parts.push(`W${formatTokens(cacheWrite)}`);
+    if ((cacheRead || cacheWrite) && latestCacheHitRate !== undefined) {
+      parts.push(`CH${latestCacheHitRate.toFixed(1)}%`);
+    }
+    if (cost) parts.push(`$${cost.toFixed(3)}`);
+
+    const context = this.ctx.getContextUsage();
+    const contextWindow = context?.contextWindow ?? this.ctx.model?.contextWindow ?? 0;
+    parts.push(context?.percent == null
+      ? `?/${formatTokens(contextWindow)}`
+      : `${context.percent.toFixed(1)}%/${formatTokens(contextWindow)}`);
+
+    const model = this.ctx.model;
+    const reasoning = this.ctx.thinkingLevel && this.ctx.thinkingLevel !== "off"
       ? ` • ${this.ctx.thinkingLevel}`
-      : "";
-    return `${location} ${provider}${model}${thinking}${contextText}`;
+      : model?.reasoning ? " • thinking off" : "";
+    const right = model ? `(${model.provider}) ${model.id}${reasoning}` : "no-model";
+    return alignSides(parts.join(" "), right, width);
   }
 }
 
@@ -1053,10 +1080,6 @@ function displayTitle(title: unknown): string {
   }
 }
 
-function stateWord(state: SubagentRun["state"]): string {
-  return state === "retrying" ? "retrying" : state === "running" ? "running" : state;
-}
-
 function stateText(state: SubagentRun["state"]): string {
   switch (state) {
     case "succeeded": return "✓ succeeded";
@@ -1067,32 +1090,57 @@ function stateText(state: SubagentRun["state"]): string {
   }
 }
 
-function selectedProcessLabel(run: SubagentRun, width: number): string {
-  const available = Math.max(0, width - visibleWidth("◉ "));
-  const state = ` ${stateWord(run.state)}`;
-  const title = displayTitle(run.title);
-  const full = `${title} (${run.agent})${state}`;
-  if (visibleWidth(full) <= available) return full;
-  if (visibleWidth(state) <= available) {
-    return `${truncateToWidth(title, available - visibleWidth(state), "")}${state}`;
-  }
-  return truncateToWidth(state.trim(), available, "");
+function subagentLine(run: SubagentRun, number: number, selected: boolean, width: number): string {
+  const left = `${selected ? "› " : ""}subagent ${number}`;
+  const usage = totalUsage(run);
+  const right = `${formatDuration(run)} ↑${formatTokens(usage.inputTokens)} ↓${formatTokens(usage.outputTokens)} ctx ${formatTokens(usage.contextTokens)}`;
+  const availableTitle = width - visibleWidth(left) - visibleWidth(right) - 2;
+  if (availableTitle <= 0) return alignSides(left, right, width);
+  const title = truncateToWidth(displayTitle(run.title), availableTitle, "");
+  const padding = " ".repeat(Math.max(1, width - visibleWidth(left) - visibleWidth(title) - visibleWidth(right) - 1));
+  return `${left} ${title}${padding}${right}`;
 }
 
-function telemetryLine(
-  run: SubagentRun,
-  processNumber: number,
-  usage: { inputTokens: number; outputTokens: number; contextTokens: number },
-  width: number,
-): string {
-  const duration = formatDuration(run);
-  const input = formatTokens(usage.inputTokens);
-  const output = formatTokens(usage.outputTokens);
-  const context = formatTokens(usage.contextTokens);
-  const full = `  #${processNumber} ${duration} ↑${input} ↓${output} ctx ${context}`;
-  return visibleWidth(full) <= width
-    ? full
-    : `#${processNumber} ${duration} ↑${input} ↓${output} ctx${context}`;
+function alignSides(left: string, right: string, width: number): string {
+  const leftWidth = visibleWidth(left);
+  const rightWidth = visibleWidth(right);
+  if (leftWidth + rightWidth + 2 <= width) {
+    return `${left}${" ".repeat(width - leftWidth - rightWidth)}${right}`;
+  }
+  const available = width - leftWidth - 1;
+  return available > 0
+    ? `${left} ${truncateToWidth(right, available, "")}`
+    : truncateToWidth(left, width, "");
+}
+
+function usageFromEntry(entry: unknown): {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  cost: number;
+} | undefined {
+  if (!entry || typeof entry !== "object") return undefined;
+  const value = entry as any;
+  const usage = value.type === "message"
+    ? value.message?.role === "assistant" || value.message?.role === "toolResult"
+      ? value.message.usage
+      : undefined
+    : value.type === "branch_summary" || value.type === "compaction"
+      ? value.usage
+      : undefined;
+  if (!usage || typeof usage !== "object") return undefined;
+  return {
+    input: finiteNumber(usage.input),
+    output: finiteNumber(usage.output),
+    cacheRead: finiteNumber(usage.cacheRead),
+    cacheWrite: finiteNumber(usage.cacheWrite),
+    cost: finiteNumber(usage.cost?.total),
+  };
+}
+
+function finiteNumber(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
 function totalUsage(run: SubagentRun): { inputTokens: number; outputTokens: number; contextTokens: number } {

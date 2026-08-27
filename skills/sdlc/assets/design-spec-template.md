@@ -19,7 +19,17 @@ updated: "{{YYYY-MM-DD}}"
 {{Component diagram; components named by the interface they implement or the functions they own}}
 ```
 
-- {{Architectural flow: how a request or event moves through the components, in a few lines.}}
+**Responsibilities:**
+
+- {{Component responsibility.}}
+
+**Flow:**
+
+- {{How a request or event moves through the components.}}
+
+**Assumptions:**
+
+- {{Approved HLD assumption, or omit.}}
 
 ## 2. Models
 

@@ -1,13 +1,13 @@
 ---
 name: sdlc
-description: Use when the user wants to pair on delivery work and review each section and decision as it is made — clarify a request, write a PRD, create a design, or produce a plan together — or resume a paired topic left in progress. Do not use for exploratory questions (use explore).
+description: Use when the user wants to formalize delivery work, create or resume planning artifacts, or plan a request with open design decisions. Do not use for exploratory questions (use explore).
 ---
 
 # SDLC Pipeline
 
 Write artifacts in ASD-STE100 Simplified Technical English: sentences of at most 20 words (instructions) or 25 (descriptions), active voice, imperative for steps, one meaning for each word, requirements use "must" (never "shall" or "should"). Chat stays in natural conversational language.
 
-Take one topic through four phases. Each phase produces one validated artifact in the topic folder. The pipeline ends with a validated implementation plan; execution belongs to other skills. The pairing rhythm in `references/facilitation-rules.md` applies in phases 1–3: the user reviews each section and decision as it is made. In phase 4, draft the complete plan before presenting it for validation.
+Take one topic through four phases. Each phase produces one validated artifact in the topic folder. The pipeline ends with a validated implementation plan; execution belongs to other skills. The pairing rhythm in `references/facilitation-rules.md` applies in phases 1–2. Phase 3 reviews the HLD first, then uses pair mode or proposal mode. Phase 4 presents the complete plan for validation.
 
 | Phase | Name | Artifact | Reference |
 |---|---|---|---|

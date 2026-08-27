@@ -298,7 +298,8 @@ const timer = setInterval(() => {
     await writeFile(release, "release");
     await pending;
     const finishedText = testHarness.uiState.footer.render(120).join("\n");
-    assert.match(finishedText, /orchestrator/);
+    assert.match(finishedText, /\(openai-codex\) parent • medium/);
+    assert.doesNotMatch(finishedText, /orchestrator|^subagent /m);
     for (let index = 0; index < 4; index++) assert.doesNotMatch(finishedText, new RegExp(`Child ${index}`));
     const sessionDirectories = (await readFile(sessionMarker, "utf8")).trim().split("\n").filter(Boolean);
     assert.equal(sessionDirectories.length, 4);

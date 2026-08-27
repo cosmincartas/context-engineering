@@ -7,7 +7,7 @@ Model-agnostic skills turn an initial development prompt into reusable context, 
 | Intent | Skill | Output |
 |---|---|---|
 | Understand a concept, compare technologies, inspect implementation impact, or see examples | `explore` | Chat response or optional technical exploration brief |
-| Plan delivery work, from scope isolation to an implementation plan, or resume a planning topic | `sdlc` | Validated context brief, PRD, design specification, and implementation plan, reviewed section by section |
+| Plan delivery work, from scope isolation to an implementation plan, or resume a planning topic | `sdlc` | Validated context brief, PRD, design specification, and implementation plan |
 | Plan one small and clear change in a single session | `quickie` | Validated quick plan: understanding, scope, acceptance criteria, and tasks |
 
 The delivery pipeline lives in one skill:
@@ -17,7 +17,7 @@ explore (optional) → sdlc: context → requirements → design → plan
 explore (optional) → quickie: align → plan
 ```
 
-`sdlc` uses a pairing rhythm: the user approves each artifact section as it is drafted, and in the design phase the pair defines models, interfaces, and function signatures one element at a time as code.
+`sdlc` pairs on context and requirements. In design, the user approves an HLD, then selects pair mode or proposal mode.
 
 `quickie` covers one deliverable that fits five tasks or fewer, changes no public contract, and has no open design decision. When a criterion fails, it stops and hands the confirmed understanding to `sdlc`.
 
