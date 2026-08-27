@@ -4,12 +4,14 @@ import os from "node:os";
 import path from "node:path";
 import { StringDecoder } from "node:string_decoder";
 
-import type { Message } from "@earendil-works/pi-ai";
+import type { Message, Usage } from "@earendil-works/pi-ai";
+import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import type {
   AgentToolResult,
+  AgentToolUpdateCallback,
   ExtensionContext,
+  JsonAgentSessionEvent,
 } from "@earendil-works/pi-coding-agent";
-import type { JsonAgentSessionEvent } from "@earendil-works/pi-coding-agent";
 
 import type { AgentDefinition } from "./agents.ts";
 
@@ -17,11 +19,49 @@ export const MAX_RESULT_BYTES = 50 * 1024;
 
 type AttemptState = "running" | "succeeded" | "failed" | "cancelled";
 
+export type SubagentRequest = {
+  readonly agent: string;
+  readonly title: string;
+  readonly task: string;
+};
+
+export type SubagentBatchRequest = {
+  readonly tasks: readonly unknown[];
+};
+
+export type SubagentBatchOutcome =
+  | {
+      readonly index: number;
+      readonly status: "queued";
+      readonly request: SubagentRequest;
+    }
+  | {
+      readonly index: number;
+      readonly status: "running" | "retrying" | "succeeded" | "failed" | "cancelled";
+      readonly run: SubagentRun;
+    }
+  | {
+      readonly index: number;
+      readonly status: "malformed" | "over-limit";
+      readonly reason: string;
+    };
+
+export type SubagentBatchDetails = {
+  readonly outcomes: readonly SubagentBatchOutcome[];
+};
+
+export type SubagentUsage = {
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly contextTokens: number;
+};
+
 export type ProcessAttempt = {
   readonly number: 1 | 2;
   readonly state: AttemptState;
   readonly activity: readonly string[];
   readonly messages: readonly Message[];
+  readonly usage: SubagentUsage;
   readonly stderr: string;
   readonly exitCode: number | null;
   readonly error?: string;
@@ -29,12 +69,45 @@ export type ProcessAttempt = {
 
 export type SubagentRun = {
   readonly agent: string;
+  readonly title: string;
   readonly task: string;
   readonly state: AttemptState | "retrying";
+  readonly startedAt: number;
+  readonly endedAt?: number;
   readonly model?: AgentDefinition["model"];
   readonly thinkingLevel?: AgentDefinition["thinkingLevel"];
   readonly attempts: readonly ProcessAttempt[];
   readonly error?: string;
+};
+
+export type ChildSessionState = {
+  readonly attempt: 1 | 2;
+  readonly directory: string;
+  readonly sessionId?: string;
+  readonly file?: string;
+  readonly partialText: string;
+  readonly partialThinking: string;
+};
+
+export type MonitoredRun = {
+  readonly runId: string;
+  readonly run: SubagentRun;
+  readonly sessions: readonly ChildSessionState[];
+};
+
+export type SubagentMonitorEvent =
+  | { readonly type: "started"; readonly run: MonitoredRun }
+  | { readonly type: "updated"; readonly run: MonitoredRun }
+  | { readonly type: "finished"; readonly run: MonitoredRun };
+
+export type SubagentRuntimeCallbacks = {
+  readonly onToolUpdate?: AgentToolUpdateCallback<SubagentRun>;
+  readonly onMonitorEvent: (event: SubagentMonitorEvent) => void;
+};
+
+export type SubagentBatchRuntimeCallbacks = {
+  readonly onToolUpdate?: AgentToolUpdateCallback<SubagentBatchDetails>;
+  readonly onMonitorEvent: (event: SubagentMonitorEvent) => void;
 };
 
 type MutableAttempt = {
@@ -42,6 +115,9 @@ type MutableAttempt = {
   state: AttemptState;
   activity: string[];
   messages: Message[];
+  usage: SubagentUsage;
+  committedUsage: SubagentUsage;
+  pendingUsage?: SubagentUsage;
   stderr: string;
   exitCode: number | null;
   error?: string;
@@ -49,15 +125,25 @@ type MutableAttempt = {
 
 type MutableRun = {
   agent: string;
+  title: string;
   task: string;
   state: SubagentRun["state"];
+  startedAt: number;
+  endedAt?: number;
   model?: AgentDefinition["model"];
   thinkingLevel?: AgentDefinition["thinkingLevel"];
   attempts: MutableAttempt[];
   error?: string;
 };
 
-type Update = (result: AgentToolResult<SubagentRun>) => void;
+type MutableChildSessionState = {
+  attempt: 1 | 2;
+  directory: string;
+  sessionId?: string;
+  file?: string;
+  partialText: string;
+  partialThinking: string;
+};
 
 type AttemptOutcome = {
   succeeded: boolean;
@@ -66,122 +152,398 @@ type AttemptOutcome = {
   error?: string;
 };
 
+const ZERO_USAGE: SubagentUsage = {
+  inputTokens: 0,
+  outputTokens: 0,
+  contextTokens: 0,
+};
+
+export function normalizeTitle(title: string): string {
+  const normalized = stripTerminalSequences(title)
+    .replace(/\u001b(?:[PX\]^_])[\s\S]*?(?:\u001b\\|\u0007|$)/g, "")
+    .replace(/[\u0090\u0098\u009d\u009e\u009f][\s\S]*?(?:\u009c|\u0007|$)/g, "")
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
+    .replace(/\u009d[^\u0007]*(?:\u0007|\u001b\\)|\u009b[0-?]*[ -/]*[@-~]/g, "")
+    .replace(/[\t\n\r\f\v\u0085\u2028\u2029]/g, " ")
+    .replace(/[\u0000-\u0008\u000b\u000e-\u001f\u007f-\u009f]/g, "")
+    .replace(/\p{Cf}/gu, "")
+    .replace(/ +/g, " ")
+    .trim();
+  if (normalized === "") {
+    throw new TypeError("Invalid subagent title: normalized title must not be blank");
+  }
+  return normalized;
+}
+
 export async function executeSubagent(
-  agentName: string,
-  task: string,
+  runId: string,
+  request: SubagentRequest,
   catalog: readonly AgentDefinition[],
   ctx: ExtensionContext,
+  sessionRoot: string,
   signal: AbortSignal | undefined,
-  onUpdate?: Update,
+  callbacks: SubagentRuntimeCallbacks,
 ): Promise<AgentToolResult<SubagentRun>> {
-  if (typeof agentName !== "string" || agentName.trim() === "") {
+  if (typeof runId !== "string" || runId.trim() === "") {
+    throw new TypeError("Invalid subagent request: run id must not be blank");
+  }
+  if (!request || typeof request !== "object") {
+    throw new TypeError("Invalid subagent request");
+  }
+  if (typeof request.agent !== "string" || request.agent.trim() === "") {
     throw new TypeError("Invalid subagent request: agent must not be blank");
   }
-  if (typeof task !== "string" || task.trim() === "") {
+  if (typeof request.title !== "string") {
+    throw new TypeError("Invalid subagent request: title must be a string");
+  }
+  if (typeof request.task !== "string" || request.task.trim() === "") {
     throw new TypeError("Invalid subagent request: task must not be blank");
   }
+  const title = normalizeTitle(request.title);
   signal?.throwIfAborted();
 
-  const definition = catalog.find((candidate) => candidate.name === agentName);
+  const run: MutableRun = {
+    agent: request.agent,
+    title,
+    task: request.task,
+    state: "running",
+    startedAt: Date.now(),
+    attempts: [],
+  };
+  const sessions: MutableChildSessionState[] = [];
+  const emit = (type: SubagentMonitorEvent["type"] = "updated") => {
+    const snapshot = snapshotMonitoredRun(runId, run, sessions);
+    callbacks.onMonitorEvent({ type, run: snapshot });
+    callbacks.onToolUpdate?.(
+      result(snapshotMonitoredRun(runId, run, sessions).run, `Subagent ${run.title} is ${run.state}.`),
+    );
+  };
+
+  emit("started");
+
+  const definition = catalog.find((candidate) => candidate.name === request.agent);
   if (!definition) {
     const available = catalog.map((candidate) => candidate.name).join(", ") || "none";
-    const error = `Unknown agent: ${agentName}. Available agents: ${available}.`;
-    const details: SubagentRun = {
-      agent: agentName,
-      task,
-      state: "failed",
-      attempts: [],
-      error,
-    };
-    return result(details, error);
+    const error = `Unknown agent: ${request.agent}. Available agents: ${available}.`;
+    run.state = "failed";
+    run.error = error;
+    run.endedAt = Date.now();
+    emit("finished");
+    return result(snapshotRun(run), error);
   }
 
   const resolved = resolveModel(definition, ctx);
   if (!resolved.model) {
     const error = resolved.warning ?? "Unable to resolve a model for the subagent";
-    const details: SubagentRun = {
-      agent: agentName,
-      task,
-      state: "failed",
-      attempts: [],
-      error,
-    };
-    return result(details, error);
+    run.state = "failed";
+    run.error = error;
+    run.endedAt = Date.now();
+    emit("finished");
+    return result(snapshotRun(run), error);
   }
 
-  const run: MutableRun = {
-    agent: agentName,
-    task,
-    state: "running",
-    model: resolved.model,
-    thinkingLevel: resolved.thinkingLevel,
-    attempts: [],
-  };
-  const emit = () => {
-    onUpdate?.(result(snapshotRun(run), `Subagent ${run.agent} is ${run.state}.`));
-  };
+  run.model = resolved.model;
+  run.thinkingLevel = resolved.thinkingLevel;
 
-  for (const number of [1, 2] as const) {
-    signal?.throwIfAborted();
-    const attempt: MutableAttempt = {
-      number,
-      state: "running",
-      activity: [
-        ...(number === 1 && resolved.warning ? [resolved.warning] : []),
-        ...(number === 2 ? ["Retrying after attempt 1 failed."] : []),
-      ],
-      messages: [],
-      stderr: "",
-      exitCode: null,
-    };
-    run.attempts.push(attempt);
-    emit();
-
-    const onCancelled = () => {
-      attempt.state = "cancelled";
-      run.state = "cancelled";
-      emit();
-    };
-    const outcome = await runAttempt(
-      definition,
-      task,
-      resolved.model,
-      resolved.thinkingLevel,
-      ctx,
-      signal,
-      attempt,
-      emit,
-      onCancelled,
-    );
-    if (outcome.cancelled) {
+  try {
+    for (const number of [1, 2] as const) {
       signal?.throwIfAborted();
-      throw new Error("Subagent cancellation was not accompanied by an abort signal");
-    }
-    attempt.state = outcome.succeeded ? "succeeded" : "failed";
-    if (outcome.error) attempt.error = outcome.error;
-
-    if (outcome.succeeded) {
-      run.state = "succeeded";
-      delete run.error;
+      const attempt: MutableAttempt = {
+        number,
+        state: "running",
+        activity: [
+          ...(number === 1 && resolved.warning ? [resolved.warning] : []),
+          ...(number === 2 ? ["Retrying after attempt 1 failed."] : []),
+        ],
+        messages: [],
+        usage: {
+          ...ZERO_USAGE,
+          contextTokens: run.attempts.at(-1)?.usage.contextTokens ?? ZERO_USAGE.contextTokens,
+        },
+        committedUsage: { ...ZERO_USAGE },
+        stderr: "",
+        exitCode: null,
+      };
+      run.attempts.push(attempt);
       emit();
-      const output = finalOutput(attempt.messages);
-      return result(snapshotRun(run), resolved.warning ? `${resolved.warning}\n\n${output}` : output);
-    }
 
-    run.error = outcome.error || attempt.stderr || "Subagent failed";
-    emit();
-    if (number === 1 && outcome.retryable !== false) {
-      run.state = "retrying";
+      const onCancelled = () => {
+        attempt.state = "cancelled";
+        run.state = "cancelled";
+        emit();
+      };
+      const outcome = await runAttempt(
+        runId,
+        definition,
+        { ...request, title: run.title },
+        resolved.model!,
+        resolved.thinkingLevel,
+        ctx,
+        sessionRoot,
+        signal,
+        attempt,
+        sessions,
+        emit,
+        onCancelled,
+      );
+      if (outcome.cancelled) {
+        run.state = "cancelled";
+        run.endedAt = Date.now();
+        emit("finished");
+        signal?.throwIfAborted();
+        throw new Error("Subagent cancellation was not accompanied by an abort signal");
+      }
+
+      attempt.state = outcome.succeeded ? "succeeded" : "failed";
+      if (outcome.error) attempt.error = outcome.error;
+
+      if (outcome.succeeded) {
+        run.state = "succeeded";
+        delete run.error;
+        run.endedAt = Date.now();
+        emit("finished");
+        const output = finalOutput(attempt.messages);
+        return result(snapshotRun(run), resolved.warning ? `${resolved.warning}\n\n${output}` : output);
+      }
+
+      run.error = outcome.error || attempt.stderr || "Subagent failed";
       emit();
-      continue;
-    }
+      if (number === 1 && outcome.retryable !== false) {
+        run.state = "retrying";
+        emit();
+        continue;
+      }
 
-    run.state = "failed";
-    const output = failureOutput(run);
-    return result(snapshotRun(run), resolved.warning ? `${resolved.warning}\n${output}` : output);
+      run.state = "failed";
+      run.endedAt = Date.now();
+      const output = failureOutput(run);
+      emit("finished");
+      return result(snapshotRun(run), resolved.warning ? `${resolved.warning}\n${output}` : output);
+    }
+  } catch (error) {
+    if (signal?.aborted) {
+      run.state = "cancelled";
+      if (run.endedAt === undefined) {
+        run.endedAt = Date.now();
+        emit("finished");
+      }
+      throw error;
+    }
+    throw error;
   }
 
   throw new Error("Subagent attempt loop did not return");
+}
+
+export async function executeSubagentBatch(
+  batchId: string,
+  request: SubagentBatchRequest,
+  catalog: readonly AgentDefinition[],
+  ctx: ExtensionContext,
+  sessionRoot: string,
+  signal: AbortSignal | undefined,
+  callbacks: SubagentBatchRuntimeCallbacks,
+): Promise<AgentToolResult<SubagentBatchDetails>> {
+  if (typeof batchId !== "string" || batchId.trim() === "") {
+    throw new TypeError("Invalid subagent batch request: batch id must not be blank");
+  }
+  let requestKeys: (string | symbol)[];
+  try {
+    if (!isRecord(request)) throw new TypeError();
+    requestKeys = Reflect.ownKeys(request);
+  } catch {
+    throw new TypeError("Invalid subagent batch request: tasks must be a non-empty array");
+  }
+  if (
+    requestKeys.length !== 1 ||
+    requestKeys[0] !== "tasks" ||
+    !Array.isArray(request.tasks) ||
+    request.tasks.length === 0
+  ) {
+    throw new TypeError("Invalid subagent batch request: tasks must be a non-empty array");
+  }
+
+  const outcomes: SubagentBatchOutcome[] = [];
+  for (let index = 0; index < request.tasks.length; index++) {
+    outcomes.push(index >= 8
+      ? {
+          index,
+          status: "over-limit",
+          reason: "Task was not run because the batch limit is eight items.",
+        }
+      : classifyTask(index, request.tasks[index]));
+  }
+  const queued = outcomes.filter((outcome): outcome is Extract<SubagentBatchOutcome, { status: "queued" }> => outcome.status === "queued");
+
+  signal?.throwIfAborted();
+  let nextQueued = 0;
+  const worker = async (): Promise<void> => {
+    while (nextQueued < queued.length) {
+      signal?.throwIfAborted();
+      const outcome = queued[nextQueued++];
+      const childRunId = `${batchId}:${outcome.index}`;
+      let monitorStarted = false;
+      try {
+        const child = await executeSubagent(
+          childRunId,
+          outcome.request,
+          catalog,
+          ctx,
+          sessionRoot,
+          signal,
+          {
+            onToolUpdate: (update) => {
+              outcomes[outcome.index] = {
+                index: outcome.index,
+                status: update.details.state,
+                run: cloneRun(update.details),
+              };
+              publishBatchUpdate(callbacks, outcomes);
+            },
+            onMonitorEvent: (event) => {
+              if (event.type === "started") monitorStarted = true;
+              callbacks.onMonitorEvent(event);
+            },
+          },
+        );
+        outcomes[outcome.index] = {
+          index: outcome.index,
+          status: child.details.state,
+          run: cloneRun(child.details),
+        };
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        const run = failedRun(outcome.request, error);
+        outcomes[outcome.index] = { index: outcome.index, status: "failed", run };
+        if (monitorStarted) {
+          callbacks.onMonitorEvent({
+            type: "finished",
+            run: { runId: childRunId, run: cloneRun(run), sessions: [] },
+          });
+        }
+        publishBatchUpdate(callbacks, outcomes);
+      }
+    }
+  };
+  const workers = Array.from({ length: Math.min(4, queued.length) }, () => worker());
+  const settled = await Promise.allSettled(workers);
+  if (signal?.aborted) throw signal.reason;
+  const rejection = settled.find((result): result is PromiseRejectedResult => result.status === "rejected");
+  if (rejection) throw rejection.reason;
+
+  const details = snapshotBatch(outcomes);
+  return {
+    content: [{ type: "text", text: formatSubagentBatch(details) }],
+    details,
+  };
+}
+
+function classifyTask(index: number, value: unknown): SubagentBatchOutcome {
+  let keys: (string | symbol)[];
+  try {
+    if (!isRecord(value)) {
+      return { index, status: "malformed", reason: "Task must contain only agent, title, and task fields." };
+    }
+    keys = Reflect.ownKeys(value);
+  } catch {
+    return { index, status: "malformed", reason: "Task could not be inspected safely." };
+  }
+  if (
+    keys.length !== 3 ||
+    keys.some((key) => key !== "agent" && key !== "title" && key !== "task")
+  ) {
+    return { index, status: "malformed", reason: "Task must contain only agent, title, and task fields." };
+  }
+  let agent: unknown;
+  let title: unknown;
+  let task: unknown;
+  try {
+    agent = value.agent;
+    title = value.title;
+    task = value.task;
+  } catch {
+    return { index, status: "malformed", reason: "Task could not be read safely." };
+  }
+  if (typeof agent !== "string" || agent.trim() === "") {
+    return { index, status: "malformed", reason: "Task agent must be a non-blank string." };
+  }
+  if (typeof title !== "string") {
+    return { index, status: "malformed", reason: "Task title must be a string." };
+  }
+  if (typeof task !== "string" || task.trim() === "") {
+    return { index, status: "malformed", reason: "Task task must be a non-blank string." };
+  }
+  try {
+    return {
+      index,
+      status: "queued",
+      request: {
+        agent,
+        title: normalizeTitle(title),
+        task,
+      },
+    };
+  } catch {
+    return { index, status: "malformed", reason: "Task title must normalize to a non-blank line." };
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, any> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function publishBatchUpdate(
+  callbacks: SubagentBatchRuntimeCallbacks,
+  outcomes: readonly SubagentBatchOutcome[],
+): void {
+  const details = snapshotBatch(outcomes);
+  callbacks.onToolUpdate?.({
+    content: [{ type: "text", text: formatSubagentBatch(details) }],
+    details,
+  });
+}
+
+function snapshotBatch(outcomes: readonly SubagentBatchOutcome[]): SubagentBatchDetails {
+  return { outcomes: outcomes.map(cloneOutcome) };
+}
+
+function cloneOutcome(outcome: SubagentBatchOutcome): SubagentBatchOutcome {
+  if (outcome.status === "queued") {
+    return { index: outcome.index, status: "queued", request: { ...outcome.request } };
+  }
+  if (outcome.status === "malformed" || outcome.status === "over-limit") {
+    return { index: outcome.index, status: outcome.status, reason: outcome.reason };
+  }
+  if ("run" in outcome) {
+    return { index: outcome.index, status: outcome.status, run: cloneRun(outcome.run) };
+  }
+  throw new TypeError("Invalid subagent batch outcome");
+}
+
+function cloneRun(run: SubagentRun): SubagentRun {
+  return {
+    ...run,
+    attempts: run.attempts.map((attempt) => ({
+      ...attempt,
+      activity: [...attempt.activity],
+      messages: attempt.messages.map((message) => structuredClone(message)),
+      usage: { ...attempt.usage },
+    })),
+  };
+}
+
+function failedRun(request: SubagentRequest, error: unknown): SubagentRun {
+  const now = Date.now();
+  return {
+    agent: request.agent,
+    title: request.title,
+    task: request.task,
+    state: "failed",
+    startedAt: now,
+    endedAt: now,
+    attempts: [],
+    error: error instanceof Error ? error.message : String(error),
+  };
 }
 
 function resolveModel(
@@ -212,21 +574,35 @@ function resolveModel(
 }
 
 async function runAttempt(
+  runId: string,
   definition: AgentDefinition,
-  task: string,
+  request: SubagentRequest,
   model: AgentDefinition["model"],
   thinkingLevel: AgentDefinition["thinkingLevel"] | undefined,
   ctx: ExtensionContext,
+  sessionRoot: string,
   signal: AbortSignal | undefined,
   attempt: MutableAttempt,
+  sessions: MutableChildSessionState[],
   emit: () => void,
   onCancelled: () => void,
 ): Promise<AttemptOutcome> {
   let promptDirectory: string | undefined;
+  let session: MutableChildSessionState | undefined;
   let outcome: AttemptOutcome = { succeeded: false, error: "Subagent attempt did not start" };
   let cleanupError: string | undefined;
 
   try {
+    const directory = await fs.mkdtemp(path.join(sessionRoot, `attempt-${attempt.number}-`));
+    session = {
+      attempt: attempt.number,
+      directory,
+      partialText: "",
+      partialThinking: "",
+    };
+    sessions.push(session);
+    emit();
+
     promptDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "pi-subagent-"));
     const promptPath = path.join(promptDirectory, `prompt-${definition.name}.md`);
     await fs.writeFile(promptPath, definition.systemPrompt, { encoding: "utf8", mode: 0o600 });
@@ -236,7 +612,6 @@ async function runAttempt(
       "--mode",
       "json",
       "-p",
-      "--no-session",
       "--no-skills",
       "--model",
       model,
@@ -246,7 +621,11 @@ async function runAttempt(
       definition.tools.join(","),
       "--append-system-prompt",
       promptPath,
-      task,
+      "--session-dir",
+      directory,
+      "--name",
+      request.title,
+      request.task,
     ];
 
     const child = spawn("pi", args, {
@@ -260,11 +639,35 @@ async function runAttempt(
       const stdoutDecoder = new StringDecoder("utf8");
       const stderrDecoder = new StringDecoder("utf8");
       let childError: string | undefined;
+      let sessionDiscoveryError: string | undefined;
+      let sessionDiscoveryPromise: Promise<void> | undefined;
       let closed = false;
       let cancellationRequested = false;
       let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
 
-      function finish(code: number | null, signalName: NodeJS.Signals | null): void {
+      function discoverSessionFile(): Promise<void> {
+        if (!session?.sessionId || session.file) return Promise.resolve();
+        if (sessionDiscoveryPromise) return sessionDiscoveryPromise;
+        sessionDiscoveryPromise = findChildSessionFile(session.directory, session.sessionId)
+          .then((file) => {
+            if (file && session && !session.file) {
+              session.file = file;
+              if (!closed) emit();
+            }
+          })
+          .finally(() => {
+            sessionDiscoveryPromise = undefined;
+          });
+        return sessionDiscoveryPromise;
+      }
+
+      function reportSessionDiscoveryError(error: unknown): void {
+        if (closed) return;
+        attempt.error = `Child session discovery failed: ${error instanceof Error ? error.message : String(error)}`;
+        emit();
+      }
+
+      async function finish(code: number | null, signalName: NodeJS.Signals | null): Promise<void> {
         if (closed) return;
         closed = true;
         if (forceKillTimer) clearTimeout(forceKillTimer);
@@ -273,10 +676,17 @@ async function runAttempt(
         attempt.stderr += stderrDecoder.end();
         if (buffer.trim()) processLine(buffer);
         attempt.exitCode = code;
+        try {
+          await discoverSessionFile();
+        } catch (error) {
+          sessionDiscoveryError = error instanceof Error ? error.message : String(error);
+        }
         if (cancellationRequested) {
           resolve({ succeeded: false, cancelled: true, retryable: false });
         } else if (childError) {
           resolve({ succeeded: false, error: childError });
+        } else if (sessionDiscoveryError) {
+          resolve({ succeeded: false, error: `Child session discovery failed: ${sessionDiscoveryError}` });
         } else if (attempt.error) {
           resolve({ succeeded: false, error: attempt.error });
         } else if (code !== 0 || signalName) {
@@ -307,7 +717,16 @@ async function runAttempt(
           } catch {
             // The parent will rethrow the abort reason after cleanup.
           }
+          child.stdout?.destroy();
+          child.stderr?.destroy();
         }, 5_000);
+      }
+
+      function handleSessionHeader(id: unknown): void {
+        if (typeof id !== "string" || !session) return;
+        session.sessionId = id;
+        if (!closed) emit();
+        void discoverSessionFile().catch(reportSessionDiscoveryError);
       }
 
       function processLine(line: string): void {
@@ -337,16 +756,32 @@ async function runAttempt(
           return;
         }
 
+        if (session?.sessionId && !session.file) {
+          void discoverSessionFile().catch(reportSessionDiscoveryError);
+        }
+
+        if (event.type === "session") {
+          handleSessionHeader(event.id);
+          return;
+        }
+
         if (event.type === "message_update") {
           const update = event.assistantMessageEvent;
+          const usage = usageFrom(event.usage);
+          if (usage) {
+            attempt.pendingUsage = usage;
+            refreshAttemptUsage(attempt, usage.contextTokens);
+          }
           if (update?.type === "error") {
             attempt.error = update.error?.errorMessage ?? `Provider stopped with ${update.reason}`;
             emit();
             return;
           }
-          if (typeof update?.delta === "string" && update.delta.length > 0) {
-            const kind = update.type === "thinking_delta" ? "thinking" : "text";
-            attempt.activity.push(`${kind}: ${update.delta}`);
+          if (typeof update?.delta === "string" && update.delta.length > 0 && session) {
+            if (update.type === "thinking_delta") session.partialThinking += update.delta;
+            else if (update.type === "text_delta") session.partialText += update.delta;
+            emit();
+          } else if (usage) {
             emit();
           }
           return;
@@ -368,13 +803,28 @@ async function runAttempt(
         if (event.type !== "message_end" || !event.message) return;
         const message = event.message as Message;
         attempt.messages.push(message);
-        if (
-          message.role === "assistant" &&
-          (message.stopReason === "error" ||
+        if (message.role === "assistant") {
+          const usage = usageFrom(message.usage) ?? attempt.pendingUsage;
+          if (usage) {
+            attempt.committedUsage = {
+              inputTokens: attempt.committedUsage.inputTokens + usage.inputTokens,
+              outputTokens: attempt.committedUsage.outputTokens + usage.outputTokens,
+              contextTokens: usage.contextTokens,
+            };
+            attempt.pendingUsage = undefined;
+            refreshAttemptUsage(attempt, usage.contextTokens);
+          }
+          if (session) {
+            session.partialText = "";
+            session.partialThinking = "";
+          }
+          if (
+            message.stopReason === "error" ||
             message.stopReason === "aborted" ||
-            Boolean(message.errorMessage))
-        ) {
-          attempt.error = message.errorMessage ?? `Provider stopped with ${message.stopReason}`;
+            Boolean(message.errorMessage)
+          ) {
+            attempt.error = message.errorMessage ?? `Provider stopped with ${message.stopReason}`;
+          }
         }
         emit();
       }
@@ -391,7 +841,9 @@ async function runAttempt(
       child.once("error", (error) => {
         childError = error.message;
       });
-      child.once("close", finish);
+      child.once("close", (code, signalName) => {
+        void finish(code, signalName);
+      });
 
       if (signal) {
         if (signal.aborted) cancel();
@@ -425,6 +877,65 @@ async function runAttempt(
   return outcome;
 }
 
+async function findChildSessionFile(
+  directory: string,
+  sessionId: string,
+): Promise<string | undefined> {
+  const entries = await fs.readdir(directory);
+  const suffix = `_${sessionId}.jsonl`;
+  const file = entries.find((entry) => entry === `${sessionId}.jsonl` || entry.endsWith(suffix));
+  return file ? path.join(directory, file) : undefined;
+}
+
+function usageFrom(value: unknown): SubagentUsage | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const usage = value as Partial<Usage> & { contextTokens?: unknown };
+  const inputTokens = numberOrZero(usage.input);
+  const outputTokens = numberOrZero(usage.output);
+  const contextTokens = typeof usage.contextTokens === "number" && Number.isFinite(usage.contextTokens)
+    ? usage.contextTokens
+    : inputTokens + numberOrZero(usage.cacheRead) + numberOrZero(usage.cacheWrite);
+  return { inputTokens, outputTokens, contextTokens };
+}
+
+function numberOrZero(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function refreshAttemptUsage(attempt: MutableAttempt, contextTokens: number): void {
+  const pending = attempt.pendingUsage ?? ZERO_USAGE;
+  attempt.usage = {
+    inputTokens: attempt.committedUsage.inputTokens + pending.inputTokens,
+    outputTokens: attempt.committedUsage.outputTokens + pending.outputTokens,
+    contextTokens,
+  };
+}
+
+function safeTitle(title: unknown): string {
+  if (typeof title !== "string") return "(untitled)";
+  try {
+    return normalizeTitle(title);
+  } catch {
+    return "(untitled)";
+  }
+}
+
+export function formatSubagentBatch(details: SubagentBatchDetails): string {
+  return truncateOutput(details.outcomes.map((outcome) => {
+    if (outcome.status === "malformed" || outcome.status === "over-limit") {
+      return `${outcome.index + 1}. ${outcome.status}: ${outcome.reason}`;
+    }
+    if (outcome.status === "queued") {
+      return `${outcome.index + 1}. ${safeTitle(outcome.request.title)} — queued`;
+    }
+    if (!("run" in outcome)) throw new TypeError("Invalid subagent batch outcome");
+    const output = outcome.status === "succeeded"
+      ? finalOutput(outcome.run.attempts.at(-1)?.messages ?? [])
+      : failureOutput(outcome.run);
+    return `${outcome.index + 1}. ${safeTitle(outcome.run.title)} — ${outcome.status}\n${output}`;
+  }).join("\n\n"));
+}
+
 function finalOutput(messages: readonly Message[]): string {
   for (let index = messages.length - 1; index >= 0; index--) {
     const message = messages[index];
@@ -437,7 +948,7 @@ function finalOutput(messages: readonly Message[]): string {
   return "(no output)";
 }
 
-function failureOutput(run: MutableRun): string {
+function failureOutput(run: Pick<SubagentRun, "error" | "attempts">): string {
   const diagnostics = run.attempts
     .map((attempt) => {
       const details = [attempt.error, attempt.stderr].filter(Boolean).join("; ");
@@ -450,20 +961,36 @@ function failureOutput(run: MutableRun): string {
 function snapshotRun(run: MutableRun): SubagentRun {
   return {
     agent: run.agent,
+    title: run.title,
     task: run.task,
     state: run.state,
+    startedAt: run.startedAt,
+    ...(run.endedAt !== undefined ? { endedAt: run.endedAt } : {}),
     model: run.model,
     thinkingLevel: run.thinkingLevel,
     attempts: run.attempts.map((attempt) => ({
       number: attempt.number,
       state: attempt.state,
       activity: [...attempt.activity],
-      messages: [...attempt.messages],
+      messages: attempt.messages.map((message) => structuredClone(message)),
+      usage: { ...attempt.usage },
       stderr: attempt.stderr,
       exitCode: attempt.exitCode,
       ...(attempt.error ? { error: attempt.error } : {}),
     })),
     ...(run.error ? { error: run.error } : {}),
+  };
+}
+
+function snapshotMonitoredRun(
+  runId: string,
+  run: MutableRun,
+  sessions: readonly MutableChildSessionState[],
+): MonitoredRun {
+  return {
+    runId,
+    run: snapshotRun(run),
+    sessions: sessions.map((session) => ({ ...session })),
   };
 }
 
