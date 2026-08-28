@@ -32,6 +32,7 @@ const QuestionnaireQuestionSchema = Type.Object(
       minItems: 2,
       maxItems: 4,
     }),
+    multiSelect: Type.Optional(Type.Boolean()),
   },
   { additionalProperties: false },
 );
@@ -100,8 +101,15 @@ function validateRequest(value: unknown): asserts value is QuestionnaireRequest 
     if (!isRecord(rawQuestion)) {
       throw new TypeError(`Invalid questionnaire request: question ${questionIndex} must be an object`);
     }
-    assertKnownKeys(rawQuestion, ["question", "header", "options"], `question ${questionIndex}`);
+    assertKnownKeys(
+      rawQuestion,
+      ["question", "header", "options", "multiSelect"],
+      `question ${questionIndex}`,
+    );
     assertSafeText(rawQuestion.question, `question ${questionIndex} text`);
+    if (rawQuestion.multiSelect !== undefined && typeof rawQuestion.multiSelect !== "boolean") {
+      throw new TypeError(`Invalid questionnaire request: question ${questionIndex} multiSelect must be a boolean`);
+    }
     if (rawQuestion.header !== undefined) {
       assertSafeText(rawQuestion.header, `question ${questionIndex} header`, true);
     }
@@ -140,6 +148,7 @@ function normalizeQuestions(request: QuestionnaireRequest): readonly Questionnai
       label: option.label,
       description: option.description,
     })),
+    multiSelect: question.multiSelect ?? false,
   }));
 }
 

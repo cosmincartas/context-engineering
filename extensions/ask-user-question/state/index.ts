@@ -7,35 +7,18 @@ export interface QuestionnaireQuestion {
   readonly question: string;
   readonly header?: string;
   readonly options: readonly QuestionnaireOption[];
+  readonly multiSelect: boolean;
 }
 
-export interface OptionAnswer {
-  readonly kind: "option";
-  readonly optionIndex: number;
-  readonly label: string;
+export interface QuestionnaireDraftAnswer {
+  readonly optionIndexes: readonly number[];
+  readonly otherText?: string;
 }
-
-export interface OtherAnswer {
-  readonly kind: "other";
-  readonly text: string;
-}
-
-export type QuestionnaireAnswer = OptionAnswer | OtherAnswer;
-
-export type QuestionnaireAnswerInput =
-  | {
-      readonly kind: "option";
-      readonly optionIndex: number;
-    }
-  | {
-      readonly kind: "other";
-      readonly text: string;
-    };
 
 export interface QuestionnaireResultAnswer {
   readonly questionIndex: number;
   readonly question: string;
-  readonly value: string;
+  readonly values: readonly string[];
 }
 
 export interface SubmittedQuestionnaireOutcome {
@@ -56,15 +39,24 @@ export interface QuestionnaireState {
   readonly questions: readonly QuestionnaireQuestion[];
   readonly activeTab: number;
   readonly activeRow: number;
-  readonly answers: readonly (QuestionnaireAnswer | undefined)[];
+  readonly answers: readonly (QuestionnaireDraftAnswer | undefined)[];
   readonly outcome?: QuestionnaireOutcome;
 }
 
 export type QuestionnaireStateEvent =
   | {
-      readonly type: "answer";
+      readonly type: "selectOption";
       readonly questionIndex: number;
-      readonly answer: QuestionnaireAnswerInput;
+      readonly optionIndex: number;
+    }
+  | {
+      readonly type: "submitOther";
+      readonly questionIndex: number;
+      readonly text: string;
+    }
+  | {
+      readonly type: "advanceMultiple";
+      readonly questionIndex: number;
     }
   | {
       readonly type: "moveRow";
@@ -88,6 +80,7 @@ export function createQuestionnaireState(
         label: option.label,
         description: option.description,
       })),
+      multiSelect: question.multiSelect ?? false,
     })),
     activeTab: 0,
     activeRow: 0,
@@ -104,8 +97,12 @@ export function reduceQuestionnaireState(
   }
 
   switch (event.type) {
-    case "answer":
-      return answerQuestion(state, event.questionIndex, event.answer);
+    case "selectOption":
+      return selectOption(state, event.questionIndex, event.optionIndex);
+    case "submitOther":
+      return submitOther(state, event.questionIndex, event.text);
+    case "advanceMultiple":
+      return advanceMultiple(state, event.questionIndex);
     case "moveRow":
       return moveRow(state, event.direction);
     case "moveTab":
@@ -154,47 +151,93 @@ function moveTab(
 }
 
 function rowCount(state: QuestionnaireState): number {
-  return state.activeTab === state.questions.length
-    ? 2
-    : state.questions[state.activeTab].options.length + 1;
+  if (state.activeTab === state.questions.length) return 2;
+  return state.questions[state.activeTab].options.length +
+    (state.questions[state.activeTab].multiSelect ? 2 : 1);
 }
 
-function answerQuestion(
+function selectOption(
   state: QuestionnaireState,
   questionIndex: number,
-  answer: QuestionnaireAnswerInput,
+  optionIndex: number,
 ): QuestionnaireState {
-  assertQuestionIndex(state, questionIndex);
+  assertOptionIndex(state, questionIndex, optionIndex);
 
   const question = state.questions[questionIndex];
-  const answers = state.answers.slice();
-
-  if (answer.kind === "option") {
-    if (
-      !Number.isInteger(answer.optionIndex) ||
-      answer.optionIndex < 0 ||
-      answer.optionIndex >= question.options.length
-    ) {
-      throw new RangeError(`Invalid option index: ${answer.optionIndex}`);
-    }
-
-    answers[questionIndex] =
-      state.answers[questionIndex]?.kind === "option" &&
-      state.answers[questionIndex].optionIndex === answer.optionIndex
-        ? undefined
-        : {
-            kind: "option",
-            optionIndex: answer.optionIndex,
-            label: question.options[answer.optionIndex].label,
-          };
-  } else {
-    answers[questionIndex] = {
-      kind: "other",
-      text: normalizeOtherText(answer.text),
-    };
+  const current = state.answers[questionIndex];
+  if (!question.multiSelect) {
+    return advanceQuestion(
+      replaceAnswer(state, questionIndex, { optionIndexes: [optionIndex] }),
+      questionIndex,
+    );
   }
 
+  const optionIndexes = current?.optionIndexes.includes(optionIndex)
+    ? current.optionIndexes.filter((index) => index !== optionIndex)
+    : [...(current?.optionIndexes ?? []), optionIndex].sort((left, right) => left - right);
+  const answer: QuestionnaireDraftAnswer = {
+    optionIndexes,
+    ...(current?.otherText === undefined ? {} : { otherText: current.otherText }),
+  };
+  return replaceAnswer(state, questionIndex, answer);
+}
+
+function submitOther(
+  state: QuestionnaireState,
+  questionIndex: number,
+  text: string,
+): QuestionnaireState {
+  assertQuestionIndex(state, questionIndex);
+  const normalizedText = normalizeOtherText(text);
+  const question = state.questions[questionIndex];
+
+  if (!question.multiSelect) {
+    return advanceQuestion(
+      replaceAnswer(state, questionIndex, {
+        optionIndexes: [],
+        otherText: normalizedText,
+      }),
+      questionIndex,
+    );
+  }
+
+  const current = state.answers[questionIndex];
+  return replaceAnswer(state, questionIndex, {
+    optionIndexes: current?.optionIndexes ?? [],
+    ...(normalizedText === "" ? {} : { otherText: normalizedText }),
+  });
+}
+
+function advanceMultiple(
+  state: QuestionnaireState,
+  questionIndex: number,
+): QuestionnaireState {
+  assertQuestionIndex(state, questionIndex);
+  if (!state.questions[questionIndex].multiSelect) {
+    throw new TypeError(`Question ${questionIndex} does not accept multiple answers`);
+  }
+  return advanceQuestion(state, questionIndex);
+}
+
+function replaceAnswer(
+  state: QuestionnaireState,
+  questionIndex: number,
+  answer: QuestionnaireDraftAnswer,
+): QuestionnaireState {
+  const answers = state.answers.slice();
+  answers[questionIndex] = answer;
   return { ...state, answers };
+}
+
+function advanceQuestion(
+  state: QuestionnaireState,
+  questionIndex: number,
+): QuestionnaireState {
+  return {
+    ...state,
+    activeTab: Math.min(state.questions.length, questionIndex + 1),
+    activeRow: 0,
+  };
 }
 
 function assertQuestionIndex(
@@ -207,6 +250,21 @@ function assertQuestionIndex(
     questionIndex >= state.questions.length
   ) {
     throw new RangeError(`Invalid question index: ${questionIndex}`);
+  }
+}
+
+function assertOptionIndex(
+  state: QuestionnaireState,
+  questionIndex: number,
+  optionIndex: number,
+): void {
+  assertQuestionIndex(state, questionIndex);
+  if (
+    !Number.isInteger(optionIndex) ||
+    optionIndex < 0 ||
+    optionIndex >= state.questions[questionIndex].options.length
+  ) {
+    throw new RangeError(`Invalid option index: ${optionIndex}`);
   }
 }
 
@@ -227,19 +285,20 @@ function buildSubmittedOutcome(
     answers: state.questions.map((question, questionIndex) => ({
       questionIndex,
       question: question.question,
-      value: publicValue(state.answers[questionIndex]),
+      values: publicValues(question, state.answers[questionIndex]),
     })),
   };
 }
 
-function publicValue(answer: QuestionnaireAnswer | undefined): string {
-  if (answer === undefined) {
-    return "Skipped";
-  }
+function publicValues(
+  question: QuestionnaireQuestion,
+  answer: QuestionnaireDraftAnswer | undefined,
+): readonly string[] {
+  if (answer === undefined) return [];
 
-  return answer.kind === "option"
-    ? answer.label
-    : answer.text === ""
-      ? "Other"
-      : answer.text;
+  const values = answer.optionIndexes.map((optionIndex) => question.options[optionIndex].label);
+  if (answer.otherText !== undefined) {
+    values.push(answer.otherText === "" ? "Other" : answer.otherText);
+  }
+  return values;
 }

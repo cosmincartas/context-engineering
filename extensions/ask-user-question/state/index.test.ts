@@ -15,6 +15,7 @@ const questions: QuestionnaireQuestion[] = [
       { label: "Blue", description: "A cool color" },
       { label: "Green", description: "A fresh color" },
     ],
+    multiSelect: false,
   },
   {
     question: "Choose a size",
@@ -23,46 +24,166 @@ const questions: QuestionnaireQuestion[] = [
       { label: "Small", description: "A compact size" },
       { label: "Large", description: "A roomy size" },
     ],
+    multiSelect: false,
   },
 ];
 
-test("answer events replace the current answer and preserve tagged provenance", () => {
+test("single answers replace drafts, advance, and build ordered value arrays", () => {
+  const initial = createQuestionnaireState(
+    questions.map((question) => ({ ...question, multiSelect: false })),
+  );
+  const selected = reduceQuestionnaireState(initial, {
+    type: "selectOption",
+    questionIndex: 0,
+    optionIndex: 0,
+  });
+
+  assert.deepEqual(selected.answers[0], { optionIndexes: [0] });
+  assert.equal(selected.activeTab, 1);
+
+  const revisited = reduceQuestionnaireState(selected, {
+    type: "moveTab",
+    direction: "left",
+  });
+  const replaced = reduceQuestionnaireState(revisited, {
+    type: "selectOption",
+    questionIndex: 0,
+    optionIndex: 1,
+  });
+  assert.deepEqual(replaced.answers[0], { optionIndexes: [1] });
+  assert.equal(replaced.activeTab, 1);
+
+  const emptyOther = reduceQuestionnaireState(
+    reduceQuestionnaireState(replaced, {
+      type: "moveTab",
+      direction: "left",
+    }),
+    { type: "submitOther", questionIndex: 0, text: "  " },
+  );
+  assert.deepEqual(emptyOther.answers[0], { optionIndexes: [], otherText: "" });
+  assert.equal(emptyOther.activeTab, 1);
+
+  const submitted = reduceQuestionnaireState(
+    reduceQuestionnaireState(emptyOther, { type: "moveTab", direction: "right" }),
+    { type: "confirm" },
+  );
+  assert.deepEqual(submitted.outcome?.answers, [
+    { questionIndex: 0, question: "Choose a color", values: ["Other"] },
+    { questionIndex: 1, question: "Choose a size", values: [] },
+  ]);
+});
+
+test("single option selections replace drafts and advance", () => {
   const initial = createQuestionnaireState(questions);
   const selected = reduceQuestionnaireState(initial, {
-    type: "answer",
+    type: "selectOption",
     questionIndex: 0,
-    answer: { kind: "option", optionIndex: 0 },
+    optionIndex: 0,
   });
-  const replaced = reduceQuestionnaireState(selected, {
-    type: "answer",
+  const revisited = reduceQuestionnaireState(selected, {
+    type: "moveTab",
+    direction: "left",
+  });
+  const replaced = reduceQuestionnaireState(revisited, {
+    type: "selectOption",
     questionIndex: 0,
-    answer: { kind: "option", optionIndex: 1 },
+    optionIndex: 1,
   });
 
   assert.equal(initial.answers[0], undefined);
-  assert.deepEqual(selected.answers[0], {
-    kind: "option",
-    optionIndex: 0,
-    label: "Blue",
-  });
-  assert.deepEqual(replaced.answers[0], {
-    kind: "option",
-    optionIndex: 1,
-    label: "Green",
-  });
+  assert.deepEqual(selected.answers[0], { optionIndexes: [0] });
+  assert.deepEqual(replaced.answers[0], { optionIndexes: [1] });
+  assert.equal(selected.activeTab, 1);
+  assert.equal(replaced.activeTab, 1);
   assert.notStrictEqual(selected, replaced);
+});
+
+test("multiple answers toggle independently, retain Other, clear it, and advance", () => {
+  const multipleQuestion: QuestionnaireQuestion = {
+    question: "Choose features",
+    header: "Features",
+    options: [
+      { label: "Alpha", description: "First" },
+      { label: "Beta", description: "Second" },
+      { label: "Gamma", description: "Third" },
+    ],
+    multiSelect: true,
+  };
+  let state = createQuestionnaireState([multipleQuestion]);
+
+  state = reduceQuestionnaireState(state, {
+    type: "selectOption",
+    questionIndex: 0,
+    optionIndex: 2,
+  });
+  state = reduceQuestionnaireState(state, {
+    type: "selectOption",
+    questionIndex: 0,
+    optionIndex: 0,
+  });
+  assert.deepEqual(state.answers[0], { optionIndexes: [0, 2] });
+  assert.equal(state.activeTab, 0);
+
+  state = reduceQuestionnaireState(state, {
+    type: "submitOther",
+    questionIndex: 0,
+    text: " custom ",
+  });
+  assert.deepEqual(state.answers[0], {
+    optionIndexes: [0, 2],
+    otherText: "custom",
+  });
+  assert.equal(state.activeTab, 0);
+  const submittedWithOther = reduceQuestionnaireState(
+    reduceQuestionnaireState(state, { type: "advanceMultiple", questionIndex: 0 }),
+    { type: "confirm" },
+  );
+  assert.deepEqual(submittedWithOther.outcome?.answers[0]?.values, [
+    "Alpha",
+    "Gamma",
+    "custom",
+  ]);
+
+  state = reduceQuestionnaireState(state, {
+    type: "submitOther",
+    questionIndex: 0,
+    text: "   ",
+  });
+  assert.deepEqual(state.answers[0], { optionIndexes: [0, 2] });
+
+  state = reduceQuestionnaireState(state, {
+    type: "selectOption",
+    questionIndex: 0,
+    optionIndex: 2,
+  });
+  assert.deepEqual(state.answers[0], { optionIndexes: [0] });
+  state = reduceQuestionnaireState(state, {
+    type: "selectOption",
+    questionIndex: 0,
+    optionIndex: 0,
+  });
+  assert.deepEqual(state.answers[0], { optionIndexes: [] });
+
+  const advanced = reduceQuestionnaireState(state, {
+    type: "advanceMultiple",
+    questionIndex: 0,
+  });
+  assert.equal(advanced.activeTab, 1);
+  assert.equal(advanced.activeRow, 0);
+  const submitted = reduceQuestionnaireState(advanced, { type: "confirm" });
+  assert.deepEqual(submitted.outcome?.answers[0]?.values, []);
 });
 
 test("Other answers escape C0 and C1 controls before trimming", () => {
   const state = reduceQuestionnaireState(createQuestionnaireState(questions), {
-    type: "answer",
+    type: "submitOther",
     questionIndex: 0,
-    answer: { kind: "other", text: "  custom\nanswer\u0085  " },
+    text: "  custom\nanswer\u0085  ",
   });
 
   assert.deepEqual(state.answers[0], {
-    kind: "other",
-    text: "custom\\u000Aanswer\\u0085",
+    optionIndexes: [],
+    otherText: "custom\\u000Aanswer\\u0085",
   });
 
   const submitted = reduceQuestionnaireState(state, { type: "confirm" });
@@ -72,46 +193,46 @@ test("Other answers escape C0 and C1 controls before trimming", () => {
       {
         questionIndex: 0,
         question: "Choose a color",
-        value: "custom\\u000Aanswer\\u0085",
+        values: ["custom\\u000Aanswer\\u0085"],
       },
       {
         questionIndex: 1,
         question: "Choose a size",
-        value: "Skipped",
+        values: [],
       },
     ],
   });
 });
 
-test("empty and whitespace-only Other answers remain explicit completed answers", () => {
+test("empty and whitespace-only single Other answers remain explicit completed answers", () => {
   const initial = createQuestionnaireState(questions);
   const empty = reduceQuestionnaireState(initial, {
-    type: "answer",
+    type: "submitOther",
     questionIndex: 0,
-    answer: { kind: "other", text: "" },
+    text: "",
   });
   const whitespace = reduceQuestionnaireState(empty, {
-    type: "answer",
+    type: "submitOther",
     questionIndex: 1,
-    answer: { kind: "other", text: "   " },
+    text: "   ",
   });
 
-  assert.deepEqual(empty.answers[0], { kind: "other", text: "" });
-  assert.deepEqual(whitespace.answers[1], { kind: "other", text: "" });
+  assert.deepEqual(empty.answers[0], { optionIndexes: [], otherText: "" });
+  assert.deepEqual(whitespace.answers[1], { optionIndexes: [], otherText: "" });
 
   const submitted = reduceQuestionnaireState(whitespace, { type: "confirm" });
-  assert.deepEqual(submitted.outcome?.answers.map((answer) => answer.value), [
-    "Other",
-    "Other",
+  assert.deepEqual(submitted.outcome?.answers.map((answer) => answer.values), [
+    ["Other"],
+    ["Other"],
   ]);
 });
 
-test("confirm derives one ordered public answer per question and defaults missing answers", () => {
+test("confirm derives ordered public arrays and defaults missing answers", () => {
   const state = reduceQuestionnaireState(
     reduceQuestionnaireState(createQuestionnaireState(questions), {
-      type: "answer",
+      type: "selectOption",
       questionIndex: 1,
-      answer: { kind: "option", optionIndex: 1 },
+      optionIndex: 1,
     }),
     { type: "confirm" },
   );
@@ -122,12 +243,12 @@ test("confirm derives one ordered public answer per question and defaults missin
       {
         questionIndex: 0,
         question: "Choose a color",
-        value: "Skipped",
+        values: [],
       },
       {
         questionIndex: 1,
         question: "Choose a size",
-        value: "Large",
+        values: ["Large"],
       },
     ],
   });
@@ -135,19 +256,15 @@ test("confirm derives one ordered public answer per question and defaults missin
 
 test("cancel discards draft answers and returns no public answers", () => {
   const answered = reduceQuestionnaireState(createQuestionnaireState(questions), {
-    type: "answer",
+    type: "selectOption",
     questionIndex: 0,
-    answer: { kind: "option", optionIndex: 0 },
+    optionIndex: 0,
   });
   const cancelled = reduceQuestionnaireState(answered, { type: "cancel" });
 
   assert.deepEqual(cancelled.answers, [undefined, undefined]);
   assert.deepEqual(cancelled.outcome, { status: "cancelled", answers: [] });
-  assert.deepEqual(answered.answers[0], {
-    kind: "option",
-    optionIndex: 0,
-    label: "Blue",
-  });
+  assert.deepEqual(answered.answers[0], { optionIndexes: [0] });
 });
 
 test("row navigation clamps at the first and last question rows", () => {
@@ -241,7 +358,7 @@ test("entering the final tab focuses Confirm", () => {
   assert.equal(backToQuestion.activeRow, 0);
 });
 
-test("answer selection keeps the selected question active", () => {
+test("single option selection advances from the selected question", () => {
   const focused = reduceQuestionnaireState(
     reduceQuestionnaireState(createQuestionnaireState(questions), {
       type: "moveTab",
@@ -250,18 +367,14 @@ test("answer selection keeps the selected question active", () => {
     { type: "moveRow", direction: "down" },
   );
   const selected = reduceQuestionnaireState(focused, {
-    type: "answer",
+    type: "selectOption",
     questionIndex: focused.activeTab,
-    answer: { kind: "option", optionIndex: focused.activeRow },
+    optionIndex: focused.activeRow,
   });
 
   assert.equal(focused.activeTab, 1);
   assert.equal(focused.activeRow, 1);
-  assert.equal(selected.activeTab, 1);
-  assert.equal(selected.activeRow, 1);
-  assert.deepEqual(selected.answers[1], {
-    kind: "option",
-    optionIndex: 1,
-    label: "Large",
-  });
+  assert.equal(selected.activeTab, 2);
+  assert.equal(selected.activeRow, 0);
+  assert.deepEqual(selected.answers[1], { optionIndexes: [1] });
 });

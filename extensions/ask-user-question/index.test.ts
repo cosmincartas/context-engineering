@@ -127,6 +127,49 @@ test("registers exactly one AskUserQuestion tool with a closed bounded schema", 
   assert.deepEqual(optionSchema.required, ["label", "description"]);
 });
 
+test("accepts optional boolean multiSelect and rejects malformed or unknown question fields", async () => {
+  const tool = registeredTool();
+  const questionSchema = tool.parameters.properties.questions.items;
+
+  assert.equal(questionSchema.properties.multiSelect.type, "boolean");
+  assert.deepEqual(questionSchema.required, ["question", "options"]);
+
+  for (const multiSelect of [true, false, undefined]) {
+    const question = { ...validRequest.questions[0] };
+    if (multiSelect !== undefined) question.multiSelect = multiSelect;
+    const harness = makeContext("rpc");
+    const result = await tool.execute("call", { questions: [question] }, undefined, undefined, harness.context);
+    assert.equal(result.details.status, "unsupported");
+    assert.equal(harness.customCalls, 0);
+  }
+
+  for (const multiSelect of ["true", 1, null, []]) {
+    const harness = makeContext("rpc");
+    await assert.rejects(
+      tool.execute(
+        "call",
+        { questions: [{ ...validRequest.questions[0], multiSelect }] },
+        undefined,
+        undefined,
+        harness.context,
+      ),
+    );
+    assert.equal(harness.customCalls, 0);
+  }
+
+  const harness = makeContext("rpc");
+  await assert.rejects(
+    tool.execute(
+      "call",
+      { questions: [{ ...validRequest.questions[0], unexpected: true }] },
+      undefined,
+      undefined,
+      harness.context,
+    ),
+  );
+  assert.equal(harness.customCalls, 0);
+});
+
 test("accepts every question and option count boundary and rejects counts outside it", async () => {
   const tool = registeredTool();
   const validMax = {
@@ -244,6 +287,8 @@ test("normalizes headers, runs the TUI component, and serializes submitted resul
   const result = await tool.execute("call", request, undefined, undefined, harness.context);
 
   assert.match(firstRender, /Q1/);
+  assert.match(firstRender, /1\. Iterative/);
+  assert.doesNotMatch(firstRender, /\[ \] Iterative/);
   assert.match(result.content[0].text, /"status":"submitted"/);
   assert.deepEqual(result.details, {
     status: "submitted",
@@ -251,7 +296,7 @@ test("normalizes headers, runs the TUI component, and serializes submitted resul
       {
         questionIndex: 0,
         question: "Choose a delivery approach",
-        value: "Iterative",
+        values: ["Iterative"],
       },
     ],
   });
@@ -356,7 +401,7 @@ test("renders visible call and terminal status components", async () => {
   assert.match(callText, /1 question/);
 
   for (const details of [
-    { status: "submitted", answers: validRequest.questions.map((question, index) => ({ questionIndex: index, question: question.question, value: "Iterative" })) },
+    { status: "submitted", answers: validRequest.questions.map((question, index) => ({ questionIndex: index, question: question.question, values: ["Iterative"] })) },
     { status: "cancelled", answers: [] },
     { status: "unsupported", answers: [], mode: "rpc" },
   ]) {
