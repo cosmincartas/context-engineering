@@ -18,6 +18,7 @@ const questions: QuestionnaireQuestion[] = [
       { label: "Iterative", description: "Deliver a small slice first." },
       { label: "Big bang", description: "Deliver everything at once." },
     ],
+    multiSelect: false,
   },
   {
     question: "Who is the audience?",
@@ -25,6 +26,7 @@ const questions: QuestionnaireQuestion[] = [
       { label: "Operators", description: "People who run the system." },
       { label: "Developers", description: "People who extend the system." },
     ],
+    multiSelect: false,
   },
   {
     question: "Which risk matters most?",
@@ -33,6 +35,7 @@ const questions: QuestionnaireQuestion[] = [
       { label: "Safety", description: "Avoid unsafe behavior." },
       { label: "Speed", description: "Keep the workflow quick." },
     ],
+    multiSelect: false,
   },
 ];
 
@@ -52,6 +55,19 @@ const input = {
   ctrlC: "\u0003",
 };
 
+const mixedQuestions: QuestionnaireQuestion[] = [
+  questions[0],
+  {
+    question: "Which features should ship?",
+    header: "Features",
+    options: [
+      { label: "Alpha", description: "First feature." },
+      { label: "Beta", description: "Second feature." },
+    ],
+    multiSelect: true,
+  },
+];
+
 function makeComponent(testQuestions: readonly QuestionnaireQuestion[] = questions) {
   const tui = {
     requestRender() {},
@@ -69,6 +85,85 @@ function makeComponent(testQuestions: readonly QuestionnaireQuestion[] = questio
   return { component, outcomes };
 }
 
+test("runs mixed single and multiple questions through numbered choices and Submit", () => {
+  const { component, outcomes } = makeComponent(mixedQuestions);
+  let output = component.render(120).join("\n");
+
+  assert.match(output, /1\. Iterative/);
+  assert.match(output, /2\. Big bang/);
+  assert.match(output, /3\. Other/);
+  assert.doesNotMatch(output, /\[ \] Iterative/);
+
+  component.handleInput?.(input.enter);
+  output = component.render(120).join("\n");
+  assert.match(output, /Which features should ship\?/);
+  assert.match(output, /\[ \] Alpha/);
+  assert.match(output, /Submit/);
+
+  component.handleInput?.(input.enter);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.enter);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.enter);
+  component.handleInput?.("custom");
+  component.handleInput?.(input.enter);
+  output = component.render(120).join("\n");
+  assert.match(output, /\[x\] Alpha/);
+  assert.match(output, /\[x\] Beta/);
+  assert.match(output, /\[x\] Other/);
+  assert.match(output, /Which features should ship\?/);
+
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.enter);
+  assert.match(component.render(120).join("\n"), /Final actions/);
+  component.handleInput?.(input.enter);
+
+  assert.deepEqual(outcomes, [
+    {
+      status: "submitted",
+      answers: [
+        {
+          questionIndex: 0,
+          question: "Which delivery approach should we use?",
+          values: ["Iterative"],
+        },
+        {
+          questionIndex: 1,
+          question: "Which features should ship?",
+          values: ["Alpha", "Beta", "custom"],
+        },
+      ],
+    },
+  ]);
+});
+
+test("multiple Submit keeps its column when selected", () => {
+  const { component } = makeComponent([mixedQuestions[1]]);
+  const unselected = component.render(120).find((line) => line.includes("Submit"));
+
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.down);
+  const selected = component.render(120).find((line) => line.includes("Submit"));
+
+  assert.ok(unselected);
+  assert.ok(selected);
+  assert.equal(selected.indexOf("Submit"), unselected.indexOf("Submit"));
+});
+
+test("multiple Submit advances with no selections", () => {
+  const { component, outcomes } = makeComponent([mixedQuestions[1]]);
+
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.enter);
+  assert.match(component.render(120).join("\n"), /Final actions/);
+  component.handleInput?.(input.enter);
+
+  assert.deepEqual(outcomes[0]?.answers[0]?.values, []);
+});
+
 test("renders grouped tabs, completion markers, labels, and descriptions", () => {
   const { component } = makeComponent();
   const output = component.render(120).join("\n");
@@ -84,41 +179,52 @@ test("renders grouped tabs, completion markers, labels, and descriptions", () =>
   assert.match(output, /→/);
 });
 
-test("routes arrows between tabs and Enter selects a listed answer", () => {
+test("routes arrows between tabs and Enter advances a single listed answer", () => {
   const { component, outcomes } = makeComponent();
 
   component.handleInput?.(input.right);
   assert.match(component.render(120).join("\n"), /> \[·\] Q2/);
 
   component.handleInput?.(input.down);
-  assert.match(component.render(120).join("\n"), /> \[ \] Developers/);
+  assert.match(component.render(120).join("\n"), /> 2\. Developers/);
   component.handleInput?.(input.up);
-  assert.match(component.render(120).join("\n"), /> \[ \] Operators/);
+  assert.match(component.render(120).join("\n"), /> 1\. Operators/);
   component.handleInput?.(input.down);
   component.handleInput?.(input.enter);
   const output = component.render(120).join("\n");
 
-  assert.match(output, /Developers/);
-  assert.match(output, /✓/);
+  assert.match(output, /Which risk matters most\?/);
+  assert.match(output, /> \[·\] Risk/);
   assert.deepEqual(outcomes, []);
 
   component.handleInput?.(input.left);
-  assert.match(component.render(120).join("\n"), /> \[·\] Approach/);
+  assert.match(component.render(120).join("\n"), /> \[✓\] Q2/);
 });
 
-test("Enter unticks the selected listed answer", () => {
+test("Enter advances a single listed answer instead of unticking it", () => {
   const { component, outcomes } = makeComponent(questions.slice(0, 1));
 
   component.handleInput?.(input.enter);
+  assert.match(component.render(120).join("\n"), /Final actions/);
+  component.handleInput?.(input.left);
+  assert.match(component.render(120).join("\n"), /Iterative ✓/);
+  component.handleInput?.(input.enter);
   component.handleInput?.(input.enter);
 
-  const output = component.render(120).join("\n");
-  assert.match(output, /> \[ \] Iterative/);
-  assert.match(output, /> \[·\] Approach/);
+  assert.deepEqual(outcomes[0]?.answers[0]?.values, ["Iterative"]);
+});
 
-  component.handleInput?.(input.right);
+test("keeps a revisited single-answer selection visible at narrow width without color", () => {
+  const { component } = makeComponent(questions.slice(0, 1));
+
   component.handleInput?.(input.enter);
-  assert.equal(outcomes[0]?.answers[0]?.value, "Skipped");
+  component.handleInput?.(input.left);
+
+  const output = component.render(5);
+  assert.ok(
+    output.some((line) => line.includes(">") && line.includes("✓")),
+    `selected marker missing from narrow output: ${JSON.stringify(output)}`,
+  );
 });
 
 test("Escape cancels the grouped flow without draft answers", () => {
@@ -140,7 +246,7 @@ test("Ctrl+C cancels the grouped flow without draft answers", () => {
 });
 
 test("keeps visible state meaning without color and fits every tested width", () => {
-  const { component } = makeComponent();
+  const { component } = makeComponent([mixedQuestions[1]]);
   component.handleInput?.(input.enter);
 
   const meaningfulOutput = component.render(80).join("\n");
@@ -176,6 +282,7 @@ test("renders control characters as visible escapes", () => {
         { label: "Label\u001b", description: "Description\u009f" },
         { label: "Safe", description: "Still safe" },
       ],
+      multiSelect: false,
     },
   ];
   const { component } = makeComponent(unsafeQuestions);
@@ -197,7 +304,7 @@ test("renders control characters as visible escapes", () => {
   );
 });
 
-test("opens Other, submits trimmed text, and keeps the question active", () => {
+test("opens Other and advances after submitting a single custom answer", () => {
   const { component, outcomes } = makeComponent(questions.slice(0, 1));
 
   component.handleInput?.(input.down);
@@ -207,10 +314,12 @@ test("opens Other, submits trimmed text, and keeps the question active", () => {
 
   component.handleInput?.("  custom answer  ");
   component.handleInput?.(input.enter);
-  const edited = component.render(80).join("\n");
-  assert.match(edited, /> \[x\] Other/);
+  assert.match(component.render(80).join("\n"), /Final actions/);
   assert.deepEqual(outcomes, []);
 
+  component.handleInput?.(input.left);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.down);
   component.handleInput?.(input.enter);
   const reopened = component.render(80).join("\n").split("\n");
   const editorLine = reopened.find(
@@ -231,6 +340,9 @@ test("prefills a non-empty Other answer and leaves an empty answer empty", () =>
   component.handleInput?.(input.enter);
   component.handleInput?.("prefilled-value");
   component.handleInput?.(input.enter);
+  component.handleInput?.(input.left);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.down);
   component.handleInput?.(input.enter);
   assert.match(component.render(80).join("\n"), /prefilled-value/);
   component.handleInput?.(input.escape);
@@ -240,9 +352,12 @@ test("prefills a non-empty Other answer and leaves an empty answer empty", () =>
   empty.handleInput?.(input.down);
   empty.handleInput?.(input.enter);
   empty.handleInput?.(input.enter);
+  empty.handleInput?.(input.left);
+  empty.handleInput?.(input.down);
+  empty.handleInput?.(input.down);
   empty.handleInput?.(input.enter);
   const emptyEditor = empty.render(80).join("\n");
-  assert.match(emptyEditor, /> \[x\] Other/);
+  assert.match(emptyEditor, /> 3\. Other/);
   assert.match(emptyEditor, /Your answer/);
   assert.ok(emptyEditor.includes("\x1b[7m \x1b[0m"));
   assert.doesNotMatch(emptyEditor, /prefilled-value/);
@@ -256,8 +371,11 @@ test("whitespace-only Other completes and reopens as an empty answer", () => {
   component.handleInput?.(input.enter);
   component.handleInput?.("   ");
   component.handleInput?.(input.enter);
-  assert.match(component.render(80).join("\n"), /> \[x\] Other/);
+  assert.match(component.render(80).join("\n"), /Final actions/);
 
+  component.handleInput?.(input.left);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.down);
   component.handleInput?.(input.enter);
   const reopened = component.render(80).join("\n");
   assert.match(reopened, /Your answer/);
@@ -268,6 +386,7 @@ test("Escape leaves Other editing without replacing an existing answer", () => {
   const { component } = makeComponent(questions.slice(0, 1));
 
   component.handleInput?.(input.enter);
+  component.handleInput?.(input.left);
   component.handleInput?.(input.down);
   component.handleInput?.(input.down);
   component.handleInput?.(input.enter);
@@ -275,8 +394,8 @@ test("Escape leaves Other editing without replacing an existing answer", () => {
   component.handleInput?.(input.escape);
   const output = component.render(80).join("\n");
 
-  assert.match(output, /\[x\] Iterative/);
-  assert.match(output, /> \[ \] Other/);
+  assert.match(output, /Iterative/);
+  assert.match(output, /> 3\. Other/);
   assert.doesNotMatch(output, /draft/);
 });
 
@@ -302,6 +421,9 @@ test("forwards editor arrows and normalizes submitted control characters", () =>
   component.handleInput?.(input.left);
   component.handleInput?.("X\u0085");
   component.handleInput?.(input.enter);
+  component.handleInput?.(input.left);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.down);
   component.handleInput?.(input.enter);
 
   assert.match(component.render(80).join("\n"), /abX\\u0085c/);
@@ -317,6 +439,9 @@ test("forwards the current Pi Editor control bindings", () => {
   component.handleInput?.("\u001d");
   component.handleInput?.("a");
   component.handleInput?.(input.enter);
+  component.handleInput?.(input.left);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.down);
   component.handleInput?.(input.enter);
 
   const reopened = component.render(80).join("\n").split("\n");
@@ -340,6 +465,9 @@ test("escapes non-Editor TUI controls before and after submit", () => {
   assert.equal(beforeSubmit.includes("\u0007"), false);
 
   component.handleInput?.(input.enter);
+  component.handleInput?.(input.left);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.down);
   component.handleInput?.(input.enter);
   const afterSubmit = component.render(80).join("\n");
   assert.match(afterSubmit, /\\u0007/);
@@ -358,10 +486,9 @@ test("escapes unknown Escape-prefixed Other input instead of dropping it", () =>
   assert.equal(beforeSubmit.includes("\x1bX"), false);
 
   component.handleInput?.(input.enter);
-  component.handleInput?.(input.right);
   component.handleInput?.(input.enter);
   assert.equal(outcomes[0]?.status, "submitted");
-  assert.equal(outcomes[0]?.answers[0]?.value, "\\u001BX");
+  assert.deepEqual(outcomes[0]?.answers[0]?.values, ["\\u001BX"]);
 });
 
 test("preserves Pi printable keyboard protocols in Other input", () => {
@@ -377,7 +504,7 @@ test("preserves Pi printable keyboard protocols in Other input", () => {
   component.handleInput?.(input.enter);
 
   assert.equal(outcomes[0]?.status, "submitted");
-  assert.equal(outcomes[0]?.answers[0]?.value, "ab");
+  assert.deepEqual(outcomes[0]?.answers[0]?.values, ["ab"]);
 });
 
 test("escapes C1 characters decoded from Pi printable keyboard protocols", () => {
@@ -397,7 +524,7 @@ test("escapes C1 characters decoded from Pi printable keyboard protocols", () =>
   component.handleInput?.(input.right);
   component.handleInput?.(input.enter);
   assert.equal(outcomes[0]?.status, "submitted");
-  assert.equal(outcomes[0]?.answers[0]?.value, "\\u0085\\u0085");
+  assert.deepEqual(outcomes[0]?.answers[0]?.values, ["\\u0085\\u0085"]);
 });
 
 test("sanitizes fragmented pasted actions before questionnaire routing", () => {
@@ -417,6 +544,9 @@ test("sanitizes fragmented pasted actions before questionnaire routing", () => {
   assert.deepEqual(outcomes, []);
 
   component.handleInput?.(input.enter);
+  component.handleInput?.(input.left);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.down);
   component.handleInput?.(input.enter);
   const afterSubmit = component.render(80).join("\n");
   assert.match(afterSubmit, /\\u001B/);
@@ -440,6 +570,9 @@ test("sanitizes pasted controls before Editor render and keeps them after submit
   assert.equal(beforeSubmit.includes("\u0085"), false);
 
   component.handleInput?.(input.enter);
+  component.handleInput?.(input.left);
+  component.handleInput?.(input.down);
+  component.handleInput?.(input.down);
   component.handleInput?.(input.enter);
   const afterSubmit = component.render(80).join("\n");
   assert.match(afterSubmit, /\\u0009/);
@@ -527,12 +660,12 @@ test("final Confirm submits ordered answers, defaults missing answers, and shows
         {
           questionIndex: 0,
           question: "Which delivery approach should we use?",
-          value: "Iterative",
+          values: ["Iterative"],
         },
         {
           questionIndex: 1,
           question: "Who is the audience?",
-          value: "Skipped",
+          values: [],
         },
       ],
     },

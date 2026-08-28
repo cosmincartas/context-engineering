@@ -71,7 +71,7 @@ export function createQuestionnaireComponent(
 
   function openEditor(questionIndex: number): void {
     const answer = state.answers[questionIndex];
-    editor.setText(answer?.kind === "other" ? answer.text : "");
+    editor.setText(answer?.otherText ?? "");
     editingQuestionIndex = questionIndex;
     editor.focused = focused;
     refresh();
@@ -92,9 +92,9 @@ export function createQuestionnaireComponent(
     const questionIndex = editingQuestionIndex;
     closeEditor();
     dispatch({
-      type: "answer",
+      type: "submitOther",
       questionIndex,
-      answer: { kind: "other", text },
+      text,
     });
   };
 
@@ -190,15 +190,17 @@ export function createQuestionnaireComponent(
       return;
     }
 
-    const question = questions[state.activeTab];
+    const question = state.questions[state.activeTab];
     if (state.activeRow < question.options.length) {
       dispatch({
-        type: "answer",
+        type: "selectOption",
         questionIndex: state.activeTab,
-        answer: { kind: "option", optionIndex: state.activeRow },
+        optionIndex: state.activeRow,
       });
-    } else {
+    } else if (state.activeRow === question.options.length) {
       openEditor(state.activeTab);
+    } else {
+      dispatch({ type: "advanceMultiple", questionIndex: state.activeTab });
     }
   }
 
@@ -251,29 +253,78 @@ export function createQuestionnaireComponent(
     addLine("");
 
     if (state.activeTab < questions.length) {
-      const question = questions[state.activeTab];
+      const question = state.questions[state.activeTab];
       addPrefixed(" ", styled("text", question.question));
       addLine("");
 
       const answer = state.answers[state.activeTab];
-      for (let index = 0; index < question.options.length; index++) {
-        const option = question.options[index];
-        const selected = state.activeRow === index;
-        const answered = answer?.kind === "option" && answer.optionIndex === index;
-        addPrefixed(
-          `${selected ? ">" : " "} [${answerMarker(answered)}] `,
-          styled(selected ? "accent" : "text", option.label),
-        );
-        addPrefixed("      ", styled("muted", option.description));
-      }
+      if (question.multiSelect) {
+        for (let index = 0; index < question.options.length; index++) {
+          const option = question.options[index];
+          const selected = state.activeRow === index;
+          const answered = answer?.optionIndexes.includes(index) ?? false;
+          addPrefixed(
+            `${selected ? ">" : " "} [${answerMarker(answered)}] `,
+            styled(selected ? "accent" : "text", option.label),
+          );
+          addPrefixed("      ", styled("muted", option.description));
+        }
 
-      const otherSelected = state.activeRow === question.options.length;
-      const otherAnswered = answer?.kind === "other";
-      addPrefixed(
-        `${otherSelected ? ">" : " "} [${answerMarker(otherAnswered)}] `,
-        styled(otherSelected ? "accent" : "text", "Other"),
-      );
-      addPrefixed("      ", styled("muted", "Enter a custom answer."));
+        const otherSelected = state.activeRow === question.options.length;
+        const otherAnswered = answer?.otherText !== undefined;
+        addPrefixed(
+          `${otherSelected ? ">" : " "} [${answerMarker(otherAnswered)}] `,
+          styled(otherSelected ? "accent" : "text", "Other"),
+        );
+        addPrefixed("      ", styled("muted", "Enter a custom answer."));
+
+        const submitSelected = state.activeRow === question.options.length + 1;
+        addPrefixed(
+          `${submitSelected ? "> " : "  "}`,
+          styled(submitSelected ? "accent" : "text", "Submit"),
+        );
+        addPrefixed("  ", styled("muted", "Continue with these selections."));
+      } else {
+        for (let index = 0; index < question.options.length; index++) {
+          const option = question.options[index];
+          const selected = state.activeRow === index;
+          const answered = answer?.optionIndexes.includes(index) ?? false;
+          const numberedPrefix = `${selected ? "> " : "  "}${index + 1}. `;
+          const completionInPrefix =
+            answered && renderWidth <= visibleWidth(numberedPrefix);
+          addPrefixed(
+            completionInPrefix
+              ? `${selected ? "> " : "  "}✓ `
+              : numberedPrefix,
+            styled(
+              selected ? "accent" : "text",
+              completionInPrefix
+                ? `${index + 1}. ${option.label}`
+                : `${option.label}${answered ? " ✓" : ""}`,
+            ),
+          );
+          addPrefixed("      ", styled("muted", option.description));
+        }
+
+        const otherSelected = state.activeRow === question.options.length;
+        const otherAnswered = answer?.otherText !== undefined;
+        const otherNumberedPrefix =
+          `${otherSelected ? "> " : "  "}${question.options.length + 1}. `;
+        const otherCompletionInPrefix =
+          otherAnswered && renderWidth <= visibleWidth(otherNumberedPrefix);
+        addPrefixed(
+          otherCompletionInPrefix
+            ? `${otherSelected ? "> " : "  "}✓ `
+            : otherNumberedPrefix,
+          styled(
+            otherSelected ? "accent" : "text",
+            otherCompletionInPrefix
+              ? `${question.options.length + 1}. Other`
+              : `Other${otherAnswered ? " ✓" : ""}`,
+          ),
+        );
+        addPrefixed("      ", styled("muted", "Enter a custom answer."));
+      }
 
       if (editingQuestionIndex === state.activeTab) {
         addLine("");
