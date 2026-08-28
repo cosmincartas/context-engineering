@@ -317,8 +317,8 @@ export default function subagentExtension(pi: ExtensionAPI): void {
       ].join(" ");
 
       pi.registerTool({
-        name: "subagent",
-        label: "Subagent",
+        name: "Agent",
+        label: "Agent",
         description,
         parameters: SubagentParameters,
         executionMode: "parallel",

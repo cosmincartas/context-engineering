@@ -85,7 +85,7 @@ test("durable task creation writes complete private state and reloads in numeric
   });
 });
 
-test("valid task updates apply text, every status, combined changes, and active replacement", async () => {
+test("valid task updates apply text, every status, combined changes, and multiple active tasks", async () => {
   await withAgentDir(async () => {
     const store = await TaskStore.load(cwd, sessionId);
     await store.create("First");
@@ -101,6 +101,13 @@ test("valid task updates apply text, every status, combined changes, and active 
     assert.deepEqual(await store.update("2", { status: "active" }), {
       task: { id: "2", text: "Second", status: "active" },
     });
+    const activeTasks = [
+      { id: "1", text: "Renamed", status: "active" as const },
+      { id: "2", text: "Second", status: "active" as const },
+      { id: "3", text: "Third", status: "pending" as const },
+    ];
+    assertTasks(store.list(), activeTasks);
+    assertTasks((await TaskStore.load(cwd, sessionId)).list(), activeTasks);
     assert.deepEqual(await store.update("2", { text: "Finished", status: "completed" }), {
       task: { id: "2", text: "Finished", status: "completed" },
     });
@@ -109,7 +116,7 @@ test("valid task updates apply text, every status, combined changes, and active 
     });
 
     const expected = [
-      { id: "1", text: "Renamed", status: "pending" as const },
+      { id: "1", text: "Renamed", status: "active" as const },
       { id: "2", text: "Finished", status: "completed" as const },
       { id: "3", text: "Third", status: "pending" as const },
     ];
@@ -164,11 +171,6 @@ test("stored data errors block all operations and preserve bytes", async () => {
         '[{"id":"2","text":"Second","status":"pending"},{"id":"1","text":"First","status":"pending"}]',
         /identifiers must be in numeric order/i,
       ],
-      [
-        "multiple-active",
-        '[{"id":"1","text":"First","status":"active"},{"id":"2","text":"Second","status":"active"}]',
-        /only one active task/i,
-      ],
     ] as const;
 
     for (const [id, contents, errorPattern] of invalidFiles) {
@@ -196,6 +198,22 @@ test("stored data errors block all operations and preserve bytes", async () => {
     await assert.rejects(() => readErrorStore.create("new"), /failed to load tasks/i);
     await assert.rejects(() => readErrorStore.update("1", { text: "new" }), /failed to load tasks/i);
     assert.deepEqual(await readdir(readErrorPath), ["evidence"]);
+  });
+});
+
+test("loads persisted task files with multiple active tasks", async () => {
+  await withAgentDir(async (agentDir) => {
+    const tasks = [
+      { id: "1", text: "First", status: "active" as const },
+      { id: "2", text: "Second", status: "active" as const },
+    ];
+    const path = taskPath(agentDir, cwd, "multiple-active");
+    await mkdir(join(path, ".."), { recursive: true, mode: 0o700 });
+    await writeFile(path, `${JSON.stringify(tasks)}\n`, { encoding: "utf8", mode: 0o600 });
+
+    const store = await TaskStore.load(cwd, "multiple-active");
+    assert.deepEqual(store.getState(), { kind: "ready", unsaved: false });
+    assertTasks(store.list(), tasks);
   });
 });
 

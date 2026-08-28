@@ -101,15 +101,7 @@ export class TaskStore {
       text: validatedChanges.text ?? current.text,
       status: nextStatus,
     };
-    const nextTasks = this.tasks.map((task, index) => {
-      if (index === taskIndex) return nextTask;
-      if (nextStatus === "active" && task.status === "active") {
-        return { ...task, status: "pending" as const };
-      }
-      return task;
-    });
-
-    this.tasks = nextTasks;
+    this.tasks = this.tasks.map((task, index) => index === taskIndex ? nextTask : task);
     return this.finishMutation(nextTask);
   }
 
@@ -210,7 +202,6 @@ function parseTaskFile(contents: string): Task[] {
 
   const tasks: Task[] = [];
   let previousId: bigint | undefined;
-  let activeCount = 0;
   for (const [index, rawTask] of value.entries()) {
     if (!isRecord(rawTask)) throw new Error(`task ${index} must be an object`);
     const keys = Object.keys(rawTask).sort();
@@ -225,8 +216,6 @@ function parseTaskFile(contents: string): Task[] {
     previousId = idNumber;
     assertTaskText(rawTask.text);
     assertTaskStatus(rawTask.status);
-    if (rawTask.status === "active") activeCount += 1;
-    if (activeCount > 1) throw new Error("task file may contain only one active task");
     tasks.push({ id: rawTask.id, text: rawTask.text, status: rawTask.status });
   }
   return tasks;

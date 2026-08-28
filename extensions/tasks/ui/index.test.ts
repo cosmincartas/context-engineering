@@ -18,17 +18,19 @@ const plainTheme = {
 const tasks: readonly Task[] = [
   { id: "1", text: "Completed task", status: "completed" },
   { id: "2", text: "Active task", status: "active" },
-  { id: "3", text: "Pending task", status: "pending" },
+  { id: "3", text: "Another active task", status: "active" },
+  { id: "4", text: "Pending task", status: "pending" },
 ];
 
 test("static task widget shows every status, identifier, text, summary, and unsaved marker", () => {
   const lines = renderTaskWidget(tasks, true, false, 0, plainTheme, 100);
   const output = lines.join("\n");
 
-  assert.equal(lines[0], "● 3 tasks (1 completed, 1 active, 1 pending) [unsaved]");
+  assert.equal(lines[0], "● 4 tasks (1 completed, 2 active, 1 pending) [unsaved]");
   assert.match(output, /  ✓ #1 Completed task/);
   assert.match(output, /  ▪ #2 Active task/);
-  assert.match(output, /  ▫ #3 Pending task/);
+  assert.match(output, /  ▪ #3 Another active task/);
+  assert.match(output, /  ▫ #4 Pending task/);
 
   const savedLines = renderTaskWidget(tasks, false, false, 0, plainTheme, 100);
   assert.equal(savedLines[0].includes("[unsaved]"), false);

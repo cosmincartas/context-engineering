@@ -138,7 +138,7 @@ test("requires a non-empty tasks array", async () => {
     assert.equal(tool.parameters.additionalProperties, false);
     assert.throws(
       () => validateToolArguments(tool, {
-        type: "toolCall", id: "empty", name: "subagent", arguments: { tasks: [] },
+        type: "toolCall", id: "empty", name: "Agent", arguments: { tasks: [] },
       }),
       /tasks/i,
     );
@@ -155,7 +155,7 @@ test("accepts malformed task items for runtime classification", async () => {
     await testHarness.start("tui");
     const [tool] = testHarness.tools;
     assert.doesNotThrow(() => validateToolArguments(tool, {
-      type: "toolCall", id: "malformed", name: "subagent", arguments: { tasks: [null] },
+      type: "toolCall", id: "malformed", name: "Agent", arguments: { tasks: [null] },
     }));
   } finally {
     await testHarness.shutdown();
@@ -170,8 +170,8 @@ test("registers the parallel batch contract", async () => {
     await testHarness.start("tui");
     const [tool] = testHarness.tools;
 
-    assert.equal(tool.name, "subagent");
-    assert.equal(tool.label, "Subagent");
+    assert.equal(tool.name, "Agent");
+    assert.equal(tool.label, "Agent");
     assert.match(tool.description, /tasks|parallel/i);
     assert.equal(tool.executionMode, "parallel");
     assert.equal(tool.parameters.additionalProperties, false);
@@ -190,18 +190,18 @@ test("registers the parallel batch contract", async () => {
 
     assert.throws(
       () => validateToolArguments(tool, {
-        type: "toolCall", id: "empty", name: "subagent", arguments: { tasks: [] },
+        type: "toolCall", id: "empty", name: "Agent", arguments: { tasks: [] },
       }),
       /tasks/i,
     );
     assert.throws(
       () => validateToolArguments(tool, {
-        type: "toolCall", id: "old", name: "subagent", arguments: { agent: "scout", title: "inspect", task: "inspect" },
+        type: "toolCall", id: "old", name: "Agent", arguments: { agent: "scout", title: "inspect", task: "inspect" },
       }),
       /tasks/i,
     );
     assert.doesNotThrow(() => validateToolArguments(tool, {
-      type: "toolCall", id: "malformed", name: "subagent", arguments: { tasks: [null] },
+      type: "toolCall", id: "malformed", name: "Agent", arguments: { tasks: [null] },
     }));
 
     const result = await tool.execute(

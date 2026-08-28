@@ -1,164 +1,96 @@
 ---
 name: sdd
-description: Delegates non-trivial feature, bug-fix, and refactoring work through tracked subagents with independent review.
+description: Delegates non-trivial work through tracked tasks, parallel agents, and independent review.
 ---
 
 # Subagent Driven Development
 
-Orchestrate the work through the task graph and subagents. The main agent frames the task, keeps the graph honest, dispatches leaf agents, and synthesizes results. Subagents do the research, implementation, and review.
+Use the task tools to coordinate implementation and review. The orchestrator owns readiness, dependency decisions, and the correction loop. Agents investigate, implement, and review the work assigned in their prompts.
+
+## Supported tools
+
+This package provides only these orchestration tools:
+
+- `TaskCreate` accepts `{ text }` and creates a task with status `pending`.
+- `TaskUpdate` accepts `{ id, text?, status? }`. Its status values are `pending`, `active`, and `completed`.
+- `TaskList` accepts `{}` and returns every task for the current session.
+- `TaskGet` accepts `{ id }` and returns one task for the current session.
+- `Agent` accepts `{ tasks: [{ agent, title, task }] }`. It runs independent batch items synchronously and in parallel. A batch contains at most eight items. The bundled `agent` values are lowercase: `scout`, `oracle`, `worker`, and `reviewer`.
+
+Keep task objects to the fields supplied by these tools. Put role, dependency, scope, and evidence information in the task's `text`; do not add task fields or invent a scheduler or structured dependency API.
 
 ## Invariants
 
-- Give every subagent a self-contained prompt. Do not use `inherit_context`.
-- Preserve the original requirements through every handoff.
-- Use the task tools for non-trivial multi-step work. Create the graph with `TaskCreate`, keep status honest with `TaskUpdate`, leave agent-backed tasks `pending` until `TaskExecute` starts them, and mark tasks `completed` only from evidence.
-- Represent any material delegated assignment as a task with `agentType` set to the exact agent type: `Scout`, `Oracle`, `Worker`, or `Reviewer`.
-- Prefer `TaskExecute` for the normal SDD flow so task state, dependencies, and outputs stay attached to the graph. Do not assume auto-cascade is enabled; explicitly execute all ready leaf tasks, batching independent tasks together.
-- Use direct `Agent` calls only for one-off dispatches that do not deserve a durable task. Use `get_subagent_result` to collect full results and `steer_subagent` to redirect running work.
-- Do not duplicate active work. If a task-backed run is stale or wrong, stop it with `TaskStop`, update the task, and rerun it. If a direct agent is salvageable, steer it instead of spawning a twin.
-- For an implementation plan, create one tracked `Worker` task per independent implementation slice and preserve the plan's dependency edges; never collapse ready plan tasks into one Worker.
-- At every graph transition, recompute all ready leaf tasks and dispatch independent ready Workers together in one `TaskExecute` batch/message. Shared cwd alone does not justify serialization: only overlapping write scopes or shared mutable verification do; add a dependency or keep that work in one cohesive Worker. Do not split a cohesive task merely to increase agent count.
-- When review scopes are independent, create one `Reviewer` per corresponding Worker, dependent only on that Worker, and batch all ready Reviewers together in one message.
-- Scout and Oracle are optional. Worker and Reviewer are required.
-- Worker performs implementation checks. Reviewer performs independent final verification.
-- The orchestrator does not modify production files or run final verification.
-- Do not commit, push, create branches, or open pull requests unless explicitly requested.
+- Preserve the original requirements in every task text and agent prompt.
+- Give every Agent item a self-contained `title` and `task` prompt.
+- Use `Worker` for implementation and `Reviewer` for independent verification. Worker and Reviewer are required. Scout and Oracle are optional.
+- Keep independent work parallel. Tasks that share a write scope or mutable verification must be serialized. Shared working-directory access alone does not require serialization.
+- Do not commit, push, create branches, or open pull requests unless the user explicitly requests it.
+- Preserve unrelated user changes.
 
-## 1. Frame the task and open the graph
+## 1. Frame the work
 
-Extract:
+Extract the objective, acceptance criteria, constraints, relevant files, reproduction steps, explicit exclusions, and required verification commands.
 
-- Objective and expected behavior
-- Acceptance criteria
-- Scope and constraints
-- Relevant errors or reproduction steps
-- Explicit exclusions
-- Required verification commands, when known
+Create the smallest useful set of tasks with `TaskCreate`. Create one task for each independent assignment. Include a simple readable record in each task's text, for example:
 
-Ask the user only when missing information would materially change the implementation.
+```text
+Role: Worker
+Dependencies: none
+Scope: extensions/example/index.ts
+Acceptance: ...
+Verification: ...
+```
 
-Use `TaskCreate` to open the smallest graph that covers the remaining work. Default shape:
+Use `TaskList` and `TaskGet` to inspect the current work. The orchestrator, not a task API, decides which tasks are ready by reading their text and the latest evidence.
 
-1. Optional Scout tasks for unanswered investigation questions
-2. Optional Oracle task for a real decision
-3. Worker tasks for implementation slices, blocked by their applicable investigation, decision, and plan-dependency tasks
-4. Corresponding Reviewer tasks, each blocked by its Worker
-5. Report task blocked by all required corresponding Reviewer tasks when the orchestration itself needs tracking
+## 2. Investigate when useful
 
-Use `TaskList` after every task transition so all ready leaf tasks, not just one next task, are explicit.
+Use a `Scout` task when code ownership, execution flow, documentation, or affected files are unclear. Give it a read-only question, the relevant files, requested evidence, and an instruction not to change files.
 
-This step is complete when a Worker could receive a self-contained assignment and the graph reflects the remaining work.
+Use an `Oracle` task only when a consequential design, security, data-integrity, or competing-root-cause decision remains unresolved. Record its conclusion in the relevant task text before implementation.
 
-## 2. Investigate when necessary
+Scout and Oracle work may run together when their scopes are independent. Do not create either role when the orchestrator already has enough evidence.
 
-Dispatch Scout when code ownership, execution flow, documentation, or affected files are unclear.
+## 3. Dispatch ready work
 
-For tracked work, create one Scout task per independent question with `agentType: Scout`, then execute the ready tasks together with `TaskExecute`. For a single gating question before the graph is stable, a foreground `Agent` call is acceptable.
+At each transition, use `TaskList` to recompute readiness from the task text and completed evidence.
 
-The Scout prompt must include:
+1. Identify every ready independent task in the current dispatch group.
+2. Use `TaskUpdate` to mark all ready tasks in that group `active`.
+3. Build one ordered `Agent` item for each task. Use the task's role as the lowercase `agent` value, a concise `title`, and a self-contained `task` prompt.
+4. Keep the ordered task IDs beside the ordered Agent items. Map each returned outcome by its batch position to the corresponding task ID.
+5. Use `TaskUpdate` to mark successful tasks `completed`. Return failed tasks to `pending` and record the failure evidence in their task text.
+6. Use `TaskList` again before the next transition.
 
-- The exact question to answer
-- Requested breadth
-- Known files or symbols
-- Required evidence
-- A statement that no files may be changed
+Send independent tasks together in one `Agent` batch. Keep each batch at or below eight items. If more ready work exists than one batch can hold, use another dispatch group after recording the first group's outcomes; never mark unsent work `active`.
 
-Treat Scout output as evidence, not as an implementation plan. Synthesize the findings into the Worker or Oracle task instead of forwarding raw output alone.
+A Worker prompt must include the original requirements, its exact scope, relevant evidence, acceptance criteria, verification commands, explicit exclusions, and a requirement to preserve unrelated changes. The Worker owns implementation and focused checks.
 
-This step is complete when any uncertainty that would change the implementation has been reduced to written evidence or escalated to Oracle.
+## 4. Review the implementation
 
-## 3. Consult Oracle when necessary
+After a Worker succeeds, its corresponding Reviewer task becomes ready according to the dependency recorded in its text. Create that Reviewer task with `TaskCreate` if it was not created during framing.
 
-Dispatch Oracle only when:
+Mark every ready corresponding Reviewer `active` with `TaskUpdate`, then send all independent Reviewers together in one `Agent` batch. Preserve the ordered Reviewer task IDs and map outcomes by position. Mark successful reviews `completed`; return unsuccessful reviews to `pending` and record actionable evidence in their task text.
 
-- A consequential architecture decision remains unresolved
-- Several plausible root causes survive investigation
-- Security, data integrity, or operational risk is substantial
-- Worker and Reviewer disagree on the correct resolution
+A Reviewer must inspect independently rather than trust the Worker report. Its prompt must include the original requirements, acceptance criteria, exact review scope, changed-file summary, relevant evidence, required verification commands, and the requirement to preserve unrelated changes.
 
-Use a tracked `Oracle` task when the decision belongs in the graph. Use a one-off `Agent` call only when the answer is immediately gating and no durable task is warranted.
+The review gate passes only when every required Reviewer reports no actionable finding, all applicable checks pass, and no verification blocker remains.
 
-Give Oracle the original requirements, relevant Scout evidence, competing options or hypotheses, and the decision that must be made.
+## 5. Correct and repeat
 
-Oracle provides a recommendation. Record the conclusion in the Worker or Reviewer task before continuing.
+When a Worker or Reviewer finds a concrete problem:
 
-This step is complete when one implementable recommendation is recorded or an external blocker requires user input.
+1. Record the location, triggering path, evidence, and correction in the affected task text with `TaskUpdate`.
+2. Return the affected task to `pending`.
+3. Recompute readiness with `TaskList`.
+4. Dispatch the corrected Worker, then its corresponding Reviewer, using the same parallel rules.
+5. Repeat until the review gate passes or the user must decide an external issue.
 
-## 4. Dispatch Worker
+Keep unrelated successful tasks `completed`. Serialize any correction that shares a write scope or mutable verification with another task. Use Oracle only when the disagreement or root cause still needs a decision.
 
-Represent each implementation slice as a `Worker` task, preserving its applicable investigation, decision, and plan dependencies.
+## 6. Report
 
-The Worker assignment must contain:
+Before replying, use `TaskList` so task statuses match reality. Every task must be `pending`, `active`, or `completed`; leave unresolved work `pending` with its evidence.
 
-- Original objective and acceptance criteria
-- Relevant Scout or Oracle findings, synthesized by the orchestrator
-- Exact scope and constraints
-- Known files, symbols, and reproduction steps
-- Required tests and repository verification commands
-- Explicit exclusions
-- A requirement to preserve unrelated changes
-
-Start all independent ready Workers together with `TaskExecute` once unblocked, and use `TaskOutput` to wait for or retrieve each full result.
-
-Worker owns implementation and focused verification.
-
-If Worker reports a blocker or partial result, update the Worker task with `TaskUpdate` and rerun it. Create new Scout or Oracle tasks only when their specialization is actually needed.
-
-This step is complete when Worker reports a changed-file summary and fresh focused verification output.
-
-## 5. Dispatch Reviewer as the final gate
-
-Represent final review for each Worker as a `Reviewer` task. When review scopes are independent, make each Reviewer depend only on its corresponding Worker and execute all ready Reviewers together in one batch/message; if scopes overlap or share mutable verification, add a dependency or keep review cohesive.
-
-The Reviewer assignment must contain:
-
-- The original requirements and acceptance criteria
-- The exact review scope or fixed point
-- Worker’s changed-file summary
-- Relevant Scout or Oracle conclusions
-- Required repository verification commands
-- A requirement to inspect independently rather than trust Worker’s report
-
-Execute ready Reviewer tasks together and use `TaskOutput` to wait for or retrieve each full result.
-
-The gate passes only when all latest required Reviewer runs pass, each reporting:
-
-1. No actionable findings
-2. All applicable verification commands passed
-3. No unresolved verification blocker
-
-The orchestrator does not repeat Reviewer’s verification.
-
-## 6. Resolve review findings
-
-When Reviewer reports a defect or failed check:
-
-1. Evaluate whether the finding is concrete and within scope.
-2. Update the Worker task with `TaskUpdate`, including the actionable finding, location, triggering path, and verification failure.
-3. Re-run Worker, then re-run Reviewer.
-
-If a running direct agent merely needs course correction, use `steer_subagent`. If a task-backed run is wedged or obsolete, stop it with `TaskStop`, update the task, and `TaskExecute` it again.
-
-If the same issue repeats or Worker and Reviewer disagree, dispatch Oracle to adjudicate. Any resulting code change still goes through Worker and then Reviewer.
-
-Continue until the Reviewer gate passes or an external blocker requires user input.
-
-## 7. Report completion
-
-Before replying, make the graph match reality: completed leaf tasks closed, deferred work left visible, and nothing still `in_progress` unless it truly is.
-
-Report:
-
-### Changes
-The behavior changed and the files involved.
-
-### Final verification
-All required Reviewers' commands and observed results.
-
-### Review
-All required Reviewers' final finding statuses.
-
-### Remaining
-Residual risks, deferred work, or `None`.
-
-Make completion claims only from evidence from all latest required Reviewer runs.
+Report the changed behavior, the final verification commands and observed results, review findings, and any remaining issue. Do not claim a task is complete without evidence.
