@@ -14,7 +14,7 @@ import {
   isCursorOnLastVisualLine,
   installSubagentUI,
   readChildSession,
-} from "./ui.ts";
+} from "./index.ts";
 
 function monitored(runId: string, state = "running"): any {
   return {
@@ -60,6 +60,18 @@ test("notifies once for each accepted mutation and publishes copies", () => {
   assert.equal(registry.get("one")?.run.title, "Title one");
 });
 
+test("shares immutable message arrays through registry copies", () => {
+  const registry = new SubagentRegistry();
+  const messages = Object.freeze([assistantMessage("persistent")]);
+  const run = child("shared-messages");
+  run.run.attempts[0].messages = messages;
+
+  registry.add(run);
+
+  assert.equal(registry.get("shared-messages")?.run.attempts[0].messages, messages);
+  assert.equal(registry.list()[0].run.attempts[0].messages, messages);
+});
+
 test("rejects duplicate additions and changes to unknown runs", () => {
   const registry = new SubagentRegistry();
   registry.add(monitored("one"));
@@ -88,7 +100,7 @@ function footerContext(): any {
     cwd: "/tmp/project",
     model: { provider: "fake", id: "parent" },
     thinkingLevel: "medium",
-    sessionManager: { getEntries: () => [], getCwd: () => "/tmp/project", getSessionName: () => undefined },
+    sessionManager: { getEntries: () => [], getLeafId: () => null, getCwd: () => "/tmp/project", getSessionName: () => undefined },
     getContextUsage: () => ({ tokens: 20, contextWindow: 100, percent: 20 }),
   };
 }
@@ -330,6 +342,7 @@ test("shows parent process usage in the statistics row", () => {
           usage: { input: 12, output: 7, cacheRead: 30, cacheWrite: 4 },
         },
       }],
+      getLeafId: () => "entry-1",
       getCwd: () => "/tmp/project",
       getSessionName: () => undefined,
     },
@@ -338,6 +351,38 @@ test("shows parent process usage in the statistics row", () => {
   const footer = new AgentFooter(footerTui(), plainTheme, footerData(), registry, context);
   const lines = footer.render(120);
   assert.match(lines[1], /↑12.*↓7.*R30.*W4.*CH65\.2%/);
+  footer.dispose();
+});
+
+test("reads session entries only when the leaf advances", () => {
+  const entries: any[] = [];
+  let leafId: string | null = null;
+  let reads = 0;
+  const append = (input: number, output: number) => {
+    entries.push({ type: "message", message: { role: "assistant", usage: { input, output, cacheRead: 0, cacheWrite: 0 } } });
+    leafId = `entry-${entries.length}`;
+  };
+  const context = {
+    ...footerContext(),
+    sessionManager: {
+      getEntries: () => { reads++; return entries; },
+      getLeafId: () => leafId,
+      getCwd: () => "/tmp/project",
+      getSessionName: () => undefined,
+    },
+  };
+  const footer = new AgentFooter(footerTui(), plainTheme, footerData(), new SubagentRegistry(), context);
+
+  append(10, 1);
+  assert.match(footer.render(120)[1], /↑10.*↓1/);
+  const afterFirst = reads;
+  footer.render(120);
+  footer.render(120);
+  assert.equal(reads, afterFirst, "unchanged leaf must not re-read the session");
+
+  append(5, 2);
+  assert.match(footer.render(120)[1], /↑15.*↓3/);
+  assert.equal(reads, afterFirst + 1);
   footer.dispose();
 });
 

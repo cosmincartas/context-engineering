@@ -5,13 +5,21 @@ import os from "node:os";
 import path from "node:path";
 import test, { mock } from "node:test";
 
-import { loadBundledAgents } from "./agents.ts";
-import { executeSubagent as executeRuntime, executeSubagentBatch, MAX_RESULT_BYTES } from "./runtime.ts";
+import { loadBundledAgents } from "../agents/index.ts";
+import { executeSubagent as executeRuntime, executeSubagentBatch, MAX_RESULT_BYTES } from "./index.ts";
 
-const bundledAgents = await loadBundledAgents(new URL("./agents/", import.meta.url));
+const bundledAgents = await loadBundledAgents(new URL("../agents/", import.meta.url));
+
+function outputText(result: { content: readonly { type: string; text?: string }[] }): string {
+  const part = result.content[0];
+  if (part?.type !== "text" || part.text === undefined) {
+    throw new Error(`expected text output, received ${part?.type ?? "nothing"}`);
+  }
+  return part.text;
+}
 
 test("normalizes titles to one safe non-blank line", async () => {
-  const { normalizeTitle } = await import("./runtime.ts");
+  const { normalizeTitle } = await import("./index.ts");
 
   assert.equal(normalizeTitle("  inspect\n\t API  " ), "inspect API");
   assert.equal(normalizeTitle("line\u2028break\u2029here"), "line break here");
@@ -178,7 +186,7 @@ test("batch classification records sparse task positions as malformed", async ()
   }
 });
 
-test("batch concurrency starts four workers and refills the queue", { timeout: 10_000 }, async () => {
+test("batch concurrency starts every queued task at once", { timeout: 10_000 }, async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-batch-concurrency-"));
   const marker = path.join(directory, "started");
   const release = path.join(directory, "release");
@@ -186,7 +194,7 @@ test("batch concurrency starts four workers and refills the queue", { timeout: 1
   const previousRelease = process.env.PI_SUBAGENT_BATCH_RELEASE;
   process.env.PI_SUBAGENT_BATCH_MARKER = marker;
   process.env.PI_SUBAGENT_BATCH_RELEASE = release;
-  const tasks = Array.from({ length: 5 }, (_, index) => ({
+  const tasks = Array.from({ length: 9 }, (_, index) => ({
     agent: "scout",
     title: `concurrent ${index}`,
     task: `block ${index}`,
@@ -204,17 +212,19 @@ test("batch concurrency starts four workers and refills the queue", { timeout: 1
     ));
     for (let attempt = 0; attempt < 100; attempt++) {
       try {
-        if ((await readFile(marker, "utf8")).trim().split("\n").filter(Boolean).length >= 4) break;
+        if ((await readFile(marker, "utf8")).trim().split("\n").filter(Boolean).length >= 8) break;
       } catch {}
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
-    assert.equal((await readFile(marker, "utf8")).trim().split("\n").filter(Boolean).length, 4);
+    assert.equal((await readFile(marker, "utf8")).trim().split("\n").filter(Boolean).length, 8);
     await writeFile(release, "release");
     const result = await pending;
     assert.deepEqual(result.details.outcomes.map((outcome: any) => outcome.status), [
-      "succeeded", "succeeded", "succeeded", "succeeded", "succeeded",
+      "succeeded", "succeeded", "succeeded", "succeeded",
+      "succeeded", "succeeded", "succeeded", "succeeded",
+      "over-limit",
     ]);
-    assert.equal((await readFile(marker, "utf8")).trim().split("\n").filter(Boolean).length, 5);
+    assert.equal((await readFile(marker, "utf8")).trim().split("\n").filter(Boolean).length, 8);
   } finally {
     await writeFile(release, "release").catch(() => {});
     await pending?.catch(() => {});
@@ -292,14 +302,14 @@ test("batch cancellation settles active workers before the original abort reject
     ));
     for (let attempt = 0; attempt < 100; attempt++) {
       try {
-        if ((await readFile(marker, "utf8")).trim().split("\n").filter(Boolean).length >= 4) break;
+        if ((await readFile(marker, "utf8")).trim().split("\n").filter(Boolean).length >= 5) break;
       } catch {}
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
-    assert.equal((await readFile(marker, "utf8")).trim().split("\n").filter(Boolean).length, 4);
+    assert.equal((await readFile(marker, "utf8")).trim().split("\n").filter(Boolean).length, 5);
     controller.abort(reason);
     await assert.rejects(pending, (error) => error === reason);
-    assert.equal((await readFile(marker, "utf8")).trim().split("\n").filter(Boolean).length, 4);
+    assert.equal((await readFile(marker, "utf8")).trim().split("\n").filter(Boolean).length, 5);
     for (const record of (await records()).filter((value) => value.scenario === "batch-cancel")) {
       assert.match(record.signals ?? "", /SIGTERM/);
       assert.throws(() => process.kill(record.pid, 0));
@@ -373,8 +383,8 @@ test("batch output limit applies one UTF-8 limit while retaining complete child 
       { onMonitorEvent: () => {} },
     ));
 
-    assert.ok(Buffer.byteLength(result.content[0].text, "utf8") <= MAX_RESULT_BYTES);
-    assert.match(result.content[0].text, /truncated/i);
+    assert.ok(Buffer.byteLength(outputText(result), "utf8") <= MAX_RESULT_BYTES);
+    assert.match(outputText(result), /truncated/i);
     for (const outcome of result.details.outcomes as any[]) {
       assert.equal(outcome.run.attempts[0].messages[0].content[0].text, "🙂".repeat(30_000));
     }
@@ -395,10 +405,10 @@ test("batch failure output retains attempt diagnostics", async () => {
       undefined,
       { onMonitorEvent: () => {} },
     ));
-    assert.match(result.content[0].text, /Attempt 1/);
-    assert.match(result.content[0].text, /Attempt 2/);
-    assert.match(result.content[0].text, /failure attempt 1/);
-    assert.match(result.content[0].text, /failure attempt 2/);
+    assert.match(outputText(result), /Attempt 1/);
+    assert.match(outputText(result), /Attempt 2/);
+    assert.match(outputText(result), /failure attempt 1/);
+    assert.match(outputText(result), /failure attempt 2/);
   } finally {
     await rm(sessionRoot, { recursive: true, force: true });
   }
@@ -644,6 +654,94 @@ test("streams text and tool events and keeps message_end messages authoritative"
   );
 });
 
+test("coalesces streaming deltas and still publishes the last streamed state", async () => {
+  const events: any[] = [];
+  const result = await withScenario("burst", () => executeRuntime(
+    "run-burst",
+    { agent: "scout", title: "burst", task: "stream a burst" },
+    bundledAgents,
+    makeContext(),
+    testSessionRoot,
+    undefined,
+    { onMonitorEvent: (event) => events.push(event) },
+  ));
+
+  assert.equal(result.details.state, "succeeded");
+  assert.ok(events.length < 20, `expected coalesced snapshots, published ${events.length}`);
+  assert.ok(events.some((event) =>
+    event.run.sessions.some((session: any) => session.partialText.includes("chunk 199"))
+  ));
+});
+
+test("reuses completed messages across snapshots and sends one run to both callbacks", async () => {
+  const events: any[] = [];
+  const updates: any[] = [];
+  await withScenario("stream", () => executeRuntime(
+    "run-snapshot-sharing",
+    { agent: "scout", title: "snapshot sharing", task: "stream snapshots" },
+    bundledAgents,
+    makeContext(),
+    testSessionRoot,
+    undefined,
+    {
+      onToolUpdate: (update) => updates.push(update),
+      onMonitorEvent: (event) => events.push(event),
+    },
+  ));
+
+  assert.equal(updates.length, events.length);
+  for (const [index, event] of events.entries()) {
+    assert.equal(updates[index].details, event.run.run);
+  }
+  const messageArrays = events
+    .map((event) => event.run.run.attempts[0]?.messages)
+    .filter((messages): messages is any[] => messages?.length > 0);
+  assert.ok(messageArrays.length >= 2);
+  assert.equal(messageArrays[0].length, 1);
+  assert.equal(messageArrays.at(-1)!.length, 2);
+  assert.equal(messageArrays[0][0], messageArrays.at(-1)![0]);
+  assert.equal(messageArrays[0].length, 1);
+});
+
+test("protects completed messages from callback mutation", async () => {
+  let sawMessages = false;
+  let textMutationBlocked = false;
+  let arrayMutationBlocked = false;
+  const result = await withScenario("stream", () => executeRuntime(
+    "run-message-immutability",
+    { agent: "scout", title: "message immutability", task: "protect messages" },
+    bundledAgents,
+    makeContext(),
+    testSessionRoot,
+    undefined,
+    {
+      onMonitorEvent: (event) => {
+        const messages = event.run.run.attempts[0]?.messages;
+        if (sawMessages || !messages || messages.length !== 1) return;
+        sawMessages = true;
+        try {
+          ((messages[0] as any).content[0] as any).text = "corrupted";
+        } catch {
+          textMutationBlocked = true;
+        }
+        try {
+          (messages as any[]).push(messages[0]);
+        } catch {
+          arrayMutationBlocked = true;
+        }
+      },
+    },
+  ));
+
+  assert.equal(sawMessages, true);
+  assert.equal(textMutationBlocked, true);
+  assert.equal(arrayMutationBlocked, true);
+  assert.deepEqual(
+    result.details.attempts[0].messages.map((message: any) => message.content?.[0]?.text),
+    ["intermediate message", "authoritative final output"],
+  );
+});
+
 test("preserves stderr and malformed protocol diagnostics", async () => {
   const result = await withScenario("malformed", () =>
     executeSubagent("scout", "fail with diagnostics", bundledAgents, makeContext(), undefined),
@@ -652,7 +750,7 @@ test("preserves stderr and malformed protocol diagnostics", async () => {
   assert.equal(result.details.state, "failed");
   assert.match(result.details.attempts[0].stderr, /provider diagnostics/);
   assert.match(result.details.attempts[0].error ?? "", /malformed JSON/i);
-  assert.match(result.content[0].text, /provider diagnostics/);
+  assert.match(outputText(result), /provider diagnostics/);
 });
 
 test("bounds oversized Unicode final output to 50 KiB", async () => {
@@ -700,7 +798,7 @@ test("keeps a run that recovered from a transient provider error", async () => {
   assert.equal(result.details.attempts[0].state, "succeeded");
   assert.equal(result.details.attempts[0].exitCode, 0);
   assert.equal(result.details.attempts[0].error, undefined);
-  assert.match(result.content[0].text, /recovered final output/);
+  assert.match(outputText(result), /recovered final output/);
 });
 
 test("fails a run whose last provider state is an error even after an earlier recovery", async () => {
@@ -734,7 +832,7 @@ test("keeps a run that recovered from a streaming provider error", async () => {
   assert.equal(result.details.attempts.length, 1);
   assert.equal(result.details.state, "succeeded");
   assert.equal(result.details.attempts[0].error, undefined);
-  assert.match(result.content[0].text, /recovered after stream error/);
+  assert.match(outputText(result), /recovered after stream error/);
 });
 
 test("fails a run whose streaming error is never followed by a completed message", async () => {
@@ -800,10 +898,10 @@ test("returns one bounded aggregate failure after two failed attempts", async ()
 
   assert.equal(result.details.state, "failed");
   assert.equal(result.details.attempts.length, 2);
-  assert.match(result.content[0].text, /Attempt 1/);
-  assert.match(result.content[0].text, /Attempt 2/);
-  assert.match(result.content[0].text, /failure attempt 1/);
-  assert.match(result.content[0].text, /failure attempt 2/);
+  assert.match(outputText(result), /Attempt 1/);
+  assert.match(outputText(result), /Attempt 2/);
+  assert.match(outputText(result), /failure attempt 1/);
+  assert.match(outputText(result), /failure attempt 2/);
   assert.ok(Buffer.byteLength(result.content[0].text, "utf8") <= 50 * 1024);
 });
 
@@ -865,7 +963,7 @@ test("reports temporary prompt cleanup failure instead of success", async () => 
       executeSubagent("scout", "cleanup failure", bundledAgents, makeContext(), undefined),
     );
     assert.equal(result.details.state, "failed");
-    assert.match(result.content[0].text, /cleanup unavailable/i);
+    assert.match(outputText(result), /cleanup unavailable/i);
   } finally {
     remove.mock.restore();
   }
@@ -1079,6 +1177,11 @@ if (scenario === "late-session") {
   emit({ type: "tool_execution_end", toolCallId: "tool-1", toolName: "read", result: { content: [] }, isError: false });
   emit({ type: "message_end", message: assistant("intermediate message") });
   emit({ type: "message_end", message: assistant("authoritative final output") }, false);
+} else if (scenario === "burst") {
+  for (let index = 0; index < 200; index++) {
+    emit({ type: "message_update", usage, assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: "chunk " + index + " " } });
+  }
+  emit({ type: "message_end", message: assistant("burst output") }, false);
 } else if (scenario === "malformed") {
   emit("{not valid json");
   process.stderr.write("provider diagnostics\\n");

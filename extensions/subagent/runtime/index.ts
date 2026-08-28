@@ -13,9 +13,23 @@ import type {
   JsonAgentSessionEvent,
 } from "@earendil-works/pi-coding-agent";
 
-import type { AgentDefinition } from "./agents.ts";
+import type { AgentDefinition } from "../agents/index.ts";
 
 export const MAX_RESULT_BYTES = 50 * 1024;
+
+/**
+ * Streaming deltas arrive per token and each published snapshot rebuilds the
+ * whole batch result, so they publish at most one snapshot per interval.
+ * Everything else publishes immediately.
+ */
+export const STREAM_EMIT_INTERVAL_MS = 50;
+
+type StreamEmitter = {
+  /** Publish the accumulated streaming state once the interval elapses. */
+  schedule(): void;
+  /** Publish a pending streaming snapshot before its state is replaced. */
+  flush(): void;
+};
 
 type AttemptState = "running" | "succeeded" | "failed" | "cancelled";
 
@@ -114,7 +128,7 @@ type MutableAttempt = {
   number: 1 | 2;
   state: AttemptState;
   activity: string[];
-  messages: Message[];
+  messages: readonly Message[];
   usage: SubagentUsage;
   committedUsage: SubagentUsage;
   pendingUsage?: SubagentUsage;
@@ -212,12 +226,27 @@ export async function executeSubagent(
     attempts: [],
   };
   const sessions: MutableChildSessionState[] = [];
+  let streamTimer: ReturnType<typeof setTimeout> | undefined;
   const emit = (type: SubagentMonitorEvent["type"] = "updated") => {
+    if (streamTimer !== undefined) {
+      clearTimeout(streamTimer);
+      streamTimer = undefined;
+    }
     const snapshot = snapshotMonitoredRun(runId, run, sessions);
     callbacks.onMonitorEvent({ type, run: snapshot });
-    callbacks.onToolUpdate?.(
-      result(snapshotMonitoredRun(runId, run, sessions).run, `Subagent ${run.title} is ${run.state}.`),
-    );
+    callbacks.onToolUpdate?.(result(snapshot.run, `Subagent ${run.title} is ${run.state}.`));
+  };
+  const stream: StreamEmitter = {
+    schedule() {
+      if (streamTimer !== undefined || run.endedAt !== undefined) return;
+      streamTimer = setTimeout(() => {
+        streamTimer = undefined;
+        emit();
+      }, STREAM_EMIT_INTERVAL_MS);
+    },
+    flush() {
+      if (streamTimer !== undefined) emit();
+    },
   };
 
   emit("started");
@@ -256,7 +285,7 @@ export async function executeSubagent(
           ...(number === 1 && resolved.warning ? [resolved.warning] : []),
           ...(number === 2 ? ["Retrying after attempt 1 failed."] : []),
         ],
-        messages: [],
+        messages: Object.freeze([]),
         usage: {
           ...ZERO_USAGE,
           contextTokens: run.attempts.at(-1)?.usage.contextTokens ?? ZERO_USAGE.contextTokens,
@@ -285,6 +314,7 @@ export async function executeSubagent(
         attempt,
         sessions,
         emit,
+        stream,
         onCancelled,
       );
       if (outcome.cancelled) {
@@ -383,57 +413,54 @@ export async function executeSubagentBatch(
   const queued = outcomes.filter((outcome): outcome is Extract<SubagentBatchOutcome, { status: "queued" }> => outcome.status === "queued");
 
   signal?.throwIfAborted();
-  let nextQueued = 0;
-  const worker = async (): Promise<void> => {
-    while (nextQueued < queued.length) {
-      signal?.throwIfAborted();
-      const outcome = queued[nextQueued++];
-      const childRunId = `${batchId}:${outcome.index}`;
-      let monitorStarted = false;
-      try {
-        const child = await executeSubagent(
-          childRunId,
-          outcome.request,
-          catalog,
-          ctx,
-          sessionRoot,
-          signal,
-          {
-            onToolUpdate: (update) => {
-              outcomes[outcome.index] = {
-                index: outcome.index,
-                status: update.details.state,
-                run: cloneRun(update.details),
-              };
-              publishBatchUpdate(callbacks, outcomes);
-            },
-            onMonitorEvent: (event) => {
-              if (event.type === "started") monitorStarted = true;
-              callbacks.onMonitorEvent(event);
-            },
+  const runQueued = async (
+    outcome: Extract<SubagentBatchOutcome, { status: "queued" }>,
+  ): Promise<void> => {
+    signal?.throwIfAborted();
+    const childRunId = `${batchId}:${outcome.index}`;
+    let monitorStarted = false;
+    try {
+      const child = await executeSubagent(
+        childRunId,
+        outcome.request,
+        catalog,
+        ctx,
+        sessionRoot,
+        signal,
+        {
+          onToolUpdate: (update) => {
+            outcomes[outcome.index] = {
+              index: outcome.index,
+              status: update.details.state,
+              run: update.details,
+            };
+            publishBatchUpdate(callbacks, outcomes);
           },
-        );
-        outcomes[outcome.index] = {
-          index: outcome.index,
-          status: child.details.state,
-          run: cloneRun(child.details),
-        };
-      } catch (error) {
-        if (signal?.aborted) throw error;
-        const run = failedRun(outcome.request, error);
-        outcomes[outcome.index] = { index: outcome.index, status: "failed", run };
-        if (monitorStarted) {
-          callbacks.onMonitorEvent({
-            type: "finished",
-            run: { runId: childRunId, run: cloneRun(run), sessions: [] },
-          });
-        }
-        publishBatchUpdate(callbacks, outcomes);
+          onMonitorEvent: (event) => {
+            if (event.type === "started") monitorStarted = true;
+            callbacks.onMonitorEvent(event);
+          },
+        },
+      );
+      outcomes[outcome.index] = {
+        index: outcome.index,
+        status: child.details.state,
+        run: child.details,
+      };
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      const run = failedRun(outcome.request, error);
+      outcomes[outcome.index] = { index: outcome.index, status: "failed", run };
+      if (monitorStarted) {
+        callbacks.onMonitorEvent({
+          type: "finished",
+          run: { runId: childRunId, run, sessions: [] },
+        });
       }
+      publishBatchUpdate(callbacks, outcomes);
     }
   };
-  const workers = Array.from({ length: Math.min(4, queued.length) }, () => worker());
-  const settled = await Promise.allSettled(workers);
+  const settled = await Promise.allSettled(queued.map(runQueued));
   if (signal?.aborted) throw signal.reason;
   const rejection = settled.find((result): result is PromiseRejectedResult => result.status === "rejected");
   if (rejection) throw rejection.reason;
@@ -533,10 +560,17 @@ function cloneRun(run: SubagentRun): SubagentRun {
     attempts: run.attempts.map((attempt) => ({
       ...attempt,
       activity: [...attempt.activity],
-      messages: attempt.messages.map((message) => structuredClone(message)),
+      messages: attempt.messages,
       usage: { ...attempt.usage },
     })),
   };
+}
+
+function deepFreeze<T>(value: T): T {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+  Object.freeze(value);
+  for (const child of Object.values(value)) deepFreeze(child);
+  return value;
 }
 
 function failedRun(request: SubagentRequest, error: unknown): SubagentRun {
@@ -600,6 +634,7 @@ async function runAttempt(
   attempt: MutableAttempt,
   sessions: MutableChildSessionState[],
   emit: () => void,
+  stream: StreamEmitter,
   onCancelled: () => void,
 ): Promise<AttemptOutcome> {
   let promptDirectory: string | undefined;
@@ -797,9 +832,9 @@ async function runAttempt(
           if (typeof update?.delta === "string" && update.delta.length > 0 && session) {
             if (update.type === "thinking_delta") session.partialThinking += update.delta;
             else if (update.type === "text_delta") session.partialText += update.delta;
-            emit();
+            stream.schedule();
           } else if (usage) {
-            emit();
+            stream.schedule();
           }
           return;
         }
@@ -818,8 +853,12 @@ async function runAttempt(
         }
 
         if (event.type !== "message_end" || !event.message) return;
+        stream.flush();
         const message = event.message as Message;
-        attempt.messages.push(message);
+        attempt.messages = Object.freeze([
+          ...attempt.messages,
+          deepFreeze(structuredClone(message)),
+        ]);
         if (message.role === "assistant") {
           const usage = usageFrom(message.usage) ?? attempt.pendingUsage;
           if (usage) {
@@ -992,7 +1031,7 @@ function snapshotRun(run: MutableRun): SubagentRun {
       number: attempt.number,
       state: attempt.state,
       activity: [...attempt.activity],
-      messages: attempt.messages.map((message) => structuredClone(message)),
+      messages: attempt.messages,
       usage: { ...attempt.usage },
       stderr: attempt.stderr,
       exitCode: attempt.exitCode,

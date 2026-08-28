@@ -13,10 +13,12 @@ Orchestrate the work through the task graph and subagents. The main agent frames
 - Preserve the original requirements through every handoff.
 - Use the task tools for non-trivial multi-step work. Create the graph with `TaskCreate`, keep status honest with `TaskUpdate`, leave agent-backed tasks `pending` until `TaskExecute` starts them, and mark tasks `completed` only from evidence.
 - Represent any material delegated assignment as a task with `agentType` set to the exact agent type: `Scout`, `Oracle`, `Worker`, or `Reviewer`.
-- Prefer `TaskExecute` for the normal SDD flow so task state, dependencies, and outputs stay attached to the graph. Do not assume auto-cascade is enabled; explicitly execute the next unblocked task unless the session proves otherwise.
+- Prefer `TaskExecute` for the normal SDD flow so task state, dependencies, and outputs stay attached to the graph. Do not assume auto-cascade is enabled; explicitly execute all ready leaf tasks, batching independent tasks together.
 - Use direct `Agent` calls only for one-off dispatches that do not deserve a durable task. Use `get_subagent_result` to collect full results and `steer_subagent` to redirect running work.
 - Do not duplicate active work. If a task-backed run is stale or wrong, stop it with `TaskStop`, update the task, and rerun it. If a direct agent is salvageable, steer it instead of spawning a twin.
-- Launch independent subagents in parallel in one message.
+- For an implementation plan, create one tracked `Worker` task per independent implementation slice and preserve the plan's dependency edges; never collapse ready plan tasks into one Worker.
+- At every graph transition, recompute all ready leaf tasks and dispatch independent ready Workers together in one `TaskExecute` batch/message. Shared cwd alone does not justify serialization: only overlapping write scopes or shared mutable verification do; add a dependency or keep that work in one cohesive Worker. Do not split a cohesive task merely to increase agent count.
+- When review scopes are independent, create one `Reviewer` per corresponding Worker, dependent only on that Worker, and batch all ready Reviewers together in one message.
 - Scout and Oracle are optional. Worker and Reviewer are required.
 - Worker performs implementation checks. Reviewer performs independent final verification.
 - The orchestrator does not modify production files or run final verification.
@@ -39,11 +41,11 @@ Use `TaskCreate` to open the smallest graph that covers the remaining work. Defa
 
 1. Optional Scout tasks for unanswered investigation questions
 2. Optional Oracle task for a real decision
-3. Worker task blocked by the investigation or decision tasks
-4. Reviewer task blocked by Worker
-5. Report task blocked by Reviewer when the orchestration itself needs tracking
+3. Worker tasks for implementation slices, blocked by their applicable investigation, decision, and plan-dependency tasks
+4. Corresponding Reviewer tasks, each blocked by its Worker
+5. Report task blocked by all required corresponding Reviewer tasks when the orchestration itself needs tracking
 
-Use `TaskList` after every task transition so the next unblocked task is explicit.
+Use `TaskList` after every task transition so all ready leaf tasks, not just one next task, are explicit.
 
 This step is complete when a Worker could receive a self-contained assignment and the graph reflects the remaining work.
 
@@ -84,7 +86,7 @@ This step is complete when one implementable recommendation is recorded or an ex
 
 ## 4. Dispatch Worker
 
-Represent implementation as a `Worker` task.
+Represent each implementation slice as a `Worker` task, preserving its applicable investigation, decision, and plan dependencies.
 
 The Worker assignment must contain:
 
@@ -96,7 +98,7 @@ The Worker assignment must contain:
 - Explicit exclusions
 - A requirement to preserve unrelated changes
 
-Start the Worker with `TaskExecute` once unblocked and use `TaskOutput` to wait for or retrieve its full result.
+Start all independent ready Workers together with `TaskExecute` once unblocked, and use `TaskOutput` to wait for or retrieve each full result.
 
 Worker owns implementation and focused verification.
 
@@ -106,7 +108,7 @@ This step is complete when Worker reports a changed-file summary and fresh focus
 
 ## 5. Dispatch Reviewer as the final gate
 
-Represent final review as a `Reviewer` task blocked by Worker.
+Represent final review for each Worker as a `Reviewer` task. When review scopes are independent, make each Reviewer depend only on its corresponding Worker and execute all ready Reviewers together in one batch/message; if scopes overlap or share mutable verification, add a dependency or keep review cohesive.
 
 The Reviewer assignment must contain:
 
@@ -117,9 +119,9 @@ The Reviewer assignment must contain:
 - Required repository verification commands
 - A requirement to inspect independently rather than trust Worker’s report
 
-Execute the Reviewer task and use `TaskOutput` to wait for or retrieve its full result.
+Execute ready Reviewer tasks together and use `TaskOutput` to wait for or retrieve each full result.
 
-The gate passes only when Reviewer reports:
+The gate passes only when all latest required Reviewer runs pass, each reporting:
 
 1. No actionable findings
 2. All applicable verification commands passed
@@ -151,12 +153,12 @@ Report:
 The behavior changed and the files involved.
 
 ### Final verification
-Reviewer’s commands and observed results.
+All required Reviewers' commands and observed results.
 
 ### Review
-Reviewer’s final finding status.
+All required Reviewers' final finding statuses.
 
 ### Remaining
 Residual risks, deferred work, or `None`.
 
-Make completion claims only from the final Reviewer evidence.
+Make completion claims only from evidence from all latest required Reviewer runs.

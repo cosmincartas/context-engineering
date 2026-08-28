@@ -8,9 +8,9 @@ import {
   BUNDLED_AGENT_NAMES,
   loadBundledAgents,
   type AgentDefinition,
-} from "./agents.ts";
+} from "./index.ts";
 
-const bundledDirectory = new URL("./agents/", import.meta.url);
+const bundledDirectory = new URL("./", import.meta.url);
 
 function assertCatalog(definitions: readonly AgentDefinition[]): void {
   assert.deepEqual(
