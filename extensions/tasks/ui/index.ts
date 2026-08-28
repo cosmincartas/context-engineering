@@ -58,7 +58,13 @@ export function renderTaskWidget(
       color = "muted";
     }
 
-    lines.push(`  ${theme.fg(color, glyph)} #${task.id} ${task.text}`);
+    const prefix = `  ${theme.fg(color, glyph)} #${task.id} `;
+    const [firstLine, ...continuationLines] = task.text.split("\n");
+    lines.push(`${prefix}${firstLine!.replaceAll("\t", "  ")}`);
+    const continuationPrefix = " ".repeat(visibleWidth(prefix));
+    for (const line of continuationLines) {
+      lines.push(`${continuationPrefix}${line.replaceAll("\t", "  ")}`);
+    }
   }
 
   return lines.map((line) =>

@@ -594,7 +594,7 @@ test("passes the mapped model, thinking level, tools, cwd, prompt, and literal t
     "max",
   ]);
   assert.equal(record.argv[8], "--tools");
-  assert.equal(record.argv[9], "read,bash,edit,write,grep,find,ls");
+  assert.equal(record.argv[9], "read,bash,edit,write,grep,find,ls,mcp,mcpScript,web_search,web_fetch");
   assert.equal(record.argv[10], "--append-system-prompt");
   assert.match(promptPath(record), /pi-subagent-/);
   assert.equal(record.argv[12], "--session-dir");

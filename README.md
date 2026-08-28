@@ -57,9 +57,9 @@ Each `sdlc` artifact records the SHA-256 hash of its exact upstream file, so a c
 
 ## Implementation
 
-`sdlc` and `quickie` stop at a validated implementation plan. Neither ships an execution skill.
+`sdlc` and `quickie` stop at a validated implementation plan. The bundled `sdd` skill executes and reviews implementation plans generally, whether they come from either workflow or elsewhere.
 
-With Superpowers, use `superpowers:subagent-driven-development` when subagents are available, or `superpowers:executing-plans` otherwise. Apply `superpowers:test-driven-development` to each production-behavior task. Superpowers is an external package and is not bundled here.
+With Superpowers, use `superpowers:subagent-driven-development` when subagents are available, or `superpowers:executing-plans` otherwise as external alternatives. Apply `superpowers:test-driven-development` to each production-behavior task. Superpowers is an external package and is not bundled here.
 
 ## Install
 

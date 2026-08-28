@@ -29,11 +29,14 @@ function assertCatalog(definitions: readonly AgentDefinition[]): void {
     "xhigh",
     "xhigh",
   ]);
+  const oracle = definitions.find((definition) => definition.name === "oracle");
+  assert.ok(oracle);
+  assert.doesNotMatch(oracle.systemPrompt, /\bbash\b/i);
   assert.deepEqual(definitions.map((definition) => [...definition.tools]), [
-    ["read", "grep", "find", "ls"],
-    ["read", "bash", "edit", "write", "grep", "find", "ls"],
-    ["read", "grep", "find", "ls"],
-    ["read", "bash", "grep", "find", "ls"],
+    ["read", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
+    ["read", "bash", "edit", "write", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
+    ["read", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
+    ["read", "bash", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
   ]);
   for (const definition of definitions) {
     assert.notEqual(definition.description.trim(), "");
@@ -74,7 +77,10 @@ test("rejects blank prompts and invalid mapping fields", async () => {
   await writeFile(
     oraclePath,
     oracle
-      .replace("tools: [read, grep, find, ls]", "tools: [read, read, grep, find, ls]")
+      .replace(
+        "tools: [read, grep, find, ls, mcp, mcpScript, web_search, web_fetch]",
+        "tools: [read, read, grep, find, ls, mcp, mcpScript, web_search, web_fetch]",
+      )
       .replace(/\n[^]*$/, "\n"),
   );
 

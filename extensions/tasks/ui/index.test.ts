@@ -36,6 +36,19 @@ test("static task widget shows every status, identifier, text, summary, and unsa
   assert.equal(savedLines[0].includes("[unsaved]"), false);
 });
 
+test("static task widget renders multiline text with aligned continuation lines and safe tabs", () => {
+  const lines = renderTaskWidget(
+    [{ id: "7", text: "Role:\n\tWorker", status: "pending" }],
+    false,
+    false,
+    0,
+    plainTheme,
+    100,
+  );
+
+  assert.deepEqual(lines.slice(1), ["  ▫ #7 Role:", "         Worker"]);
+});
+
 test("static task widget truncates every line to the supplied width", () => {
   const lines = renderTaskWidget(
     [{ id: "12", text: "A very long task that must be truncated", status: "pending" }],

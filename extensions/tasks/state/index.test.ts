@@ -85,6 +85,19 @@ test("durable task creation writes complete private state and reloads in numeric
   });
 });
 
+test("task text preserves newlines and tabs and normalizes carriage returns", async () => {
+  await withAgentDir(async () => {
+    const store = await TaskStore.load(cwd, sessionId);
+
+    await store.create("Role:\r\n\tWorker");
+    assert.equal(store.get("1").text, "Role:\n\tWorker");
+
+    await store.update("1", { text: "Scope:\rfile.ts" });
+    assert.equal(store.get("1").text, "Scope:\nfile.ts");
+    assert.equal((await TaskStore.load(cwd, sessionId)).get("1").text, "Scope:\nfile.ts");
+  });
+});
+
 test("valid task updates apply text, every status, combined changes, and multiple active tasks", async () => {
   await withAgentDir(async () => {
     const store = await TaskStore.load(cwd, sessionId);
@@ -134,7 +147,7 @@ test("invalid mutations preserve memory and durable bytes", async () => {
     const beforeTasks = store.list();
     const beforeBytes = await readFile(path);
 
-    const invalidCreates = ["", "   ", "line\nbreak", "nul\u0000", "next\u0085"];
+    const invalidCreates = ["", "   ", "nul\u0000", "escape\u001b", "delete\u007f", "next\u0085"];
     for (const text of invalidCreates) {
       await assert.rejects(() => store.create(text), /invalid task text/i, text);
       assertTasks(store.list(), beforeTasks);

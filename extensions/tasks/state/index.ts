@@ -27,7 +27,7 @@ export interface TaskMutationResult {
   readonly writeError?: string;
 }
 
-const CONTROL_CHARACTERS = /[\u0000-\u001F\u0080-\u009F]/;
+const CONTROL_CHARACTERS = /[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F-\u009F]/;
 const TASK_STATUSES: readonly TaskStatus[] = ["pending", "active", "completed"];
 
 export class TaskStore {
@@ -77,11 +77,10 @@ export class TaskStore {
 
   async create(text: string): Promise<TaskMutationResult> {
     this.assertReady();
-    assertTaskText(text);
 
     const task: Task = {
       id: nextTaskId(this.tasks),
-      text,
+      text: normalizeTaskText(text),
       status: "pending",
     };
     this.tasks = [...this.tasks, task];
@@ -181,8 +180,7 @@ function validateChanges(changes: TaskChanges): { text?: string; status?: TaskSt
 
   const validated: { text?: string; status?: TaskStatus } = {};
   if (keys.includes("text")) {
-    assertTaskText(changes.text);
-    validated.text = changes.text;
+    validated.text = normalizeTaskText(changes.text);
   }
   if (keys.includes("status")) {
     assertTaskStatus(changes.status);
@@ -214,9 +212,9 @@ function parseTaskFile(contents: string): Task[] {
       throw new Error(`task ${index} identifiers must be in numeric order`);
     }
     previousId = idNumber;
-    assertTaskText(rawTask.text);
+    const text = normalizeTaskText(rawTask.text);
     assertTaskStatus(rawTask.status);
-    tasks.push({ id: rawTask.id, text: rawTask.text, status: rawTask.status });
+    tasks.push({ id: rawTask.id, text, status: rawTask.status });
   }
   return tasks;
 }
@@ -228,13 +226,18 @@ function assertTaskId(value: unknown, index?: number): asserts value is string {
   }
 }
 
-function assertTaskText(value: unknown): asserts value is string {
-  if (typeof value !== "string" || value.trim() === "") {
+function normalizeTaskText(value: unknown): string {
+  if (typeof value !== "string") {
     throw new TypeError("Invalid task text: must not be blank");
   }
-  if (CONTROL_CHARACTERS.test(value)) {
+  const text = value.replace(/\r\n?/g, "\n");
+  if (text.trim() === "") {
+    throw new TypeError("Invalid task text: must not be blank");
+  }
+  if (CONTROL_CHARACTERS.test(text)) {
     throw new TypeError("Invalid task text: contains a control character");
   }
+  return text;
 }
 
 function assertTaskStatus(value: unknown): asserts value is TaskStatus {

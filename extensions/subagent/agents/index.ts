@@ -6,7 +6,18 @@ import { parseFrontmatter } from "@earendil-works/pi-coding-agent";
 export const BUNDLED_AGENT_NAMES = ["scout", "worker", "oracle", "reviewer"] as const;
 
 export type AgentName = (typeof BUNDLED_AGENT_NAMES)[number];
-export type AgentToolName = "read" | "bash" | "edit" | "write" | "grep" | "find" | "ls";
+export type AgentToolName =
+  | "read"
+  | "bash"
+  | "edit"
+  | "write"
+  | "grep"
+  | "find"
+  | "ls"
+  | "mcp"
+  | "mcpScript"
+  | "web_search"
+  | "web_fetch";
 export type AgentModel = `${string}/${string}`;
 
 export type AgentDefinition = {
@@ -28,22 +39,22 @@ type AgentFrontmatter = Record<string, unknown>;
 
 const AGENT_CONTRACTS: Readonly<Record<AgentName, AgentContract>> = {
   scout: {
-    tools: ["read", "grep", "find", "ls"],
+    tools: ["read", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
     model: "openai-codex/gpt-5.6-luna",
     thinkingLevel: "medium",
   },
   worker: {
-    tools: ["read", "bash", "edit", "write", "grep", "find", "ls"],
+    tools: ["read", "bash", "edit", "write", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
     model: "openai-codex/gpt-5.6-luna",
     thinkingLevel: "max",
   },
   oracle: {
-    tools: ["read", "grep", "find", "ls"],
+    tools: ["read", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
     model: "openai-codex/gpt-5.6-sol",
     thinkingLevel: "xhigh",
   },
   reviewer: {
-    tools: ["read", "bash", "grep", "find", "ls"],
+    tools: ["read", "bash", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
     model: "openai-codex/gpt-5.6-sol",
     thinkingLevel: "xhigh",
   },
@@ -111,7 +122,19 @@ function parseAgent(name: AgentName, content: string): AgentDefinition {
     rawTools.length === 0 ||
     !rawTools.every((tool): tool is AgentToolName =>
       typeof tool === "string" &&
-      ["read", "bash", "edit", "write", "grep", "find", "ls"].includes(tool),
+      [
+        "read",
+        "bash",
+        "edit",
+        "write",
+        "grep",
+        "find",
+        "ls",
+        "mcp",
+        "mcpScript",
+        "web_search",
+        "web_fetch",
+      ].includes(tool),
     )
   ) {
     throw new Error(`${name}.md tools must be a list of known tool names`);

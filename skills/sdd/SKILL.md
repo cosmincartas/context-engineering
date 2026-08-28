@@ -60,7 +60,7 @@ At each transition, use `TaskList` to recompute readiness from the task text and
 2. Use `TaskUpdate` to mark all ready tasks in that group `active`.
 3. Build one ordered `Agent` item for each task. Use the task's role as the lowercase `agent` value, a concise `title`, and a self-contained `task` prompt.
 4. Keep the ordered task IDs beside the ordered Agent items. Map each returned outcome by its batch position to the corresponding task ID.
-5. Use `TaskUpdate` to mark successful tasks `completed`. Return failed tasks to `pending` and record the failure evidence in their task text.
+5. Inspect each returned report before changing its task status. A normal child exit (`succeeded`) is process evidence only, not task success. Compare the report's verdict and evidence with the task's acceptance criteria and required checks. Mark a task `completed` only when the report supports a passing verdict, all applicable checks pass, and no blocker, actionable finding, or missing evidence remains. Otherwise return it to `pending` and record the report, failed checks, blockers, actionable findings, and any missing or ambiguous evidence in the task text.
 6. Use `TaskList` again before the next transition.
 
 Send independent tasks together in one `Agent` batch. Keep each batch at or below eight items. If more ready work exists than one batch can hold, use another dispatch group after recording the first group's outcomes; never mark unsent work `active`.
@@ -69,22 +69,22 @@ A Worker prompt must include the original requirements, its exact scope, relevan
 
 ## 4. Review the implementation
 
-After a Worker succeeds, its corresponding Reviewer task becomes ready according to the dependency recorded in its text. Create that Reviewer task with `TaskCreate` if it was not created during framing.
+After a Worker report passes the status inspection and its acceptance criteria and checks, its corresponding Reviewer task becomes ready according to the dependency recorded in its text. Create that Reviewer task with `TaskCreate` if it was not created during framing.
 
-Mark every ready corresponding Reviewer `active` with `TaskUpdate`, then send all independent Reviewers together in one `Agent` batch. Preserve the ordered Reviewer task IDs and map outcomes by position. Mark successful reviews `completed`; return unsuccessful reviews to `pending` and record actionable evidence in their task text.
+Mark every ready corresponding Reviewer `active` with `TaskUpdate`, then send all independent Reviewers together in one `Agent` batch. Preserve the ordered Reviewer task IDs and map outcomes by position. Inspect every returned Reviewer report before changing its task status: a normal child exit is not a passing review. Mark a Reviewer task `completed` only when its report finds no actionable issue, all applicable checks pass, and no blocker or missing evidence remains. Otherwise return it to `pending` and record the report, failed checks, blockers, actionable findings, and any missing or ambiguous evidence in its task text.
 
 A Reviewer must inspect independently rather than trust the Worker report. Its prompt must include the original requirements, acceptance criteria, exact review scope, changed-file summary, relevant evidence, required verification commands, and the requirement to preserve unrelated changes.
 
-The review gate passes only when every required Reviewer reports no actionable finding, all applicable checks pass, and no verification blocker remains.
+The review gate passes only after every required Reviewer report has been inspected and reports no actionable finding, all applicable checks pass, and no verification blocker or missing evidence remains.
 
 ## 5. Correct and repeat
 
-When a Worker or Reviewer finds a concrete problem:
+When a Worker or Reviewer report fails status inspection—including failed checks, blockers, actionable findings, or missing or ambiguous evidence:
 
-1. Record the location, triggering path, evidence, and correction in the affected task text with `TaskUpdate`.
+1. Record the location, triggering path, prior Worker report/evidence, Reviewer findings (or the recorded absence of a review), and correction in the affected task text with `TaskUpdate`.
 2. Return the affected task to `pending`.
 3. Recompute readiness with `TaskList`.
-4. Dispatch the corrected Worker, then its corresponding Reviewer, using the same parallel rules.
+4. Dispatch a new corrected Worker, then its corresponding Reviewer, using the same parallel rules. The correction Worker prompt must include the original requirements, prior Worker evidence, Reviewer findings, failed checks, blockers, and recorded correction; do not resume or rely on the exited Worker session.
 5. Repeat until the review gate passes or the user must decide an external issue.
 
 Keep unrelated successful tasks `completed`. Serialize any correction that shares a write scope or mutable verification with another task. Use Oracle only when the disagreement or root cause still needs a decision.

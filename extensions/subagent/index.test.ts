@@ -157,10 +157,10 @@ process.stdout.write(JSON.stringify({ type: "message_end", message: { role: "ass
   process.env.PI_SUBAGENT_TOOL_RECORD = recordPath;
 
   const baseTools: Record<string, string[]> = {
-    scout: ["read", "grep", "find", "ls"],
-    worker: ["read", "bash", "edit", "write", "grep", "find", "ls"],
-    oracle: ["read", "grep", "find", "ls"],
-    reviewer: ["read", "bash", "grep", "find", "ls"],
+    scout: ["read", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
+    worker: ["read", "bash", "edit", "write", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
+    oracle: ["read", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
+    reviewer: ["read", "bash", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
   };
   const cases = [
     { parent: ["fffind", "ffgrep", "parent-only"], find: "fffind", grep: "ffgrep" },

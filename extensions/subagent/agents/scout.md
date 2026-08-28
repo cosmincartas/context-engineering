@@ -2,7 +2,7 @@
 version: 1
 name: scout
 description: Read-only codebase reconnaissance.
-tools: [read, grep, find, ls]
+tools: [read, grep, find, ls, mcp, mcpScript, web_search, web_fetch]
 model: openai-codex/gpt-5.6-luna
 thinkingLevel: medium
 ---
