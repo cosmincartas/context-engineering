@@ -16,14 +16,20 @@ An `explore` artifact is supporting evidence, not approval of scope or a decisio
 
 ## PRD invariant
 
-The PRD must cover one deliverable that can ship independently. It must contain no more than five FRs and five NFRs.
+The PRD must cover one deliverable that can ship independently.
+It must use five FRs as the default budget.
+When the FR list exceeds five entries, the final PRD must record an exception.
+It must also record evidence that no smaller independently shippable slice exists.
+The PRD must retain every mandatory NFR and contain no more than five discretionary NFRs.
 
 ## Workflow
 
 1. Draft Problem and Goal in conversation, then run the **framing gate**.
-2. Draft Functional and Non-Functional Requirements with verifications in conversation. Apply both budgets, then run the **requirements gate**.
+2. Draft Functional and Non-Functional Requirements with verifications in conversation. Apply the FR and discretionary NFR budgets, then run the **requirements gate**.
 3. Draft Open Questions without a separate review round — the validation recap covers them. Run the self-checks.
-4. Write `prd.md` with `status: draft` — the first and only write. Present a recap per pairing rule 18 and ask the user to validate. Apply changes to the file until approved, then set `status: validated`.
+4. Write `prd.md` with `status: draft` — the first and only write.
+   When writing `prd.md`, include the approved exception and its evidence in frontmatter `fr_budget_exception`.
+   Present a recap per pairing rule 18 and ask the user to validate. Apply changes to the file until approved, then set `status: validated`.
 
 ### Framing gate
 
@@ -36,45 +42,55 @@ Present Problem and Goal concisely. Then challenge:
 
 ### FR budget
 
-The FR list has a maximum of five entries. Give each distinct functional behavior one FR. Never merge behaviors to meet the cap.
+Use five FRs as the default budget.
+Define a distinct behavior by its actor, trigger, observable outcome, or independent acceptance decision.
+Give each distinct behavior one FR. Keep one checkable behavior per FR. Never merge distinct behaviors to meet the budget.
 
 1. Fold only edge cases, variants, and failure paths of the same behavior into its Verification field. Never hide a separate behavior in Verification.
-2. If the draft exceeds five FRs, return to phase 1's slicing gate. Select a smaller deliverable that can ship independently.
-3. Apply the user's scope decision.
-4. Park deliverables and behaviors that leave scope before the requirements gate.
-5. Run the scope-revision process only after an over-budget draft changes scope.
-6. Do not run the requirements gate until the revised brief passes validation and the FR list fits the budget.
+2. If the draft exceeds five FRs, return to phase 1's slicing gate first. Seek a smaller deliverable that can ship independently.
+3. Draft the FR exception reason and evidence in conversation when no smaller independently shippable slice exists.
+4. Present the draft exception and evidence at the requirements gate for user approval.
+5. Keep each distinct behavior as its own FR after the gate approves the exception.
+6. Apply the user's scope decision.
+7. Park deliverables and behaviors that leave scope before the requirements gate.
+8. Run the scope-revision process only after an over-budget draft changes scope.
+9. Do not run the requirements gate until the FR list fits five entries or has a drafted exception and evidence.
 
 ### Scope revision
 
-Run this process for NFR deferral; run it for FR overflow or mandatory NFR overflow only when they change scope.
+Run this process for NFR deferral and for FR overflow only when they change scope.
 
 1. Announce the scope revision.
 2. Follow the staleness process and warn about downstream staleness.
-3. Update the brief's Scope and Parked sections. Send every NFR candidate you defer to the context brief's Parked section.
+3. Update the brief's Scope and Parked sections. Send every deferred discretionary NFR to the context brief's Parked section.
 4. Revalidate the revised context brief.
 5. Refresh the PRD context hash before continuing.
 
 ### NFR budget
 
-The NFR list has a maximum of five entries. Consider candidates from every category: performance, capacity, security, privacy, availability and recovery, compliance, accessibility, and observability.
+Apply the five-item NFR budget only to discretionary NFRs.
+The PRD must retain every mandatory NFR, regardless of count.
+Consider candidates from every category: performance, capacity, security, privacy, availability and recovery, compliance, accessibility, and observability.
 
 1. Infer candidates from the validated brief, user statements, and repository evidence.
 2. Rank candidates contextually in this order:
    - mandatory obligations from any category, such as legal, security, privacy, accessibility, and data-loss obligations;
    - explicit user or repository constraints;
    - risks to the core outcome.
-3. Keep at most five candidates. Run the scope-revision process after you defer any candidate.
-4. If mandatory NFRs exceed five, return to phase 1's slicing gate and reduce feature scope until all mandatory NFRs fit.
-5. After mandatory overflow reduces scope, run the scope-revision process. Never defer a mandatory NFR.
-6. Skip scope revision when the unchanged list has five or fewer candidates.
-7. Do not run the requirements gate until the NFR list fits the budget.
+3. Retain every mandatory NFR. Keep no more than five discretionary NFRs.
+4. If discretionary NFRs exceed five, park lower-priority discretionary NFRs before the requirements gate.
+5. Run the scope-revision process after you defer any discretionary NFR. Never defer a mandatory NFR.
+6. Skip scope revision when the unchanged list has five or fewer discretionary candidates.
+7. Do not run the requirements gate until every mandatory NFR remains and the discretionary list has five or fewer entries.
 
 ### Requirements gate
 
-Summarize the FR and NFR lists.
+Summarize the FR and NFR lists, including any drafted FR-budget exception and its evidence.
 
-Confirm the PRD invariant: one deliverable that can ship independently, five FRs maximum, and five NFRs maximum.
+Confirm the PRD invariant: one deliverable that can ship independently and five FRs as the default budget.
+If a draft exception exists, confirm that it includes evidence that no smaller independently shippable slice exists.
+Ask the user to approve or reject any drafted exception and its evidence.
+Confirm that the PRD retains every mandatory NFR and contains no more than five discretionary NFRs.
 
 Challenge the requirements:
 
@@ -96,8 +112,15 @@ Before validation, make sure that:
 
 - Every Goal clause answers the Problem, and every in-scope Problem statement has a Goal clause.
 - The PRD covers one deliverable that can ship independently.
-- The FR list has no more than five entries. Each distinct functional behavior has its own FR; no FR hides a separate behavior in Verification.
-- The NFR list has no more than five entries. Rank candidates from every category contextually. Park lower-priority candidates and keep all mandatory NFRs in scope.
+- The FR list must have five or fewer entries unless the gate approved a drafted exception.
+- The approved exception must include evidence that no smaller independently shippable slice exists.
+- Each distinct functional behavior must have its own FR.
+- Define distinct behavior by actor, trigger, observable outcome, or independent acceptance decision.
+- Ensure that no FR hides a separate behavior in Verification.
+- The NFR list must retain every mandatory NFR.
+- The NFR list must contain no more than five discretionary entries.
+- Rank candidates from every category contextually.
+- Park lower-priority discretionary candidates.
 - Every FR and NFR has an observable verification and a source, and every NFR is measurable or binary.
 - Every NFR numeric limit has user or repository provenance, or a user-owned `Q-*` entry.
 - Both gates received a user response.

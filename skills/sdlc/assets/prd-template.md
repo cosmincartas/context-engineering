@@ -5,6 +5,7 @@ subject: "{{subject}}"
 status: draft
 context: "context-brief.md"
 context_sha256: "{{context brief content hash}}"
+fr_budget_exception: "{{None, or the reason and evidence that no smaller independently shippable slice exists}}"
 repository_baseline: "{{commit or unavailable}}"
 created: "{{YYYY-MM-DD}}"
 updated: "{{YYYY-MM-DD}}"
