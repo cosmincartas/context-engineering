@@ -83,7 +83,7 @@ function harness() {
     model: { provider: "openai-codex", id: "parent" },
     thinkingLevel: "medium",
     modelRegistry: { getAvailable: () => [] },
-    sessionManager: { getEntries: () => [], getCwd: () => process.cwd(), getSessionName: () => undefined },
+    sessionManager: { getEntries: () => [], getLeafId: () => null, getCwd: () => process.cwd(), getSessionName: () => undefined },
     getContextUsage: () => undefined,
     ui,
   });
@@ -495,8 +495,13 @@ test("notifies the TUI and registers nothing when the bundled catalog fails", as
   await loadExtension();
   const directory = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-extension-"));
   try {
-    for (const file of ["index.ts", "agents.ts", "runtime.ts", "ui.ts", "package.json"]) {
+    for (const file of ["index.ts", "package.json"]) {
       await cp(new URL(file, import.meta.url), path.join(directory, file));
+    }
+    for (const module of ["runtime", "ui"]) {
+      await cp(new URL(`./${module}/`, import.meta.url), path.join(directory, module), {
+        recursive: true,
+      });
     }
     await symlink(new URL("./node_modules/", import.meta.url), path.join(directory, "node_modules"));
     const agentsDirectory = path.join(directory, "agents");

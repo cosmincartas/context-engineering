@@ -33,18 +33,18 @@ import {
 
 import type { Message } from "@earendil-works/pi-ai";
 
-import { normalizeTitle } from "./runtime.ts";
+import { normalizeTitle } from "../runtime/index.ts";
 import type {
   ChildSessionState,
   MonitoredRun,
   ProcessAttempt,
   SubagentRun,
-} from "./runtime.ts";
+} from "../runtime/index.ts";
 
 export type SubagentUIHandle = {
   readonly registry: SubagentRegistry;
   readonly footer: AgentFooter;
-  onMonitorEvent(event: import("./runtime.ts").SubagentMonitorEvent): void;
+  onMonitorEvent(event: import("../runtime/index.ts").SubagentMonitorEvent): void;
   openChild(run: MonitoredRun): Promise<void>;
   dispose(): void;
 };
@@ -57,6 +57,17 @@ export type FooterAction =
 
 const ZERO_USAGE = { inputTokens: 0, outputTokens: 0, contextTokens: 0 };
 const MAX_VISIBLE_CHILDREN = 3;
+
+type SessionUsageTotals = {
+  leafId: string | null;
+  count: number;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  cost: number;
+  latestCacheHitRate?: number;
+};
 
 type CursorAwareEditor = EditorComponent & {
   getLines(): string[];
@@ -181,6 +192,7 @@ export class AgentFooter implements Component, Focusable {
   private selectedIndex = 0;
   private selectedRunId?: string;
   private childOffset = 0;
+  private usageTotals?: SessionUsageTotals;
   private readonly unsubscribe: () => void;
   private readonly unsubscribeBranch: () => void;
   private readonly timer: ReturnType<typeof setInterval>;
@@ -354,26 +366,49 @@ export class AgentFooter implements Component, Focusable {
       : truncateToWidth(branch || cwd, width, "");
   }
 
-  private statisticsLine(width: number): string {
-    let input = 0;
-    let output = 0;
-    let cacheRead = 0;
-    let cacheWrite = 0;
-    let cost = 0;
-    let latestCacheHitRate: number | undefined;
-    for (const entry of this.ctx.sessionManager.getEntries()) {
+  /**
+   * The session is append-only and every append advances the leaf, so an
+   * unchanged leaf means the cached totals still hold and the entry list never
+   * has to be materialized. A shorter list than the cache means the session was
+   * replaced, so the totals are rebuilt from the start.
+   */
+  private sessionUsage(): SessionUsageTotals {
+    const leafId = this.ctx.sessionManager.getLeafId();
+    const cached = this.usageTotals;
+    if (cached && cached.leafId === leafId) return cached;
+
+    const entries = this.ctx.sessionManager.getEntries();
+    const base = cached && entries.length >= cached.count ? cached : undefined;
+    const totals: SessionUsageTotals = {
+      leafId,
+      count: entries.length,
+      input: base?.input ?? 0,
+      output: base?.output ?? 0,
+      cacheRead: base?.cacheRead ?? 0,
+      cacheWrite: base?.cacheWrite ?? 0,
+      cost: base?.cost ?? 0,
+      latestCacheHitRate: base?.latestCacheHitRate,
+    };
+    for (let index = base?.count ?? 0; index < entries.length; index++) {
+      const entry = entries[index];
       const usage = usageFromEntry(entry);
       if (!usage) continue;
-      input += usage.input;
-      output += usage.output;
-      cacheRead += usage.cacheRead;
-      cacheWrite += usage.cacheWrite;
-      cost += usage.cost;
+      totals.input += usage.input;
+      totals.output += usage.output;
+      totals.cacheRead += usage.cacheRead;
+      totals.cacheWrite += usage.cacheWrite;
+      totals.cost += usage.cost;
       if (entry.type === "message" && entry.message.role === "assistant") {
         const promptTokens = usage.input + usage.cacheRead + usage.cacheWrite;
-        latestCacheHitRate = promptTokens > 0 ? usage.cacheRead / promptTokens * 100 : undefined;
+        totals.latestCacheHitRate = promptTokens > 0 ? usage.cacheRead / promptTokens * 100 : undefined;
       }
     }
+    this.usageTotals = totals;
+    return totals;
+  }
+
+  private statisticsLine(width: number): string {
+    const { input, output, cacheRead, cacheWrite, cost, latestCacheHitRate } = this.sessionUsage();
 
     const parts: string[] = [];
     if (input) parts.push(`↑${formatTokens(input)}`);
@@ -963,14 +998,14 @@ export function installSubagentUI(ctx: ExtensionContext): SubagentUIHandle {
     }
   }
 
-  function onMonitorEvent(event: import("./runtime.ts").SubagentMonitorEvent): void {
+  function onMonitorEvent(event: import("../runtime/index.ts").SubagentMonitorEvent): void {
     if (disposed) return;
     if (event.type === "started") {
       registry.add(event.run);
     } else if (event.type === "updated") {
       registry.update(event.run);
     } else {
-      if (activeView?.runId === event.run.runId) activeView.setRun(event.run);
+      if (activeView && activeView.runId === event.run.runId) activeView.setRun(event.run);
       if (registry.get(event.run.runId)) registry.remove(event.run.runId);
     }
   }
@@ -1195,7 +1230,7 @@ function copyAttempt(value: ProcessAttempt): ProcessAttempt {
   return {
     ...value,
     activity: [...value.activity],
-    messages: value.messages.map((message) => structuredClone(message)),
+    messages: value.messages,
     usage: { ...(value.usage ?? ZERO_USAGE) },
   };
 }

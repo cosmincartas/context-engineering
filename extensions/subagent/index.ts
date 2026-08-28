@@ -12,7 +12,7 @@ import {
 import { Container, Markdown, Spacer, Text, type Component } from "@earendil-works/pi-tui";
 import { Type, type Static } from "typebox";
 
-import { loadBundledAgents } from "./agents.ts";
+import { loadBundledAgents } from "./agents/index.ts";
 import {
   executeSubagentBatch,
   normalizeTitle,
@@ -20,8 +20,8 @@ import {
   type SubagentBatchDetails,
   type SubagentBatchOutcome,
   type SubagentRun,
-} from "./runtime.ts";
-import { installSubagentUI, type SubagentUIHandle } from "./ui.ts";
+} from "./runtime/index.ts";
+import { installSubagentUI, type SubagentUIHandle } from "./ui/index.ts";
 
 const SubagentParameters = Type.Object(
   {
