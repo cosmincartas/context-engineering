@@ -12,7 +12,7 @@ import {
 import { Container, Markdown, Spacer, Text, type Component } from "@earendil-works/pi-tui";
 import { Type, type Static } from "typebox";
 
-import { loadBundledAgents } from "./agents/index.ts";
+import { loadBundledAgents, type AgentDefinition } from "./agents/index.ts";
 import {
   executeSubagentBatch,
   normalizeTitle,
@@ -301,7 +301,15 @@ export default function subagentExtension(pi: ExtensionAPI): void {
     let root: string | undefined;
     let ui: SubagentUIHandle | undefined;
     try {
-      const catalog = await loadBundledAgents(new URL("./agents/", import.meta.url));
+      const parentToolNames = new Set(pi.getAllTools().map((tool) => tool.name));
+      const catalog = (await loadBundledAgents(new URL("./agents/", import.meta.url))).map((agent): AgentDefinition => ({
+        ...agent,
+        tools: agent.tools.map((tool) =>
+          tool === "find" && parentToolNames.has("fffind") ? "fffind" :
+          tool === "grep" && parentToolNames.has("ffgrep") ? "ffgrep" :
+          tool,
+        ) as AgentDefinition["tools"],
+      }));
       root = await fs.mkdtemp(path.join(os.tmpdir(), "pi-subagent-sessions-"));
       ui = installSubagentUI(ctx);
       const session: ActiveSubagentSession = {

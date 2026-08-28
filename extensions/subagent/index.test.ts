@@ -24,7 +24,9 @@ async function loadExtension(url = new URL("./index.ts", import.meta.url)): Prom
   return (await loadModule(url)).default;
 }
 
-function harness() {
+const defaultParentTools = ["read", "bash", "edit", "write", "grep", "find", "ls"];
+
+function harness(parentToolNames: readonly string[] = defaultParentTools) {
   let sessionStart: ((event: unknown, ctx: any) => Promise<void>) | undefined;
   let sessionShutdown: ((event: unknown, ctx: any) => Promise<void>) | undefined;
   const tools: any[] = [];
@@ -75,6 +77,9 @@ function harness() {
     registerTool(tool: any) {
       tools.push(tool);
     },
+    getAllTools() {
+      return parentToolNames.map((name) => ({ name }));
+    },
   };
   const context = (mode: "tui" | "rpc" | "json" | "print") => ({
     mode,
@@ -122,6 +127,99 @@ test("registers the tool only after a TUI session starts", async () => {
     assert.equal(tuiHarness.tools.length, 1);
   } finally {
     await tuiHarness.shutdown();
+  }
+});
+
+test("resolves bundled search tools independently from parent availability", { timeout: 10_000 }, async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-tool-resolution-"));
+  const recordPath = path.join(directory, "records.jsonl");
+  const executable = path.join(directory, "pi");
+  const previousPath = process.env.PATH;
+  const previousRecordPath = process.env.PI_SUBAGENT_TOOL_RECORD;
+  await writeFile(recordPath, "");
+  await writeFile(
+    executable,
+    `#!/usr/bin/env node
+const fs = require("node:fs");
+const path = require("node:path");
+const argv = process.argv.slice(2);
+const sessionDirectory = argv[argv.indexOf("--session-dir") + 1];
+const sessionId = "resolution-" + process.pid;
+fs.mkdirSync(sessionDirectory, { recursive: true });
+fs.writeFileSync(path.join(sessionDirectory, sessionId + ".jsonl"), "");
+fs.appendFileSync(process.env.PI_SUBAGENT_TOOL_RECORD, JSON.stringify(argv) + "\\n");
+process.stdout.write(JSON.stringify({ type: "session", id: sessionId }) + "\\n");
+process.stdout.write(JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "ok" }], stopReason: "stop" } }) + "\\n");
+`,
+  );
+  await chmod(executable, 0o755);
+  process.env.PATH = `${directory}${path.delimiter}${previousPath ?? ""}`;
+  process.env.PI_SUBAGENT_TOOL_RECORD = recordPath;
+
+  const baseTools: Record<string, string[]> = {
+    scout: ["read", "grep", "find", "ls"],
+    worker: ["read", "bash", "edit", "write", "grep", "find", "ls"],
+    oracle: ["read", "grep", "find", "ls"],
+    reviewer: ["read", "bash", "grep", "find", "ls"],
+  };
+  const cases = [
+    { parent: ["fffind", "ffgrep", "parent-only"], find: "fffind", grep: "ffgrep" },
+    { parent: ["fffind", "parent-only"], find: "fffind", grep: "grep" },
+    { parent: ["ffgrep", "parent-only"], find: "find", grep: "ffgrep" },
+    { parent: ["parent-only"], find: "find", grep: "grep" },
+  ];
+
+  try {
+    for (const [index, resolution] of cases.entries()) {
+      const testHarness = harness(resolution.parent);
+      const subagentExtension = await loadExtension();
+      subagentExtension(testHarness.pi);
+      try {
+        await testHarness.start("tui");
+        const [tool] = testHarness.tools;
+        const result = await tool.execute(
+          `resolution-${index}`,
+          {
+            tasks: Object.keys(baseTools).map((agent) => ({
+              agent,
+              title: `${agent} resolution`,
+              task: "record the child tool allowlist",
+            })),
+          },
+          undefined,
+          undefined,
+          testHarness.context("tui"),
+        );
+        assert.deepEqual(result.details.outcomes.map((outcome: any) => outcome.status), [
+          "succeeded", "succeeded", "succeeded", "succeeded",
+        ]);
+
+        const records = (await readFile(recordPath, "utf8"))
+          .trim()
+          .split("\n")
+          .filter(Boolean)
+          .slice(index * 4)
+          .map((line) => JSON.parse(line));
+        assert.equal(records.length, 4);
+        for (const [agent, tools] of Object.entries(baseTools)) {
+          const record = records.find((argv: string[]) => argv[argv.indexOf("--name") + 1] === `${agent} resolution`);
+          assert.ok(record, `missing child record for ${agent}`);
+          const actual = record[record.indexOf("--tools") + 1].split(",");
+          assert.deepEqual(
+            actual,
+            tools.map((tool) => tool === "find" ? resolution.find : tool === "grep" ? resolution.grep : tool),
+            agent,
+          );
+        }
+      } finally {
+        await testHarness.shutdown();
+      }
+    }
+  } finally {
+    process.env.PATH = previousPath;
+    if (previousRecordPath === undefined) delete process.env.PI_SUBAGENT_TOOL_RECORD;
+    else process.env.PI_SUBAGENT_TOOL_RECORD = previousRecordPath;
+    await rm(directory, { recursive: true, force: true });
   }
 });
 
