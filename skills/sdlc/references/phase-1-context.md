@@ -28,13 +28,12 @@ Goals, in order: build a common and complete understanding of the subject, then 
 ### Slicing gate
 
 1. Split a broad request into deliverables that can ship independently. Select one deliverable for this topic and park the rest.
-2. Propose the smallest slice of the deliverable you select that can ship independently and delivers one user-visible outcome. Never slice below a user-visible outcome.
-3. If the proposed deliverable may exceed either the FR or NFR budget, prefer a smaller slice that can ship independently.
-4. Present two lists: the slice in scope and items to park (one line each).
-5. Ask the user to approve, adjust, or reject the slice.
-6. Accept and record full scope only within both budgets: five FRs and five NFRs. Never bypass either budget.
-7. Apply the slice the user approves to Scope. Record items you park under Parked, each as a candidate subject for a future topic.
+2. Propose the smallest slice of the deliverable you select that can ship independently and has one independently verifiable outcome. Do not add work only to make the slice user-visible.
+3. Present two lists: the slice in scope and items to park (one line each).
+4. Ask the user to approve, adjust, or reject the slice.
+5. Accept and record the approved scope only when it selects one independently verifiable outcome.
+6. Apply the slice the user approves to Scope. Record items you park under Parked, each as a candidate subject for a future topic.
 
 ## Completion check
 
-Confirmed Understanding states the problem, who is affected, the desired outcome, evidence or greenfield status, and constraints. The user has confirmed the inferred entries. Scope names one deliverable that can ship independently, moves other deliverables and out-of-slice items to Parked, and records full-scope decisions within both budgets.
+Confirmed Understanding states the problem, who is affected, the desired outcome, evidence or greenfield status, and constraints. The user has confirmed the inferred entries. Scope names one deliverable that can ship independently and one independently verifiable outcome, and moves other deliverables and out-of-slice items to Parked.
