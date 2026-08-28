@@ -20,6 +20,9 @@ Take one topic through four phases. Each phase produces one validated artifact i
 
 These hold in every phase:
 
+- Use Scout for repository evidence in phases 1, 3, and 4 whenever Scout is available. If Scout is unavailable, perform that work locally.
+- In phase 3, use Oracle for consequential design decisions whenever Oracle is available, before proposing each decision. If Oracle is unavailable, resolve the decision locally.
+- Never use Worker or Reviewer during SDLC planning, including as fallbacks for unavailable Scout or Oracle.
 - Never write production code. This skill plans; it does not implement. Type declarations, interface definitions, and function signatures inside `design.md` are design; never write a function body.
 - Never run `git commit`, create branches, or push changes.
 - Validated artifacts are the state. Work each phase in conversation; write the artifact file once, when you present it for validation, with `status: draft`. Set `status: validated` when the user approves. A session interrupted before the write restarts its phase from the validated upstream artifacts; do not reconstruct partial phase work from chat history.
