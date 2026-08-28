@@ -2,7 +2,7 @@
 version: 1
 name: reviewer
 description: Read-only review of code changes.
-tools: [read, grep, find, ls]
+tools: [read, bash, grep, find, ls]
 model: openai-codex/gpt-5.6-sol
 thinkingLevel: xhigh
 ---

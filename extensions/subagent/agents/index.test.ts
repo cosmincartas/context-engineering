@@ -33,7 +33,7 @@ function assertCatalog(definitions: readonly AgentDefinition[]): void {
     ["read", "grep", "find", "ls"],
     ["read", "bash", "edit", "write", "grep", "find", "ls"],
     ["read", "grep", "find", "ls"],
-    ["read", "grep", "find", "ls"],
+    ["read", "bash", "grep", "find", "ls"],
   ]);
   for (const definition of definitions) {
     assert.notEqual(definition.description.trim(), "");

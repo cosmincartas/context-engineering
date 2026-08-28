@@ -43,7 +43,7 @@ const AGENT_CONTRACTS: Readonly<Record<AgentName, AgentContract>> = {
     thinkingLevel: "xhigh",
   },
   reviewer: {
-    tools: ["read", "grep", "find", "ls"],
+    tools: ["read", "bash", "grep", "find", "ls"],
     model: "openai-codex/gpt-5.6-sol",
     thinkingLevel: "xhigh",
   },
