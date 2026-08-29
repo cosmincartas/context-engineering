@@ -59,7 +59,7 @@ Ask the user to select one mode. Record the selection in the working draft.
 Use one complete element as the review unit. An element is one model, interface, class, external contract, or function-owner signature batch.
 
 1. Walk components in dependency order. Present each component's elements in dependency order.
-2. Present each element as one complete code block in the repository language. Include fields, signatures, types, and errors. Never write a function body.
+2. Present each element as an implementation-shaped skeleton in the repository language. Preserve concrete owners, framework metadata, dependency wiring, fields, signatures, types, and errors. Keep structural bodies that show required wiring. Replace executable logic with `...`.
 3. Explain the shape in one line. Add one open question when necessary.
 4. Give each weighty element its own turn. Weighty elements include external contracts, new abstractions, persistent models, and gated decisions.
 5. Batch a component's minor elements. List inferred entries for confirmation.
@@ -84,7 +84,7 @@ Present Behavior, Failure Model, and Traceability as one batch per section. List
 - **Architecture.** Preserve the approved HLD Mermaid diagram, responsibilities, flow, and assumptions. Name components by their implemented interfaces or owned functions. Use exit codes only for command-line interfaces.
 - **Models.** Types and records the design introduces or changes, as code. Each field has a type; a constraint that the type cannot express is a one-line invariant under the block.
 - **Interfaces.** Abstractions as code: interface, protocol, trait, or abstract class, with member signatures. One line after the block names what the abstraction is deliberately not responsible for.
-- **Functions.** Signatures grouped by owner (module, class, or component). Each signature has one line stating its effect and its error behavior. A function references only models and interfaces in this design or already in the repository.
+- **Functions.** Show each concrete owner as an implementation-shaped skeleton. Include framework metadata, dependency wiring, and method signatures where relevant. Keep structural bodies that show required wiring. Replace executable logic with `...`. Each method has one line stating its effect and error behavior.
 - **Contracts.** Externally shared schemas, formats, and interfaces. A contract has exactly one writer, a version, and invariants.
 - **Behavior.** Important flows and state transitions, naming the functions they call in order. Write ordering and sudden-stop recovery only where related persistent writes exist.
 - **Failure Model.** Failures relevant to this system, with detector, response, and observable verification. Do not invent optional dependencies, corruption paths, or persistence failures for systems that do not have them.
@@ -102,7 +102,7 @@ Before validation, make sure that:
 - In proposal mode, the user decided every non-reversible choice. No remaining section received a partial review.
 - In proposal mode, the validation recap lists reversible choices, assumptions, and inferred entries.
 - Every model, interface, function owner, and contract belongs to one component in the architecture diagram.
-- Every function signature references only designed or existing types; every interface has at least one designed implementer or consumer; no code block contains a function body.
+- Every function signature references only designed or existing types. Every interface has a designed implementer or consumer. No code block contains executable logic.
 - Every contract has one writer, a version, and invariants.
 - Every failure has an observable verification.
 - Technology and repository choices are existing constraints or decisions from the selected mode.

@@ -56,10 +56,10 @@ updated: "{{YYYY-MM-DD}}"
 ### 4.1 `{{owner: module, class, or component}}`
 
 ```{{lang}}
-{{function signature}}
+{{implementation-shaped class, module, or component skeleton; preserve framework metadata and dependency wiring; replace executable logic with ...}}
 ```
 
-- {{Effect in one line; error behavior.}}
+- {{Each method's effect and error behavior.}}
 
 ## 5. Contracts
 
