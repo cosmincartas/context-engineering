@@ -4,7 +4,13 @@ import { visibleWidth } from "@earendil-works/pi-tui";
 import test from "node:test";
 
 import { TaskStore, type Task } from "../state/index.ts";
-import { handleWriteFailure, renderTaskWidget, TaskWidget } from "./index.ts";
+import {
+  handleWriteFailure,
+  renderTaskListResult,
+  renderTaskResult,
+  renderTaskWidget,
+  TaskWidget,
+} from "./index.ts";
 
 const plainTheme = {
   fg(_color: string, text: string) {
@@ -61,6 +67,68 @@ test("static task widget truncates every line to the supplied width", () => {
 
   assert.ok(lines.length > 0);
   assert.ok(lines.every((line) => visibleWidth(line) <= 12));
+});
+
+test("single-task tool results render one line per task", () => {
+  const result = (task: Task) => ({
+    content: [{ type: "text" as const, text: JSON.stringify(task) }],
+    details: task,
+  });
+
+  const completed = renderTaskResult(result(tasks[0]), { expanded: false, isPartial: false }, plainTheme).render(100).map((line) => line.trimEnd());
+  assert.deepEqual(completed, ["✓ #1 Completed task"]);
+
+  const expanded = renderTaskResult(result(tasks[3]), { expanded: true, isPartial: false }, plainTheme).render(100).map((line) => line.trimEnd());
+  assert.deepEqual(expanded, ["▫ #4 Pending task"]);
+
+  const multiline = renderTaskResult(
+    result({ id: "7", text: "Role:\n\tWorker", status: "active" }),
+    { expanded: true, isPartial: false },
+    plainTheme,
+  ).render(100).map((line) => line.trimEnd());
+  assert.deepEqual(multiline, ["▪ #7 Role:…"]);
+});
+
+test("task result rendering falls back to model content for invalid details", () => {
+  const lines = renderTaskResult(
+    { content: [{ type: "text", text: "raw fallback" }], details: { id: 3 } as any },
+    { expanded: false, isPartial: false },
+    plainTheme,
+  ).render(100).map((line) => line.trimEnd());
+  assert.deepEqual(lines, ["raw fallback"]);
+});
+
+test("task list results collapse to a summary and expand to one line per task", () => {
+  const result = {
+    content: [{ type: "text" as const, text: JSON.stringify(tasks) }],
+    details: tasks,
+  };
+
+  const collapsed = renderTaskListResult(result, { expanded: false, isPartial: false }, plainTheme).render(100).map((line) => line.trimEnd());
+  assert.deepEqual(collapsed, ["4 tasks (1 completed, 2 active, 1 pending)"]);
+
+  const expanded = renderTaskListResult(result, { expanded: true, isPartial: false }, plainTheme).render(100).map((line) => line.trimEnd());
+  assert.deepEqual(expanded, [
+    "4 tasks (1 completed, 2 active, 1 pending)",
+    "  ✓ #1 Completed task",
+    "  ▪ #2 Active task",
+    "  ▪ #3 Another active task",
+    "  ▫ #4 Pending task",
+  ]);
+
+  const empty = renderTaskListResult(
+    { content: [{ type: "text" as const, text: "[]" }], details: [] },
+    { expanded: true, isPartial: false },
+    plainTheme,
+  ).render(100).map((line) => line.trimEnd());
+  assert.deepEqual(empty, ["0 tasks (0 completed, 0 active, 0 pending)"]);
+
+  const invalid = renderTaskListResult(
+    { content: [{ type: "text" as const, text: "list fallback" }], details: [{ id: 1 }] as any },
+    { expanded: true, isPartial: false },
+    plainTheme,
+  ).render(100).map((line) => line.trimEnd());
+  assert.deepEqual(invalid, ["list fallback"]);
 });
 
 test("write failure choice prompts only in TUI and treats dismissal as cancellation", async () => {

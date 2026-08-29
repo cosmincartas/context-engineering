@@ -108,6 +108,10 @@ test("model task tools register closed schemas and intended execution modes", ()
   assert.equal(get.parameters.additionalProperties, false);
   assert.deepEqual(get.parameters.required, ["id"]);
   assert.equal(get.executionMode, "parallel");
+
+  for (const tool of tools.values()) {
+    assert.equal(typeof (tool as any).renderResult, "function", `${tool.name} renderResult`);
+  }
 });
 
 test("session lifecycle restores UUID stores, isolates new and fork sessions, and reports load errors", async () => {

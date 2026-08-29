@@ -9,7 +9,12 @@ import {
   type TaskMutationResult,
   type TaskStatus,
 } from "./state/index.ts";
-import { handleWriteFailure, TaskWidget } from "./ui/index.ts";
+import {
+  handleWriteFailure,
+  renderTaskListResult,
+  renderTaskResult,
+  TaskWidget,
+} from "./ui/index.ts";
 
 const TaskStatusSchema = StringEnum(["pending", "active", "completed"] as const);
 const TaskCreateParameters = Type.Object(
@@ -121,6 +126,7 @@ export default function tasksExtension(pi: ExtensionAPI): void {
       const activeStore = currentStore(store);
       return finishMutation(activeStore, widget, ctx, () => activeStore.create(params.text));
     },
+    renderResult: renderTaskResult,
   });
 
   pi.registerTool({
@@ -136,6 +142,7 @@ export default function tasksExtension(pi: ExtensionAPI): void {
       const activeStore = currentStore(store);
       return finishMutation(activeStore, widget, ctx, () => activeStore.update(params.id, changes));
     },
+    renderResult: renderTaskResult,
   });
 
   pi.registerTool({
@@ -147,6 +154,7 @@ export default function tasksExtension(pi: ExtensionAPI): void {
     async execute(_toolCallId, _params, _signal, _onUpdate, _ctx: ExtensionContext) {
       return serialized(currentStore(store).list());
     },
+    renderResult: renderTaskListResult,
   });
 
   pi.registerTool({
@@ -158,5 +166,6 @@ export default function tasksExtension(pi: ExtensionAPI): void {
     async execute(_toolCallId, params: TaskGetRequest, _signal, _onUpdate, _ctx: ExtensionContext) {
       return serialized(currentStore(store).get(params.id));
     },
+    renderResult: renderTaskResult,
   });
 }

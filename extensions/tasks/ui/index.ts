@@ -1,5 +1,10 @@
-import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
+import type {
+  AgentToolResult,
+  ExtensionContext,
+  Theme,
+  ToolRenderResultOptions,
+} from "@earendil-works/pi-coding-agent";
+import { Text, truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
 
 import { TaskStore, type Task, type TaskStatus } from "../state/index.ts";
 
@@ -25,6 +30,60 @@ export async function handleWriteFailure(
     "warning",
   );
   return "cancel";
+}
+
+function isTask(value: unknown): value is Task {
+  if (value === null || typeof value !== "object") return false;
+  const task = value as Record<string, unknown>;
+  return typeof task.id === "string" &&
+    typeof task.text === "string" &&
+    (task.status === "pending" || task.status === "active" || task.status === "completed");
+}
+
+function taskLine(task: Task, theme: WidgetTheme): string {
+  const glyph =
+    task.status === "completed" ? theme.fg("success", "✓") :
+    task.status === "active" ? theme.fg("accent", "▪") :
+    theme.fg("muted", "▫");
+  const [firstLine, ...rest] = task.text.split("\n");
+  return `${glyph} #${task.id} ${firstLine!.replaceAll("\t", "  ")}${rest.length > 0 ? "…" : ""}`;
+}
+
+function fallbackText(result: AgentToolResult<unknown>): Component {
+  const text = result.content
+    .filter((item): item is { type: "text"; text: string } => item.type === "text")
+    .map((item) => item.text)
+    .join("\n");
+  return new Text(text || "(no output)", 0, 0);
+}
+
+export function renderTaskResult(
+  result: AgentToolResult<Task>,
+  _options: ToolRenderResultOptions,
+  theme: Theme,
+): Component {
+  if (!isTask(result.details)) return fallbackText(result);
+  return new Text(taskLine(result.details, theme), 0, 0);
+}
+
+export function renderTaskListResult(
+  result: AgentToolResult<readonly Task[]>,
+  options: ToolRenderResultOptions,
+  theme: Theme,
+): Component {
+  const details: unknown = result.details;
+  if (!Array.isArray(details) || !details.every(isTask)) return fallbackText(result);
+  const tasks: readonly Task[] = details;
+
+  const counts: Record<TaskStatus, number> = { pending: 0, active: 0, completed: 0 };
+  for (const task of tasks) counts[task.status] += 1;
+  const summary = `${tasks.length} task${tasks.length === 1 ? "" : "s"} (${counts.completed} completed, ${counts.active} active, ${counts.pending} pending)`;
+  if (!options.expanded || tasks.length === 0) return new Text(summary, 0, 0);
+  return new Text(
+    [summary, ...tasks.map((task) => `  ${taskLine(task, theme)}`)].join("\n"),
+    0,
+    0,
+  );
 }
 
 export function renderTaskWidget(
