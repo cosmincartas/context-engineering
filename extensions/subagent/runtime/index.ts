@@ -953,7 +953,9 @@ function usageFrom(value: unknown): SubagentUsage | undefined {
   const outputTokens = numberOrZero(usage.output);
   const contextTokens = typeof usage.contextTokens === "number" && Number.isFinite(usage.contextTokens)
     ? usage.contextTokens
-    : inputTokens + numberOrZero(usage.cacheRead) + numberOrZero(usage.cacheWrite);
+    : typeof usage.totalTokens === "number" && Number.isFinite(usage.totalTokens)
+      ? usage.totalTokens
+      : inputTokens + numberOrZero(usage.cacheRead) + numberOrZero(usage.cacheWrite);
   return { inputTokens, outputTokens, contextTokens };
 }
 
@@ -966,7 +968,7 @@ function refreshAttemptUsage(attempt: MutableAttempt, contextTokens: number): vo
   attempt.usage = {
     inputTokens: attempt.committedUsage.inputTokens + pending.inputTokens,
     outputTokens: attempt.committedUsage.outputTokens + pending.outputTokens,
-    contextTokens,
+    contextTokens: contextTokens || attempt.usage.contextTokens,
   };
 }
 

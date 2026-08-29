@@ -457,6 +457,34 @@ test("publishes lifecycle snapshots with cumulative telemetry and immutable stat
   }
 });
 
+test("keeps context stable across zero streaming usage and uses total tokens", async () => {
+  const sessionRoot = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-context-stability-"));
+  const contexts: number[] = [];
+  try {
+    const result = await withScenario("context-stability", () =>
+      executeRuntime(
+        "run-context-stability",
+        { agent: "scout", title: "context stability", task: "use a tool" },
+        bundledAgents,
+        makeContext(),
+        sessionRoot,
+        undefined,
+        {
+          onMonitorEvent: (event) => {
+            const usage = event.run.run.attempts[0]?.usage;
+            if (usage?.inputTokens) contexts.push(usage.contextTokens);
+          },
+        },
+      ),
+    );
+
+    assert.deepEqual(contexts, contexts.map(() => 110));
+    assert.equal(result.details.attempts[0].usage.contextTokens, 110);
+  } finally {
+    await rm(sessionRoot, { recursive: true, force: true });
+  }
+});
+
 test("totals input and output tokens across retry attempts", async () => {
   const sessionRoot = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-telemetry-retry-"));
   try {
@@ -1078,6 +1106,8 @@ const record = { scenario, argv, cwd: process.cwd(), pid: process.pid, attemptNu
 fs.writeFileSync(recordFile, JSON.stringify(record));
 const usage = scenario === "telemetry"
   ? { input: 12, output: 7, cacheRead: 3, cacheWrite: 1, contextTokens: 40, totalTokens: 23, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }
+  : scenario === "context-stability"
+    ? { input: 100, output: 10, cacheRead: 0, cacheWrite: 0, totalTokens: 110, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }
   : scenario === "telemetry-retry"
     ? { input: attemptNumber === 1 ? 11 : 22, output: attemptNumber === 1 ? 3 : 5, cacheRead: 0, cacheWrite: 0, contextTokens: attemptNumber === 1 ? 31 : 62, totalTokens: attemptNumber === 1 ? 14 : 27, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }
     : scenario === "telemetry-retry-no-usage"
@@ -1167,6 +1197,10 @@ if (scenario === "late-session") {
   emit("{not valid json");
 } else if (scenario === "retry-abnormal" && attemptNumber === 1) {
   process.kill(process.pid, "SIGTERM");
+} else if (scenario === "context-stability") {
+  emit({ type: "message_end", message: assistant("tool call", "toolUse") });
+  emit({ type: "message_update", usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0 }, assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: "final" } });
+  emit({ type: "message_end", message: assistant("final output") });
 } else if (scenario === "telemetry") {
   emit({ type: "message_update", usage: { ...usage, input: 4, output: 2, contextTokens: 18 }, assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: "first delta" } });
   emit({ type: "message_update", usage, assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: "second delta" } });
