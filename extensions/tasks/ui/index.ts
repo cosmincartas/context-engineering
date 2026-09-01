@@ -117,13 +117,10 @@ export function renderTaskWidget(
       color = "muted";
     }
 
-    const prefix = `  ${theme.fg(color, glyph)} #${task.id} `;
-    const [firstLine, ...continuationLines] = task.text.split("\n");
-    lines.push(`${prefix}${firstLine!.replaceAll("\t", "  ")}`);
-    const continuationPrefix = " ".repeat(visibleWidth(prefix));
-    for (const line of continuationLines) {
-      lines.push(`${continuationPrefix}${line.replaceAll("\t", "  ")}`);
-    }
+    const [firstLine, ...rest] = task.text.split("\n");
+    lines.push(
+      `  ${theme.fg(color, glyph)} #${task.id} ${firstLine!.replaceAll("\t", "  ")}${rest.length > 0 ? "…" : ""}`,
+    );
   }
 
   return lines.map((line) =>

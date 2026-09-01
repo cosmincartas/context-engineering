@@ -42,9 +42,9 @@ test("static task widget shows every status, identifier, text, summary, and unsa
   assert.equal(savedLines[0].includes("[unsaved]"), false);
 });
 
-test("static task widget renders multiline text with aligned continuation lines and safe tabs", () => {
+test("static task widget renders only the first line of multiline text with safe tabs", () => {
   const lines = renderTaskWidget(
-    [{ id: "7", text: "Role:\n\tWorker", status: "pending" }],
+    [{ id: "7", text: "Role:\tWorker\nDetails here", status: "pending" }],
     false,
     false,
     0,
@@ -52,7 +52,7 @@ test("static task widget renders multiline text with aligned continuation lines 
     100,
   );
 
-  assert.deepEqual(lines.slice(1), ["  ▫ #7 Role:", "         Worker"]);
+  assert.deepEqual(lines.slice(1), ["  ▫ #7 Role:  Worker…"]);
 });
 
 test("static task widget truncates every line to the supplied width", () => {
