@@ -14,7 +14,6 @@ Plan one small change in a single pass: align the understanding, draft the plan,
 Use this skill only when every criterion holds:
 
 - The request covers one deliverable that can ship independently.
-- The work fits five tasks or fewer.
 - The work changes no public contract, data format, or security behavior.
 - No design decision with realistic alternatives is open.
 
@@ -53,12 +52,11 @@ If a criterion fails, run the escalation step. Use `sdlc` for paired delivery wo
 
 Draft the complete plan in conversation before you present plan content. Present no partial task drafts. Ask only factual questions that block drafting.
 
-- Write five tasks or fewer. Give each task a stable `Task N` identifier and exactly one independently verifiable outcome.
+- Give each task a stable `Task N` identifier and exactly one independently verifiable outcome.
 - Give each task one `file:symbol` entry point: a current symbol, or one file path when the symbol does not exist yet. Tell implementers to trace downstream from it; do not freeze a downstream file map.
 - Declare exact task identifiers under `Depends on:` or `none`. Order the tasks so the project builds and its tests pass after every completed task.
 - For every production-behavior task, specify the TDD cycle: the test and expected failure for RED, the minimum behavior for GREEN, and the allowed cleanup for REFACTOR. For a non-behavior task, state why TDD does not apply.
 - Cover every acceptance criterion on at least one task. Do not invent behavior.
-- If the complete draft needs more than five tasks, return to the escalation step.
 
 ## Step 3 — Validate
 
@@ -74,7 +72,7 @@ Before you report the plan as validated, make sure that:
 
 - The user confirmed the understanding, the scope, and the acceptance criteria.
 - Every entry criterion holds.
-- The plan has five tasks or fewer, and each task has one entry point and one observable verification.
+- Each task has one entry point and one observable verification.
 - Every acceptance criterion appears on at least one task.
 - Every production-behavior task states its RED, GREEN, and REFACTOR steps.
 - The artifact has `status: validated`.
