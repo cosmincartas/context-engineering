@@ -1,6 +1,6 @@
 ---
 name: quickie
-description: Use when the user wants one small and clear change planned in a single session, without a PRD or a design specification. Produces one validated implementation plan. Do not use when the scope is unclear, when a public contract changes, or when a design decision is open (use sdlc).
+description: Use when the user wants one small and clear change planned in a single session, without a specification. Produces one validated implementation plan. Do not use when the scope is unclear, when a public contract changes, or when a design decision is open (use sdlc).
 ---
 
 # Quickie

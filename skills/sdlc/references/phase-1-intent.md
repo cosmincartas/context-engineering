@@ -10,7 +10,7 @@ Goals, in order: build a common and complete understanding of the subject, then 
 - If the user only wants an explanation or an impact assessment, direct them to `explore`.
 - Capture a proposed solution as intent or an assumption. Do not evaluate alternatives.
 - Do not ask about APIs, schemas, libraries, or architecture unless the user has already stated the answer as a constraint.
-- Do not chase detail-level precision; phase 2's `Q-*` list owns it. Every understanding-level entry must reach user confirmation before the write.
+- Do not chase detail-level precision; phase 2 owns it. Every understanding-level entry must reach user confirmation before the write.
 
 ## Artifact
 

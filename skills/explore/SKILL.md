@@ -42,7 +42,7 @@ Remove optional sections that do not apply. A concept explanation does not need 
 
 ## Boundaries
 
-- Do not create a PRD, design document, or implementation plan.
+- Do not create a specification or implementation plan.
 - Do not modify production code, project configuration, dependencies, or tests.
 - Do not force multiple options when one factual answer is sufficient.
 - Do not present illustrative code as repository-compatible or tested unless you verified it.

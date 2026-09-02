@@ -7,7 +7,7 @@ Model-agnostic skills turn an initial development prompt into reusable context, 
 | Intent | Skill | Output |
 |---|---|---|
 | Understand a concept, compare technologies, inspect implementation impact, or see examples | `explore` | Chat response or optional technical exploration brief |
-| Plan delivery work, from scope isolation to an implementation plan, or resume a planning topic | `sdlc` | Validated intent, PRD, design specification, and implementation plan |
+| Plan delivery work, from scope isolation to an implementation plan, or resume a planning topic | `sdlc` | Validated intent, specification, and implementation plan |
 | Plan one small and clear change in a single session | `quickie` | Validated quick plan: understanding, scope, acceptance criteria, and tasks |
 
 The delivery pipeline lives in one skill:
@@ -49,8 +49,7 @@ One topic is one folder: `docs/agentic-engineering/<subject>/`.
 | Technical exploration, when requested | `docs/agentic-engineering/explorations/` | Optional draft → validated |
 | Quick plan | `quickie/<YYYY-MM-DD>-<subject>.md` | Draft → validated; no upstream hash |
 | Intent | `<subject>/intent.md` | Draft checkpoints → validated |
-| PRD | `<subject>/prd.md` | Draft checkpoints → validated |
-| Design specification | `<subject>/design.md` | Draft checkpoints → validated |
+| Specification | `<subject>/spec.md` | Draft checkpoints → validated |
 | Implementation plan | `<subject>/plan.md` | Draft → validated; task status and evidence during external execution |
 
 Each `sdlc` artifact records the SHA-256 hash of its exact upstream file, so a change to a validated artifact marks everything downstream as stale. Artifacts are not committed without explicit user consent. Ignored artifacts resume only in the current working copy; commit them when recovery across machines matters.

@@ -1,19 +1,45 @@
 ---
 schema_version: 1
-artifact: design
+artifact: spec
 subject: "{{subject}}"
 status: draft
-prd: "prd.md"
-prd_sha256: "{{PRD content hash}}"
+intent: "intent.md"
+intent_sha256: "{{intent content hash}}"
 repository_baseline: "{{commit or unavailable}}"
 language: "{{repository language}}"
 created: "{{YYYY-MM-DD}}"
 updated: "{{YYYY-MM-DD}}"
 ---
 
-# {{Subject}} Design Specification
+# {{Subject}} Specification
 
-## 1. Architecture
+## 1. User Interface
+
+<!-- Omit this section when the slice has no user-facing surface. -->
+
+### 1.1 `UI-1` — {{screen, widget, or dialog}}
+
+```text
+{{text mock}}
+```
+
+- **States:** {{one line per state: empty, loading, error, narrow, or omit.}}
+- **Inputs:** {{key or action → effect}}
+
+## 2. Functional Requirements
+
+- **FR-1** — The system must {{one checkable behavior}}.
+  - UI: {{UI-* entry, or omit}}
+  - Verification: {{observable action and expected result}}
+  - Source: {{intent, repository evidence, user statement, assumption, or delegation}}
+
+## 3. Non-Functional Requirements
+
+- **NFR-1** ({{category}}) — The system must {{measurable limit or binary condition}}.
+  - Verification: {{observable check}}
+  - Source: {{source}}
+
+## 4. Architecture
 
 ```mermaid
 {{Approved HLD Mermaid diagram; components named by the interface they implement or the functions they own}}
@@ -31,9 +57,9 @@ updated: "{{YYYY-MM-DD}}"
 
 - {{Approved HLD assumption, or omit.}}
 
-## 2. Models
+## 5. Models
 
-### 2.1 `{{TypeName}}`
+### 5.1 `{{TypeName}}`
 
 ```{{lang}}
 {{type or record declaration with typed fields}}
@@ -41,9 +67,9 @@ updated: "{{YYYY-MM-DD}}"
 
 - {{Invariant the type cannot express, or omit.}}
 
-## 3. Interfaces
+## 6. Interfaces
 
-### 3.1 `{{InterfaceName}}`
+### 6.1 `{{InterfaceName}}`
 
 ```{{lang}}
 {{interface, protocol, trait, or abstract class with member signatures}}
@@ -51,9 +77,9 @@ updated: "{{YYYY-MM-DD}}"
 
 - **Not responsible for:** {{one line}}
 
-## 4. Functions
+## 7. Functions
 
-### 4.1 `{{owner: module, class, or component}}`
+### 7.1 `{{owner: module, class, or component}}`
 
 ```{{lang}}
 {{implementation-shaped class, module, or component skeleton; preserve framework metadata and dependency wiring; replace executable logic with ...}}
@@ -61,9 +87,9 @@ updated: "{{YYYY-MM-DD}}"
 
 - {{Each method's effect and error behavior.}}
 
-## 5. Contracts
+## 8. Contracts
 
-### 5.1 `{{contract name}}`
+### 8.1 `{{contract name}}`
 
 - **Version:** {{version}}
 - **Writer:** {{one owner}}
@@ -75,22 +101,22 @@ updated: "{{YYYY-MM-DD}}"
 
 - {{Rule that is always true.}}
 
-## 6. Behavior
+## 9. Behavior
 
-### 6.1 {{Flow or state machine}}
+### 9.1 {{Flow or state machine}}
 
 - **Condition:** {{Precondition.}}
 - **Steps:** {{Ordered calls to designed functions. State write order and interruption recovery when related persistent writes exist.}}
 - **Result:** {{Postcondition.}}
 
-## 7. Failure Model
+## 10. Failure Model
 
 - **F-1** — {{Relevant failure}}
   - Detector: {{detector}}
   - Response: {{designed response}}
   - Verification: {{observable check}}
 
-## 8. Traceability
+## 11. Traceability
 
-- **FR-1** → {{section numbers or element names}}
+- **FR-1** → {{UI-* entry when one exists, section numbers, or element names}}
 - **NFR-1** → {{section numbers or element names}}

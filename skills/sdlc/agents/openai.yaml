@@ -1,6 +1,6 @@
 interface:
   display_name: "SDLC"
-  short_description: "Pair on delivery work through context, requirements, design, and planning"
+  short_description: "Pair on delivery work through intent, design, and planning"
   default_prompt: "Use $sdlc to pair on this work end to end."
 
 policy:

@@ -3,10 +3,8 @@ schema_version: 1
 artifact: implementation-plan
 subject: "{{subject}}"
 status: draft
-design: "design.md"
-design_sha256: "{{design content hash}}"
-prd: "prd.md"
-prd_sha256: "{{PRD content hash}}"
+spec: "spec.md"
+spec_sha256: "{{spec content hash}}"
 repository_baseline: "{{commit or unavailable}}"
 working_tree: "{{clean or summary of existing changes}}"
 created: "{{YYYY-MM-DD}}"
@@ -15,7 +13,7 @@ updated: "{{YYYY-MM-DD}}"
 
 # {{Subject}} Implementation Plan
 
-Before execution, verify `design_sha256`, `prd_sha256`, and the upstream hashes against their files; stop on a mismatch. Execution state belongs to the implementer.
+Before execution, verify `spec_sha256` and its upstream `intent_sha256` against their files; stop on a mismatch. Execution state belongs to the implementer.
 
 ## Repository Findings
 
