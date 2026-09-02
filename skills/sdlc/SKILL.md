@@ -11,7 +11,7 @@ Take one topic through four phases. Each phase produces one validated artifact i
 
 | Phase | Name | Artifact | Reference |
 |---|---|---|---|
-| 1 | Context | `context-brief.md` | `references/phase-1-context.md` |
+| 1 | Intent | `intent.md` | `references/phase-1-intent.md` |
 | 2 | Requirements | `prd.md` | `references/phase-2-requirements.md` |
 | 3 | Design | `design.md` | `references/phase-3-design.md` |
 | 4 | Plan | `plan.md` | `references/phase-4-plan.md` |
@@ -39,14 +39,14 @@ A topic is one folder: `docs/agentic-engineering/<subject>/`. Use a short kebab-
 
 ## Phase detection
 
-1. The pipeline order is: `context-brief.md`, `prd.md`, `design.md`, `plan.md`.
+1. The pipeline order is: `intent.md`, `prd.md`, `design.md`, `plan.md`.
 2. The active phase is the first artifact that is missing or does not have `status: validated`.
 3. Never start phase N+1 while the phase N artifact is not validated.
 4. If the user asks for a later phase directly ("write me a PRD"), route through the missing earlier phases. Move quickly when the answers are clear, but do not skip a phase or its gates.
 
 ## Staleness chain
 
-Each artifact records the SHA-256 hash of the exact upstream file: `prd.md` records `context_sha256`, `design.md` records `prd_sha256`, and `plan.md` records both `design_sha256` and `prd_sha256`.
+Each artifact records the SHA-256 hash of the exact upstream file: `prd.md` records `intent_sha256`, `design.md` records `prd_sha256`, and `plan.md` records both `design_sha256` and `prd_sha256`.
 
 - Before phase work and again before validation, compare each recorded hash with the current file. On a mismatch, stop, show the difference, and ask the user how to proceed.
 - A change to a validated artifact makes every downstream artifact stale. Say this to the user before you revise a validated artifact. Never silently overwrite one.

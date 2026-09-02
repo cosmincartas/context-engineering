@@ -1,4 +1,4 @@
-# Phase 1 — Context
+# Phase 1 — Intent
 
 Turn an initial development prompt into a shared, user-validated understanding of what the request means, not how to implement it. Required first phase for every topic.
 
@@ -14,7 +14,7 @@ Goals, in order: build a common and complete understanding of the subject, then 
 
 ## Artifact
 
-`docs/agentic-engineering/<subject>/context-brief.md` from `assets/context-brief-template.md`, written once at the end of the phase.
+`docs/agentic-engineering/<subject>/intent.md` from `assets/intent-template.md`, written once at the end of the phase.
 
 ## Workflow
 
@@ -23,7 +23,7 @@ Goals, in order: build a common and complete understanding of the subject, then 
 3. Ask the questions that close the gaps. Apply the challenge duty to the stated problem. Do not ask the user to confirm a synthesis you have not yet presented.
 4. Synthesize Confirmed Understanding from confirmed entries only. Present it per the pairing rhythm; present surviving inferences as one list for confirmation (rule 16).
 5. Draft Scope and run the **slicing gate** as one step; the gate is the scope review.
-6. Write `context-brief.md` with `status: draft` — the first and only write. Present the recap and ask the user to validate. Apply changes to the file until approved, then set `status: validated`.
+6. Write `intent.md` with `status: draft` — the first and only write. Present the recap and ask the user to validate. Apply changes to the file until approved, then set `status: validated`.
 
 ### Slicing gate
 

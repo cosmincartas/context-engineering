@@ -1,6 +1,6 @@
 ---
 schema_version: 1
-artifact: context-brief
+artifact: intent
 subject: "{{subject}}"
 status: draft
 repository_baseline: "{{commit or unavailable}}"
@@ -9,7 +9,7 @@ created: "{{YYYY-MM-DD}}"
 updated: "{{YYYY-MM-DD}}"
 ---
 
-# {{Subject}} Context Brief
+# {{Subject}} Intent
 
 ## Scope
 

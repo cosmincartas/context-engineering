@@ -1,12 +1,12 @@
 # Phase 2 — Requirements
 
-Turn the validated context brief into a validated Product Requirements Document. This phase runs even when the user already knows what they want.
+Turn the validated intent into a validated Product Requirements Document. This phase runs even when the user already knows what they want.
 
 ## Input contract
 
-1. Require `docs/agentic-engineering/<subject>/context-brief.md` with `artifact: context-brief` and `status: validated`. If it is a draft, return to phase 1.
-2. Preserve the brief's Scope and Confirmed Understanding. Do not silently reopen settled context.
-3. Re-inspect repository facts that requirements depend on. If material repository drift contradicts the brief, show the evidence and ask before you continue.
+1. Require `docs/agentic-engineering/<subject>/intent.md` with `artifact: intent` and `status: validated`. If it is a draft, return to phase 1.
+2. Preserve the intent's Scope and Confirmed Understanding. Do not silently reopen settled context.
+3. Re-inspect repository facts that requirements depend on. If material repository drift contradicts the intent, show the evidence and ask before you continue.
 
 An `explore` artifact is supporting evidence, not approval of scope or a decision to build.
 
@@ -48,14 +48,14 @@ Run this process when a parked requirement changes scope.
 
 1. Announce the scope revision.
 2. Follow the staleness process and warn about downstream staleness.
-3. Update the brief's Scope and Parked sections. Send every parked requirement to the context brief's Parked section.
-4. Revalidate the revised context brief.
-5. Refresh the PRD context hash before continuing.
+3. Update the intent's Scope and Parked sections. Send every parked requirement to the intent's Parked section.
+4. Revalidate the revised intent.
+5. Refresh the PRD intent hash before continuing.
 
 ### NFR rules
 
 Consider candidates from every category: performance, capacity, security, privacy, availability and recovery, compliance, accessibility, and observability.
-Infer candidates from the validated brief, user statements, and repository evidence.
+Infer candidates from the validated intent, user statements, and repository evidence.
 Never drop a legal, security, privacy, accessibility, or data-loss obligation.
 
 ### Requirements gate

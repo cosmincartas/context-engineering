@@ -3,8 +3,8 @@ schema_version: 1
 artifact: prd
 subject: "{{subject}}"
 status: draft
-context: "context-brief.md"
-context_sha256: "{{context brief content hash}}"
+intent: "intent.md"
+intent_sha256: "{{intent content hash}}"
 repository_baseline: "{{commit or unavailable}}"
 created: "{{YYYY-MM-DD}}"
 updated: "{{YYYY-MM-DD}}"
@@ -24,7 +24,7 @@ updated: "{{YYYY-MM-DD}}"
 
 - **FR-1** — The system must {{one checkable behavior}}.
   - Verification: {{observable action and expected result}}
-  - Source: {{brief, repository evidence, user statement, or assumption}}
+  - Source: {{intent, repository evidence, user statement, or assumption}}
 
 ## 4. Non-Functional Requirements
 

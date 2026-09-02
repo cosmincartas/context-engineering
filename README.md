@@ -7,13 +7,13 @@ Model-agnostic skills turn an initial development prompt into reusable context, 
 | Intent | Skill | Output |
 |---|---|---|
 | Understand a concept, compare technologies, inspect implementation impact, or see examples | `explore` | Chat response or optional technical exploration brief |
-| Plan delivery work, from scope isolation to an implementation plan, or resume a planning topic | `sdlc` | Validated context brief, PRD, design specification, and implementation plan |
+| Plan delivery work, from scope isolation to an implementation plan, or resume a planning topic | `sdlc` | Validated intent, PRD, design specification, and implementation plan |
 | Plan one small and clear change in a single session | `quickie` | Validated quick plan: understanding, scope, acceptance criteria, and tasks |
 
 The delivery pipeline lives in one skill:
 
 ```text
-explore (optional) → sdlc: context → requirements → design → plan
+explore (optional) → sdlc: intent → requirements → design → plan
 explore (optional) → quickie: align → plan
 ```
 
@@ -48,7 +48,7 @@ One topic is one folder: `docs/agentic-engineering/<subject>/`.
 |---|---|---|
 | Technical exploration, when requested | `docs/agentic-engineering/explorations/` | Optional draft → validated |
 | Quick plan | `quickie/<YYYY-MM-DD>-<subject>.md` | Draft → validated; no upstream hash |
-| Context brief | `<subject>/context-brief.md` | Draft checkpoints → validated |
+| Intent | `<subject>/intent.md` | Draft checkpoints → validated |
 | PRD | `<subject>/prd.md` | Draft checkpoints → validated |
 | Design specification | `<subject>/design.md` | Draft checkpoints → validated |
 | Implementation plan | `<subject>/plan.md` | Draft → validated; task status and evidence during external execution |
