@@ -5,7 +5,7 @@ Turn the validated intent into a validated specification: requirements and techn
 ## Input contract
 
 1. Require `docs/agentic-engineering/<subject>/intent.md` with `artifact: intent` and `status: validated`. If it is a draft, return to phase 1.
-2. Preserve the intent's Scope and Confirmed Understanding. Do not silently reopen settled context.
+2. Preserve the intent's Problem, Proposed outcome, Affected users, and Constraints. Do not silently reopen settled context. Treat Open Questions as input to the scope stop.
 3. Re-inspect repository facts that requirements and design depend on: implementation language, existing types and interfaces, and naming conventions. If material repository drift contradicts the intent, show the evidence and ask before you continue.
 
 An `explore` artifact is supporting evidence, not approval of scope or a decision to build.
@@ -22,21 +22,32 @@ The spec must cover one deliverable that can ship independently.
 
 Each stop presents one section. Never combine two stops into one presentation.
 
-1. Run the **UI stop** when the slice has a user-facing surface. Otherwise omit the User Interface section.
-2. Draft Functional Requirements with verifications in conversation. Apply the FR rules, then run the **FR stop**.
-3. Draft Non-Functional Requirements in conversation. Apply the NFR rules, then run the **NFR stop**.
-4. Run the **HLD step**.
-5. Run the **mode selection gate** after HLD approval.
-6. Run the selected mode workflow.
-7. Run the self-checks.
-8. Write `spec.md` with `status: draft` — the first and only write. Present a recap per pairing rule 18 and ask the user to validate. Apply changes to the file until approved, then set `status: validated`.
+1. Run the **scope stop**.
+2. Run the **UI stop** when the slice has a user-facing surface. Otherwise omit the User Interface section.
+3. Draft Functional Requirements with verifications in conversation. Apply the FR rules, then run the **FR stop**.
+4. Draft Non-Functional Requirements in conversation. Apply the NFR rules, then run the **NFR stop**.
+5. Run the **HLD step**.
+6. Run the **mode selection gate** after HLD approval.
+7. Run the selected mode workflow.
+8. Run the self-checks.
+9. Write `spec.md` with `status: draft` — the first and only write. Present a recap per pairing rule 18 and ask the user to validate. Apply changes to the file until approved, then set `status: validated`.
+
+### Scope stop
+
+1. Infer the main flow from the intent in at most five lines: actor, trigger, and outcome.
+2. Collect every point where the flow can widen: variants such as one provider or several, optional behaviors, extra actors, extra surfaces, and Open Questions that change scope.
+3. Ask one batch per subject per rule 4. For each point, offer the narrow option and the wider options, and recommend one.
+4. Record each declined wider option under Parked, one line. Record each kept answer as a scope fact for the FR draft.
+5. Repeat steps 2 to 4 until the flow has one independently verifiable outcome and no widening point is unanswered.
+6. Present the narrowed flow and the Parked list. Ask the user to approve.
 
 ### UI stop
 
-1. Draft one `UI-*` entry for each screen, widget, or dialog in scope. Each entry has a text mock in a fenced block, its states one line each, and its input map.
-2. Present the entries. Ask the user to accept, edit, or counter each one.
-3. Probe the empty, loading, error, and narrow states the mock does not show.
-4. Apply the answers before you draft requirements.
+1. Draft one `UI-*` entry for each screen, widget, or dialog in scope. Each entry has an HTML mock, its states one line each, and its input map.
+2. Write every mock into one static file, `docs/agentic-engineering/<subject>/ui.html`. Give each entry one section anchored by its identifier and one block per state. Use inline CSS only: no scripts, no external resources. `ui.html` is a supporting file of the spec, not a status-bearing artifact; edit it in place during this stop.
+3. Report the file path so the user can open it in a browser. Present each entry's states and input map in chat. Ask the user to accept, edit, or counter each entry.
+4. Probe the empty, loading, error, and narrow states the mock does not show.
+5. Apply the answers to `ui.html` and the entries before you draft requirements.
 
 ### FR rules
 
@@ -44,17 +55,7 @@ Define a distinct behavior by its actor, trigger, observable outcome, or indepen
 Give each distinct behavior one FR. Keep one checkable behavior per FR. Never merge distinct behaviors.
 Fold only edge cases, variants, and failure paths of the same behavior into its Verification field. Never hide a separate behavior in Verification.
 When a `UI-*` entry exists, cite it in each FR that renders or reacts to it.
-Park behaviors that leave scope before the FR stop.
-
-### Scope revision
-
-Run this process when a parked requirement changes scope.
-
-1. Announce the scope revision.
-2. Follow the staleness process and warn about downstream staleness.
-3. Update the intent's Scope and Parked sections. Send every parked requirement to the intent's Parked section.
-4. Revalidate the revised intent.
-5. Refresh the spec intent hash before continuing.
+Record a behavior that leaves scope under Parked before the FR stop.
 
 ### FR stop
 
@@ -65,7 +66,7 @@ Confirm the spec invariant: one deliverable that can ship independently.
 Challenge the requirements:
 
 - Collect every requirement you inferred rather than received into one list with sources, and confirm it in a single round per rule 16.
-- Name each in-scope item of the intent that has no FR.
+- Name each kept scope answer that has no FR.
 - Where a requirement can be strict or lenient, present both as options and recommend one.
 - Name requirement conflicts and overlaps instead of resolving them silently.
 
@@ -142,7 +143,7 @@ Present Behavior, Failure Model, and Traceability as one batch per section. List
 ## Section rules
 
 - Use stable `UI-*`, `FR-*`, and `NFR-*` identifiers. One checkable behavior per entry. Requirements use "must". Sections 1–3 are ID-keyed lists, never tables.
-- **User Interface.** One entry per screen, widget, or dialog: a text mock in a fenced block, its states, and its input map. Omit the section when the slice has no user-facing surface.
+- **User Interface.** One entry per screen, widget, or dialog: a link to its anchor in `ui.html`, its states, and its input map. Omit the section and the file when the slice has no user-facing surface.
 - Each NFR has a number, limit, or binary check. Do not disguise a feature as a quality requirement. Consider each category: performance, capacity, security, privacy, availability and recovery, compliance, accessibility, observability. Add an NFR or omit the category; do not write "not applicable" entries.
 - Each Verification field states an observable action and result, never "code written".
 - A requirement that relies on an unverified assumption names it in Source. A choice the user delegated with `you decide` names the delegation in Source.
@@ -155,15 +156,16 @@ Present Behavior, Failure Model, and Traceability as one batch per section. List
 - **Behavior.** Important flows and state transitions, naming the functions they call in order. Write ordering and sudden-stop recovery only where related persistent writes exist.
 - **Failure Model.** Failures relevant to this system, with detector, response, and observable verification. Do not invent optional dependencies, corruption paths, or persistence failures for systems that do not have them.
 - **Traceability.** Every `FR-*` and `NFR-*` maps to design elements, and to its `UI-*` entry when one exists. A design element with no requirement or existing repository constraint is scope creep.
+- **Parked.** One line per declined widening option or behavior that left scope. Each is a candidate subject for a future topic.
 - Consider security (authorization, malicious input), privacy (personal data, retention, deletion), and operability (monitoring, configuration, deployment). Add a contract, failure entry, or behavior where one applies; do not write "not applicable" entries.
 
 ## Self-checks
 
 Before validation, make sure that:
 
-- Every in-scope item of the intent has at least one FR, and the spec covers one deliverable that can ship independently.
+- Every kept scope answer has at least one FR, every declined option appears in Parked, and the spec covers one deliverable that can ship independently.
 - Each distinct functional behavior has its own FR, defined by actor, trigger, observable outcome, or independent acceptance decision. No FR hides a separate behavior in Verification.
-- No FR cites a `UI-*` entry that does not exist. When the slice has a user-facing surface, the User Interface section exists and the user reviewed each entry.
+- No FR cites a `UI-*` entry that does not exist. Every `UI-*` entry has an anchor in `ui.html`. When the slice has a user-facing surface, the User Interface section exists and the user reviewed each entry.
 - The NFR list keeps every legal, security, privacy, accessibility, and data-loss obligation.
 - Every FR and NFR has an observable verification and a source, and every NFR is measurable or binary.
 - Every NFR numeric limit has user or repository provenance.

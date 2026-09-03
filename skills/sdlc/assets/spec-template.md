@@ -19,10 +19,7 @@ updated: "{{YYYY-MM-DD}}"
 
 ### 1.1 `UI-1` — {{screen, widget, or dialog}}
 
-```text
-{{text mock}}
-```
-
+- **Mock:** [ui.html#UI-1](ui.html#UI-1)
 - **States:** {{one line per state: empty, loading, error, narrow, or omit.}}
 - **Inputs:** {{key or action → effect}}
 
@@ -120,3 +117,7 @@ updated: "{{YYYY-MM-DD}}"
 
 - **FR-1** → {{UI-* entry when one exists, section numbers, or element names}}
 - **NFR-1** → {{section numbers or element names}}
+
+## 12. Parked
+
+- {{Declined widening option or behavior that left scope. One line. A candidate subject for a future topic.}}

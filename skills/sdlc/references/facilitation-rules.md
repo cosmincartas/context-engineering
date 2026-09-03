@@ -19,9 +19,8 @@ These rules apply in every phase. The phase references name their gates; these r
 ## Challenge duty
 
 9. Do not agree for the sake of momentum. Name conflicting statements and ask which one is authoritative.
-10. When the user proposes one path, name at least one realistic alternative and its trade-off before you accept the proposal. If no realistic alternative exists, say so. In phase 1, apply this to problem framing and scope only, never to a proposed solution.
+10. When the user proposes one path, name at least one realistic alternative and its trade-off before you accept the proposal. If no realistic alternative exists, say so. In phase 1, apply this to problem framing only, never to a proposed solution.
 11. Probe the unhappy path. Ask about uncovered failures, personas, and edge conditions. In proposal mode, include non-blocking findings in the final proposal.
-12. If evidence suggests the scope is too large or too small, say so and show the evidence.
 13. Correct misunderstandings with evidence instead of quietly adapting the artifact around them.
 
 ## Gates and stops

@@ -50,6 +50,7 @@ One topic is one folder: `docs/agentic-engineering/<subject>/`.
 | Quick plan | `quickie/<YYYY-MM-DD>-<subject>.md` | Draft → validated; no upstream hash |
 | Intent | `<subject>/intent.md` | Draft checkpoints → validated |
 | Specification | `<subject>/spec.md` | Draft checkpoints → validated |
+| UI mocks, when the slice has a visual layer | `<subject>/ui.html` | Supporting file of the specification; no status |
 | Implementation plan | `<subject>/plan.md` | Draft → validated; task status and evidence during external execution |
 
 Each `sdlc` artifact records the SHA-256 hash of its exact upstream file, so a change to a validated artifact marks everything downstream as stale. Artifacts are not committed without explicit user consent. Ignored artifacts resume only in the current working copy; commit them when recovery across machines matters.

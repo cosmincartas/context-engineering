@@ -11,20 +11,22 @@ updated: "{{YYYY-MM-DD}}"
 
 # {{Subject}} Intent
 
-## Scope
+## Problem
 
-### In scope
+{{The problem in the user's vocabulary, confirmed by the user.}}
 
-- {{Boundary confirmed by the user or evidence.}}
+## Proposed outcome
 
-### Out of scope
+{{The desired outcome and its success signals in ordinary language, confirmed by the user.}}
 
-- {{Non-goal and reason.}}
+## Affected users
 
-### Parked
+- {{Who is affected and how.}}
 
-- {{Item cut from this slice. One line. A candidate subject for a future topic.}}
+## Constraints
 
-## Confirmed Understanding
+- {{Constraint the user stated or repository evidence shows, with its source.}}
 
-{{Concise restatement of the problem, who is affected, the desired outcome, evidence or greenfield status, and constraints, confirmed by the user.}}
+## Open Questions
+
+- {{Question the user could not resolve or phase 2 owns.}} Consequence: {{what changes with the answer.}}
