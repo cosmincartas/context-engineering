@@ -38,6 +38,10 @@ updated: "{{YYYY-MM-DD}}"
 
 ## 4. Architecture
 
+**Architecture decisions:**
+
+- {{Decision, source, strongest alternative, and trade-off.}}
+
 ```mermaid
 {{Approved HLD Mermaid diagram; components named by the interface they implement or the functions they own}}
 ```

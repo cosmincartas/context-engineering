@@ -7,7 +7,7 @@ description: Use when the user wants to formalize delivery work, create or resum
 
 Write artifacts in ASD-STE100 Simplified Technical English: sentences of at most 20 words (instructions) or 25 (descriptions), active voice, imperative for steps, one meaning for each word, requirements use "must" (never "shall" or "should"). Chat stays in natural conversational language.
 
-Take one topic through three phases. Each phase produces one validated artifact in the topic folder. The pipeline ends with a validated implementation plan; execution belongs to other skills. The pairing rhythm in `references/facilitation-rules.md` applies in phase 1 and in phase 2 before mode selection. Phase 2 reviews the HLD, then uses pair mode or proposal mode. Phase 3 presents the complete plan for validation.
+Take one topic through three phases. Each phase produces one validated artifact in the topic folder. The pipeline ends with a validated implementation plan; execution belongs to other skills. The pairing rhythm in `references/facilitation-rules.md` applies in phase 1 and in phase 2 before mode selection. Phase 2 reviews architecture decisions and their resulting HLD together, then uses pair mode or proposal mode. Phase 3 presents the complete plan for validation.
 
 | Phase | Name | Artifact | Reference |
 |---|---|---|---|

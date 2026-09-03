@@ -26,8 +26,8 @@ Each stop presents one section. Never combine two stops into one presentation.
 2. Run the **UI stop** when the slice has a user-facing surface. Otherwise omit the User Interface section.
 3. Draft Functional Requirements with verifications in conversation. Apply the FR rules, then run the **FR stop**.
 4. Draft Non-Functional Requirements in conversation. Apply the NFR rules, then run the **NFR stop**.
-5. Run the **HLD step**.
-6. Run the **mode selection gate** after HLD approval.
+5. Run the **architecture proposal stop**.
+6. Run the **mode selection gate** after architecture proposal approval.
 7. Run the selected mode workflow.
 8. Run the self-checks.
 9. Write `spec.md` with `status: draft` — the first and only write. Present a recap per pairing rule 18 and ask the user to validate. Apply changes to the file until approved, then set `status: validated`.
@@ -85,16 +85,24 @@ Challenge the requirements:
 - Collect every NFR you inferred and every numeric limit without user or repository provenance into one list with sources, and confirm it in a single round per rule 16.
 - Where an NFR can be strict or lenient, present both as options and recommend one.
 
-### HLD step
+### Architecture proposal stop
 
-1. Propose one simple component diagram as a Mermaid diagram in a ```mermaid block. Add concise component responsibilities, architectural flow, and important assumptions.
-2. Ask the user to accept, edit, or counter the HLD. Do not continue without approval.
-3. Use the approved HLD as the map for every later design element. Preserve it in the final Architecture section.
-4. Return here when a later decision changes the HLD or an element fits no component.
+1. Collect every known decision that can change the HLD.
+2. Include component boundaries, data ownership, integrations, contracts, trust boundaries, deployment, public compatibility, material cost, and irreversible data behavior.
+3. Separate repository constraints, user decisions, reversible defaults, and policy concerns.
+4. Apply the phase 2 Oracle invariant before you propose each consequential decision.
+5. For each user decision, offer two or three realistic options with trade-offs and recommend one.
+6. Draft the recommended decision set and one simple Mermaid component diagram.
+7. Add concise responsibilities, architectural flow, and important assumptions.
+8. Present decisions first, with sources, strongest alternatives, and trade-offs. Present the resulting HLD next, then list concerns.
+9. Ask the user to accept, edit, or counter the complete architecture proposal.
+10. Apply the response to both decisions and HLD. Repeat until the user approves them together.
+11. Use the approved decisions and HLD as the map for every later design element. Preserve both in the Architecture section.
+12. Return here when a later decision changes the HLD or an element fits no component.
 
 ### Mode selection gate
 
-Offer these choices after HLD approval:
+Offer these choices after architecture proposal approval:
 
 - **Pair mode:** Review decisions and complete design elements one at a time.
 - **Proposal mode:** Draft all remaining sections, then present the complete proposal for validation.
@@ -103,17 +111,17 @@ Ask the user to select one mode. Record the selection in the working draft.
 
 ### Pair mode
 
-1. Run the **decision gate**.
+1. Run the **detailed decision gate**.
 2. Run the **pairing loop** over HLD components in dependency order.
 3. Present Behavior, Failure Model, and Traceability as separate derived-section batches.
 
-#### Decision gate
+#### Detailed decision gate
 
-1. Collect every consequential technical choice. Include technology, data model, and integration choices.
+1. Collect every remaining consequential technical choice that does not change the approved architecture.
 2. Present two or three realistic options with trade-offs. Recommend one and ask one subject at a time per rule 4.
-3. Always ask for decisions involving product scope, public compatibility, security policy, material cost, or irreversible data behavior.
+3. Always ask for remaining decisions involving public compatibility, security policy, material cost, or irreversible data behavior.
 4. Apply each decision directly to the design. Return here when a consequential choice appears later.
-5. Return to the HLD step when a decision changes the approved architecture.
+5. Return to the architecture proposal stop when a decision changes the approved architecture.
 
 #### Pairing loop
 
@@ -126,7 +134,7 @@ Use one complete element as the review unit. An element is one model, interface,
 5. Batch a component's minor elements. List inferred entries for confirmation.
 6. Ask for the response through `AskUserQuestion` with accept, counter, and `you decide` as options. Edits arrive through Other. Apply challenge duty once to edits and counters.
 7. Record each agreed element before you continue.
-8. Return to the decision gate when an element needs a consequential decision.
+8. Return to the detailed decision gate when an element needs a consequential decision.
 
 #### Derived sections
 
@@ -134,11 +142,12 @@ Present Behavior, Failure Model, and Traceability as one batch per section. List
 
 ### Proposal mode
 
-1. Collect every consequential choice that is not safely reversible. Include scope, compatibility, security policy, material cost, and irreversible data behavior.
+1. Collect every remaining consequential choice that is not safely reversible and does not change the approved architecture.
 2. Ask one subject at a time per rule 4. Give two or three realistic options, trade-offs, and one recommendation.
-3. Select the remaining reversible technical details. Record each selection, its strongest alternative, and the trade-off.
-4. Complete Models, Interfaces, Functions, Contracts, Behavior, Failure Model, and Traceability without intermediate reviews.
-5. At validation, recap the complete proposal, consequential choices, assumptions, and inferred entries.
+3. Return to the architecture proposal stop when a choice changes the approved architecture.
+4. Select the remaining reversible technical details. Record each selection, its strongest alternative, and the trade-off.
+5. Complete Models, Interfaces, Functions, Contracts, Behavior, Failure Model, and Traceability without intermediate reviews.
+6. At validation, recap the complete proposal, consequential choices, assumptions, and inferred entries.
 
 ## Section rules
 
@@ -148,7 +157,7 @@ Present Behavior, Failure Model, and Traceability as one batch per section. List
 - Each Verification field states an observable action and result, never "code written".
 - A requirement that relies on an unverified assumption names it in Source. A choice the user delegated with `you decide` names the delegation in Source.
 - An unknown the user cannot resolve blocks validation. Record the unknown and its consequence in the recap; do not write a dependent entry as confirmed.
-- **Architecture.** Preserve the approved HLD Mermaid diagram, responsibilities, flow, and assumptions. Name components by their implemented interfaces or owned functions. Use exit codes only for command-line interfaces.
+- **Architecture.** Preserve the approved decisions, HLD Mermaid diagram, responsibilities, flow, and assumptions. Name components by their implemented interfaces or owned functions. Use exit codes only for command-line interfaces.
 - **Models.** Types and records the design introduces or changes, as code. Each field has a type; a constraint that the type cannot express is a one-line invariant under the block.
 - **Interfaces.** Abstractions as code: interface, protocol, trait, or abstract class, with member signatures. One line after the block names what the abstraction is deliberately not responsible for.
 - **Functions.** Show each concrete owner as an implementation-shaped skeleton. Include framework metadata, dependency wiring, and method signatures where relevant. Keep structural bodies that show required wiring. Replace executable logic with `...`. Each method has one line stating its effect and error behavior.
@@ -170,7 +179,9 @@ Before validation, make sure that:
 - Every FR and NFR has an observable verification and a source, and every NFR is measurable or binary.
 - Every NFR numeric limit has user or repository provenance.
 - No unresolved unknown remains.
-- Every stop before the HLD received a user response. The user approved the HLD and selected a mode.
+- Every earlier stop received a user response. The user approved the architecture decisions and their resulting HLD together.
+- Every later decision fits the approved architecture. A decision that changed the HLD returned to the architecture proposal stop.
+- The user selected a mode after architecture proposal approval.
 - In pair mode, every weighty element, component batch, and derived-section batch received a user response.
 - In proposal mode, the user decided every non-reversible choice. No remaining section received a partial review.
 - In proposal mode, the validation recap lists reversible choices, assumptions, and inferred entries.
