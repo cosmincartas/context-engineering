@@ -164,6 +164,18 @@ test("multiple Submit advances with no selections", () => {
   assert.deepEqual(outcomes[0]?.answers[0]?.values, []);
 });
 
+test("keeps a single question compact and bordered", () => {
+  const { component } = makeComponent(questions.slice(0, 1));
+  const lines = component.render(120);
+
+  assert.equal(lines.length, 7);
+  assert.equal(lines[0], "─".repeat(120));
+  assert.equal(lines.at(-1), "─".repeat(120));
+  assert.equal(lines.some((line) => line === ""), false);
+  assert.ok(lines.some((line) => line.includes("Iterative") && line.includes("Deliver a small slice first.")));
+  assert.equal(lines.some((line) => line.includes("Questionnaire")), false);
+});
+
 test("renders grouped tabs, completion markers, labels, and descriptions", () => {
   const { component } = makeComponent();
   const output = component.render(120).join("\n");

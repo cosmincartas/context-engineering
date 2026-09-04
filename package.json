@@ -4,6 +4,12 @@
   "description": "Turn development requests into shared context, validated specifications, and TDD-ready implementation plans.",
   "repository": "https://github.com/cosmincartas/context-engineering",
   "keywords": ["pi-package"],
+  "scripts": {
+    "pi:ask-user-question": "mise exec -- pi -ne -e ./extensions/ask-user-question/index.ts",
+    "pi:skill-toggle": "mise exec -- pi -ne -e ./extensions/skill-toggle/index.ts",
+    "pi:subagent": "mise exec -- pi -ne -e ./extensions/subagent/index.ts",
+    "pi:tasks": "mise exec -- pi -ne -e ./extensions/tasks/index.ts"
+  },
   "peerDependencies": {
     "@earendil-works/pi-agent-core": "*",
     "@earendil-works/pi-ai": "*",

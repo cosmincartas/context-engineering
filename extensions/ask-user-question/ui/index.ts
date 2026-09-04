@@ -239,25 +239,28 @@ export function createQuestionnaireComponent(
     }
 
     addLine(theme.fg("border", "─".repeat(renderWidth)));
-    addPrefixed(" ", styled("accent", "Questionnaire"));
 
-    const tabs = questions.map((question, index) => {
-      const active = state.activeTab === index;
-      const answered = state.answers[index] !== undefined;
-      const header = question.header?.trim() ? question.header : `Q${index + 1}`;
-      return `${active ? ">" : " "} [${answered ? "✓" : "·"}] ${escapeControls(header)}`;
-    });
-    const finalActive = state.activeTab === questions.length;
-    tabs.push(`${finalActive ? ">" : " "} [ ] Confirm`);
-    addLine(styled("muted", `← ${tabs.join("  ")} →`));
-    addLine("");
+    if (questions.length > 1) {
+      const tabs = questions.map((question, index) => {
+        const active = state.activeTab === index;
+        const answered = state.answers[index] !== undefined;
+        const header = question.header?.trim() ? question.header : `Q${index + 1}`;
+        return `${active ? ">" : " "} [${answered ? "✓" : "·"}] ${escapeControls(header)}`;
+      });
+      const finalActive = state.activeTab === questions.length;
+      tabs.push(`${finalActive ? ">" : " "} [ ] Confirm`);
+      addLine(styled("muted", `← ${tabs.join("  ")} →`));
+    }
 
     if (state.activeTab < questions.length) {
       const question = state.questions[state.activeTab];
-      addPrefixed(" ", styled("text", question.question));
-      addLine("");
-
       const answer = state.answers[state.activeTab];
+      const header = question.header?.trim() ? question.header : `Q${state.activeTab + 1}`;
+      addPrefixed(
+        " ",
+        `${styled("muted", `${header} [${answer === undefined ? "·" : "✓"}]`)} ${styled("text", question.question)}`,
+      );
+
       if (question.multiSelect) {
         for (let index = 0; index < question.options.length; index++) {
           const option = question.options[index];
@@ -265,25 +268,22 @@ export function createQuestionnaireComponent(
           const answered = answer?.optionIndexes.includes(index) ?? false;
           addPrefixed(
             `${selected ? ">" : " "} [${answerMarker(answered)}] `,
-            styled(selected ? "accent" : "text", option.label),
+            `${styled(selected ? "accent" : "text", option.label)}  ${styled("muted", option.description)}`,
           );
-          addPrefixed("      ", styled("muted", option.description));
         }
 
         const otherSelected = state.activeRow === question.options.length;
         const otherAnswered = answer?.otherText !== undefined;
         addPrefixed(
           `${otherSelected ? ">" : " "} [${answerMarker(otherAnswered)}] `,
-          styled(otherSelected ? "accent" : "text", "Other"),
+          `${styled(otherSelected ? "accent" : "text", "Other")}  ${styled("muted", "Enter a custom answer.")}`,
         );
-        addPrefixed("      ", styled("muted", "Enter a custom answer."));
 
         const submitSelected = state.activeRow === question.options.length + 1;
         addPrefixed(
           `${submitSelected ? "> " : "  "}`,
-          styled(submitSelected ? "accent" : "text", "Submit"),
+          `${styled(submitSelected ? "accent" : "text", "Submit")}  ${styled("muted", "Continue with these selections.")}`,
         );
-        addPrefixed("  ", styled("muted", "Continue with these selections."));
       } else {
         for (let index = 0; index < question.options.length; index++) {
           const option = question.options[index];
@@ -292,18 +292,15 @@ export function createQuestionnaireComponent(
           const numberedPrefix = `${selected ? "> " : "  "}${index + 1}. `;
           const completionInPrefix =
             answered && renderWidth <= visibleWidth(numberedPrefix);
+          const label = completionInPrefix
+            ? `${index + 1}. ${option.label}`
+            : `${option.label}${answered ? " ✓" : ""}`;
           addPrefixed(
             completionInPrefix
               ? `${selected ? "> " : "  "}✓ `
               : numberedPrefix,
-            styled(
-              selected ? "accent" : "text",
-              completionInPrefix
-                ? `${index + 1}. ${option.label}`
-                : `${option.label}${answered ? " ✓" : ""}`,
-            ),
+            `${styled(selected ? "accent" : "text", label)}  ${styled("muted", option.description)}`,
           );
-          addPrefixed("      ", styled("muted", option.description));
         }
 
         const otherSelected = state.activeRow === question.options.length;
@@ -312,22 +309,18 @@ export function createQuestionnaireComponent(
           `${otherSelected ? "> " : "  "}${question.options.length + 1}. `;
         const otherCompletionInPrefix =
           otherAnswered && renderWidth <= visibleWidth(otherNumberedPrefix);
+        const otherLabel = otherCompletionInPrefix
+          ? `${question.options.length + 1}. Other`
+          : `Other${otherAnswered ? " ✓" : ""}`;
         addPrefixed(
           otherCompletionInPrefix
             ? `${otherSelected ? "> " : "  "}✓ `
             : otherNumberedPrefix,
-          styled(
-            otherSelected ? "accent" : "text",
-            otherCompletionInPrefix
-              ? `${question.options.length + 1}. Other`
-              : `Other${otherAnswered ? " ✓" : ""}`,
-          ),
+          `${styled(otherSelected ? "accent" : "text", otherLabel)}  ${styled("muted", "Enter a custom answer.")}`,
         );
-        addPrefixed("      ", styled("muted", "Enter a custom answer."));
       }
 
       if (editingQuestionIndex === state.activeTab) {
-        addLine("");
         addPrefixed(" ", styled("muted", "Your answer:"));
         const editorWidth = Math.max(1, renderWidth - 2);
         for (const line of editor.render(editorWidth)) {
@@ -337,7 +330,6 @@ export function createQuestionnaireComponent(
       }
     } else {
       addPrefixed(" ", styled("accent", "Final actions"));
-      addLine("");
       const confirmSelected = state.activeRow === 0;
       addPrefixed(
         `${confirmSelected ? "> " : "  "}`,
@@ -349,16 +341,20 @@ export function createQuestionnaireComponent(
       );
     }
 
-    addLine("");
-    addPrefixed(
-      " ",
-      styled(
-        "dim",
-        editingQuestionIndex === undefined
-          ? "←/→ tabs • ↑/↓ choices • Enter select • Esc cancel"
-          : "Type your answer",
-      ),
-    );
+    if (editingQuestionIndex === undefined) {
+      addPrefixed(
+        " ",
+        styled(
+          "dim",
+          questions.length > 1
+            ? "←/→ tabs • ↑/↓ choices • Enter select • Esc cancel"
+            : state.activeTab === questions.length
+              ? "← back • ↑/↓ actions • Enter select • Esc cancel"
+              : "↑/↓ choices • Enter select • Esc cancel",
+        ),
+      );
+    }
+
     addLine(theme.fg("border", "─".repeat(renderWidth)));
 
     cachedLines = lines;

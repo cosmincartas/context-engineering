@@ -123,6 +123,12 @@ test("registers exactly one AskUserQuestion tool with a closed bounded schema", 
   assert.equal(optionSchema.additionalProperties, false);
   assert.equal(questionSchema.properties.options.minItems, 2);
   assert.equal(questionSchema.properties.options.maxItems, 4);
+  assert.match(questionSchema.properties.options.description, /distinct, non-overlapping/);
+  assert.match(questionSchema.properties.options.description, /adds Other/);
+  assert.match(optionSchema.properties.label.description, /Do not use Other/);
+  assert.match(optionSchema.properties.description.description, /Do not repeat the label/);
+  assert.match(tool.description, /fewest useful, distinct options/);
+  assert.match(tool.description, /adds Other automatically/);
   assert.deepEqual(questionSchema.required, ["question", "options"]);
   assert.deepEqual(optionSchema.required, ["label", "description"]);
 });

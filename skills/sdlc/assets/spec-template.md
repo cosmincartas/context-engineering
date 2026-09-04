@@ -15,7 +15,7 @@ updated: "{{YYYY-MM-DD}}"
 
 ## 1. User Interface
 
-<!-- Omit this section when the slice has no user-facing surface. -->
+<!-- Include this section only when the approved scope adds or changes UI. For non-UI work, skip the UI gate and do not create, modify, or delete ui.html. -->
 
 ### 1.1 `UI-1` — {{screen, widget, or dialog}}
 
@@ -58,6 +58,7 @@ updated: "{{YYYY-MM-DD}}"
 
 - {{Approved HLD assumption, or omit.}}
 
+<!-- Include section 5 only when the design introduces or changes models. Omit the heading and contents otherwise. Keep this section number. -->
 ## 5. Models
 
 ### 5.1 `{{TypeName}}`
@@ -68,6 +69,7 @@ updated: "{{YYYY-MM-DD}}"
 
 - {{Invariant the type cannot express, or omit.}}
 
+<!-- Include section 6 only when the design introduces or changes interfaces. Omit the heading and contents otherwise. Keep this section number. -->
 ## 6. Interfaces
 
 ### 6.1 `{{InterfaceName}}`
@@ -78,6 +80,7 @@ updated: "{{YYYY-MM-DD}}"
 
 - **Not responsible for:** {{one line}}
 
+<!-- Include section 7 only when the design introduces or changes concrete functions. Omit the heading and contents otherwise. Keep this section number. -->
 ## 7. Functions
 
 ### 7.1 `{{owner: module, class, or component}}`
@@ -88,6 +91,7 @@ updated: "{{YYYY-MM-DD}}"
 
 - {{Each method's effect and error behavior.}}
 
+<!-- Include section 8 only when the design introduces or changes an external contract. Omit the heading and contents otherwise. Keep this section number. -->
 ## 8. Contracts
 
 ### 8.1 `{{contract name}}`
@@ -102,6 +106,7 @@ updated: "{{YYYY-MM-DD}}"
 
 - {{Rule that is always true.}}
 
+<!-- Include section 9 only when the design has an important flow or state transition. Omit the heading and contents otherwise. Keep this section number. -->
 ## 9. Behavior
 
 ### 9.1 {{Flow or state machine}}
@@ -110,6 +115,7 @@ updated: "{{YYYY-MM-DD}}"
 - **Steps:** {{Ordered calls to designed functions. State write order and interruption recovery when related persistent writes exist.}}
 - **Result:** {{Postcondition.}}
 
+<!-- Include section 10 only when the design has relevant failures to record. Omit the heading and contents otherwise. Keep this section number. -->
 ## 10. Failure Model
 
 - **F-1** — {{Relevant failure}}
@@ -117,11 +123,13 @@ updated: "{{YYYY-MM-DD}}"
   - Response: {{designed response}}
   - Verification: {{observable check}}
 
+<!-- Include section 11 when traceability entries apply. Omit the heading and contents otherwise. Keep this section number. -->
 ## 11. Traceability
 
 - **FR-1** → {{UI-* entry when one exists, section numbers, or element names}}
 - **NFR-1** → {{section numbers or element names}}
 
+<!-- Include section 12 only when a widening option or behavior leaves scope. Omit the heading and contents otherwise. Keep this section number. -->
 ## 12. Parked
 
 - {{Declined widening option or behavior that left scope. One line. A candidate subject for a future topic.}}

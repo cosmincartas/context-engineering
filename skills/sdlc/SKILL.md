@@ -7,7 +7,7 @@ description: Use when the user wants to formalize delivery work, create or resum
 
 Write artifacts in ASD-STE100 Simplified Technical English: sentences of at most 20 words (instructions) or 25 (descriptions), active voice, imperative for steps, one meaning for each word, requirements use "must" (never "shall" or "should"). Chat stays in natural conversational language.
 
-Take one topic through three phases. Each phase produces one validated artifact in the topic folder. The pipeline ends with a validated implementation plan; execution belongs to other skills. The pairing rhythm in `references/facilitation-rules.md` applies in phase 1 and in phase 2 before mode selection. Phase 2 reviews architecture decisions and their resulting HLD together, then uses pair mode or proposal mode. Phase 3 presents the complete plan for validation.
+Take one topic through three phases. Each phase produces one validated artifact in the topic folder. The pipeline ends with a validated implementation plan. Execution belongs to other skills. The pairing rhythm in `references/facilitation-rules.md` applies in phase 1. Phase 2 uses one combined requirements gate for scope, FRs, and NFRs and one combined HLD gate for architecture decisions and explained HLD. Explicit correction paths may rerun those same gates. It uses a UI gate only when the slice adds or changes UI. It then drafts applicable design sections autonomously before final validation. Phase 3 presents the complete plan for validation.
 
 | Phase | Name | Artifact | Reference |
 |---|---|---|---|
@@ -24,9 +24,9 @@ These hold in every phase:
 - Never use Worker or Reviewer during SDLC planning, including as fallbacks for unavailable Scout or Oracle.
 - Never write production code. This skill plans; it does not implement. In `spec.md`, show implementation-shaped skeletons in the repository language. Preserve concrete owners, framework metadata, dependency wiring, fields, and method signatures. Keep structural bodies when they show required wiring. Replace executable logic with `...`.
 - Never run `git commit`, create branches, or push changes.
-- Validated artifacts are the state. Work each phase in conversation; write the artifact file once, when you present it for validation, with `status: draft`. Set `status: validated` when the user approves. A session interrupted before the write restarts its phase from the validated upstream artifacts; do not reconstruct partial phase work from chat history.
-- Facilitate; do not transcribe. Read `references/facilitation-rules.md` before each phase and apply its gates.
-- Load only the reference file for the active phase.
+- Validated artifacts are the state. Work each phase in conversation. Create the draft file once at first validation presentation. Apply requested corrections in place. Set `status: validated` only after approval. A session interrupted before the write restarts its phase from the validated upstream artifacts; do not reconstruct partial phase work from chat history.
+- Facilitate; do not transcribe. Before each phase, read shared `references/facilitation-rules.md` and that phase's active reference.
+- Load no other phase reference.
 - Never inspect, edit, or ask about `.gitignore`. After you save an artifact, you can say exactly: `Consider adding docs/agentic-engineering/ to .gitignore manually.`
 
 ## Topic resolution

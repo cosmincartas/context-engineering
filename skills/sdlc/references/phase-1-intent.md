@@ -18,12 +18,13 @@ Goal: build a common and complete understanding of the subject.
 
 ## Workflow
 
-1. Inspect relevant repository files, docs, tests, and recent commits. Read a supplied exploration artifact as evidence, not as a decision. State when there is no repository evidence.
-2. Build a framing ledger in conversation, not on disk: the restated request in the user's vocabulary, evidence labeled by source (user statement, repository evidence, inference, unknown), and the list of gaps.
-3. Ask the questions that close the gaps. Apply the challenge duty to the stated problem. Do not ask the user to confirm a synthesis you have not yet presented.
-4. Synthesize the five sections from confirmed entries only: Problem, Proposed outcome, Affected users, Constraints, Open Questions. Put unknowns the user could not resolve and detail-level questions deferred to phase 2 under Open Questions, each with its consequence (rule 8). Present the sections per the pairing rhythm; present surviving inferences as one list for confirmation (rule 16).
-5. Write `intent.md` with `status: draft` — the first and only write. Present the recap and ask the user to validate. Apply changes to the file until approved, then set `status: validated`.
+1. Capture the first user-authored development request before changing its wording. Copy it verbatim under Initial Request. Exclude skill names, commands, and arguments that only invoke this workflow as invocation metadata.
+2. Inspect relevant repository files, docs, tests, and recent commits. Read a supplied exploration artifact as evidence, not as a decision. State when there is no repository evidence.
+3. Build a framing ledger in conversation, not on disk: the restated request in the user's vocabulary, evidence labeled by source (user statement, repository evidence, inference, unknown), and the list of gaps.
+4. Ask the questions that close the gaps. Apply the challenge duty to the stated problem. Do not ask the user to confirm a synthesis you have not yet presented.
+5. Synthesize the five sections from confirmed entries only: Problem, Proposed outcome, Affected users, Constraints, Open Questions. Put unknowns the user could not resolve and detail-level questions deferred to phase 2 under Open Questions, each with its consequence (rule 8). Present the sections per the pairing rhythm; present surviving inferences as one list for confirmation (rule 16).
+6. Write `intent.md` with `status: draft` — the first and only write. Present the recap and ask the user to validate. Apply changes to the file until approved, then set `status: validated`.
 
 ## Completion check
 
-Problem, Proposed outcome, Affected users, and Constraints hold only entries the user confirmed. Open Questions holds only unknowns the user could not resolve and questions deferred to phase 2, each with its consequence. No narrowing and no requirement identifiers appear.
+Initial Request contains the first user-authored development request verbatim and excludes invocation metadata. Problem, Proposed outcome, Affected users, and Constraints hold only entries the user confirmed. Open Questions holds only unknowns the user could not resolve and questions deferred to phase 2, each with its consequence. No narrowing and no requirement identifiers appear.

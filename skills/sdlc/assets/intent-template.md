@@ -11,6 +11,10 @@ updated: "{{YYYY-MM-DD}}"
 
 # {{Subject}} Intent
 
+## Initial Request
+
+{{The first user-authored development request, copied verbatim without skill invocation metadata.}}
+
 ## Problem
 
 {{The problem in the user's vocabulary, confirmed by the user.}}

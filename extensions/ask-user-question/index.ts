@@ -18,8 +18,12 @@ import type {
 
 const QuestionnaireOptionSchema = Type.Object(
   {
-    label: Type.String(),
-    description: Type.String(),
+    label: Type.String({
+      description: "A concrete answer. Do not use Other, Custom, or Something else.",
+    }),
+    description: Type.String({
+      description: "Explain the consequence or trade-off. Do not repeat the label.",
+    }),
   },
   { additionalProperties: false },
 );
@@ -29,6 +33,8 @@ const QuestionnaireQuestionSchema = Type.Object(
     question: Type.String(),
     header: Type.Optional(Type.String()),
     options: Type.Array(QuestionnaireOptionSchema, {
+      description:
+        "Two to four distinct, non-overlapping answers. Use only the useful options. The UI adds Other with free-text input automatically.",
       minItems: 2,
       maxItems: 4,
     }),
@@ -284,7 +290,8 @@ export default function askUserQuestion(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "AskUserQuestion",
     label: "AskUserQuestion",
-    description: "Ask one to four related questions in a guided terminal flow.",
+    description:
+      "Ask one to four related questions. Provide the fewest useful, distinct options. The UI adds Other automatically, so never include an Other or custom-answer option.",
     executionMode: "sequential",
     parameters: QuestionnaireParameters,
     execute(toolCallId, params, signal, _onUpdate, ctx) {

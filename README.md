@@ -17,7 +17,7 @@ explore (optional) → sdlc: intent → requirements → design → plan
 explore (optional) → quickie: align → plan
 ```
 
-`sdlc` pairs on context and requirements. In design, the user approves architecture decisions and their resulting HLD together. The user then selects pair mode or proposal mode.
+`sdlc` pairs on context. In design, one requirements gate covers scope, FRs, and NFRs. A UI gate follows only when the slice adds or changes UI. One HLD gate combines decisions with the explained design. The agent then drafts applicable sections autonomously before final validation.
 
 `quickie` covers one deliverable that fits five tasks or fewer, changes no public contract, and has no open design decision. When a criterion fails, it stops and hands the confirmed understanding to `sdlc`.
 
