@@ -26,6 +26,7 @@ export type AgentDefinition = {
   readonly tools: readonly AgentToolName[];
   readonly model: AgentModel;
   readonly thinkingLevel: ThinkingLevel;
+  readonly maxTurns: number;
   readonly systemPrompt: string;
 };
 
@@ -33,6 +34,7 @@ type AgentContract = {
   readonly tools: readonly AgentToolName[];
   readonly model: AgentModel;
   readonly thinkingLevel: ThinkingLevel;
+  readonly maxTurns: number;
 };
 
 type AgentFrontmatter = Record<string, unknown>;
@@ -42,21 +44,25 @@ const AGENT_CONTRACTS: Readonly<Record<AgentName, AgentContract>> = {
     tools: ["read", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
     model: "openai-codex/gpt-5.6-luna",
     thinkingLevel: "medium",
+    maxTurns: 40,
   },
   worker: {
     tools: ["read", "bash", "edit", "write", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
     model: "openai-codex/gpt-5.6-luna",
     thinkingLevel: "high",
+    maxTurns: 60,
   },
   oracle: {
     tools: ["read", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
     model: "openai-codex/gpt-5.6-sol",
     thinkingLevel: "xhigh",
+    maxTurns: 50,
   },
   reviewer: {
     tools: ["read", "bash", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
-    model: "openai-codex/gpt-5.6-luna",
-    thinkingLevel: "max",
+    model: "openai-codex/gpt-5.6-terra",
+    thinkingLevel: "high",
+    maxTurns: 40,
   },
 };
 
@@ -67,6 +73,7 @@ const FRONTMATTER_FIELDS = [
   "tools",
   "model",
   "thinkingLevel",
+  "maxTurns",
 ] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -116,6 +123,13 @@ function parseAgent(name: AgentName, content: string): AgentDefinition {
   if (typeof frontmatter.thinkingLevel !== "string") {
     throw new Error(`${name}.md thinkingLevel must be a string`);
   }
+  if (
+    typeof frontmatter.maxTurns !== "number" ||
+    !Number.isInteger(frontmatter.maxTurns) ||
+    frontmatter.maxTurns < 1
+  ) {
+    throw new Error(`${name}.md maxTurns must be an integer of at least 1`);
+  }
   const rawTools = frontmatter.tools;
   if (
     !Array.isArray(rawTools) ||
@@ -152,6 +166,9 @@ function parseAgent(name: AgentName, content: string): AgentDefinition {
   if (frontmatter.thinkingLevel !== contract.thinkingLevel) {
     throw new Error(`${name}.md thinkingLevel does not match the bundled mapping`);
   }
+  if (frontmatter.maxTurns !== contract.maxTurns) {
+    throw new Error(`${name}.md maxTurns does not match the bundled mapping`);
+  }
   if (
     tools.length !== contract.tools.length ||
     tools.some((tool, index) => tool !== contract.tools[index])
@@ -165,6 +182,7 @@ function parseAgent(name: AgentName, content: string): AgentDefinition {
     tools: Object.freeze([...tools]),
     model: contract.model,
     thinkingLevel: contract.thinkingLevel,
+    maxTurns: contract.maxTurns,
     systemPrompt: parsed.body,
   });
 }

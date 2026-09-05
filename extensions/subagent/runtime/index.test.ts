@@ -619,7 +619,7 @@ test("passes the mapped model, thinking level, tools, cwd, prompt, and literal t
     "--model",
     "openai-codex/gpt-5.6-luna",
     "--thinking",
-    "max",
+    "high",
   ]);
   assert.equal(record.argv[8], "--tools");
   assert.equal(record.argv[9], "read,bash,edit,write,grep,find,ls,mcp,mcpScript,web_search,web_fetch");
@@ -628,6 +628,9 @@ test("passes the mapped model, thinking level, tools, cwd, prompt, and literal t
   assert.equal(record.argv[12], "--session-dir");
   assert.equal(record.argv[14], "--name");
   assert.equal(record.argv[15], "worker test");
+  assert.equal(record.argv[16], "-e");
+  assert.match(record.argv[17], /runtime[/\\]turn-budget\.ts$/);
+  assert.equal(record.maxTurns, "60");
   assert.equal(record.prompt, bundledAgents[1].systemPrompt);
   assert.equal(result.details.attempts[0].messages.at(-1).role, "assistant");
 
@@ -997,6 +1000,36 @@ test("reports temporary prompt cleanup failure instead of success", async () => 
   }
 });
 
+test("marks a succeeded run that used more turns than its budget", async () => {
+  const result = await withScenario("turn-budget", () =>
+    executeSubagent("scout", "exhaust the budget", bundledAgents, makeContext(), undefined),
+  );
+
+  assert.equal(result.details.state, "succeeded");
+  const text = outputText(result);
+  assert.ok(
+    text.startsWith(
+      "Turn budget reached: the report below was written after 40 turns and may be incomplete.",
+    ),
+    text.slice(0, 160),
+  );
+  assert.match(text, /final report/);
+  assert.ok(
+    result.details.attempts[0].activity.some((item: string) => item.includes("turn budget reached")),
+  );
+});
+
+test("does not mark a run that stopped within its budget", async () => {
+  const result = await withScenario("turn-budget-exact", () =>
+    executeSubagent("scout", "stay inside the budget", bundledAgents, makeContext(), undefined),
+  );
+
+  assert.equal(result.details.state, "succeeded");
+  const text = outputText(result);
+  assert.equal(text.startsWith("Turn budget reached"), false, text.slice(0, 160));
+  assert.match(text, /final report/);
+});
+
 async function withScenario<T>(scenario: string, callback: () => Promise<T>): Promise<T> {
   const previous = process.env.PI_SUBAGENT_SCENARIO;
   process.env.PI_SUBAGENT_SCENARIO = scenario;
@@ -1102,7 +1135,7 @@ const sessionFile = path.join(sessionDirectory, "2026_" + sessionId + ".jsonl");
 fs.mkdirSync(sessionDirectory, { recursive: true });
 fs.writeFileSync(sessionFile, JSON.stringify({ type: "session", version: 3, id: sessionId, timestamp: new Date().toISOString(), cwd: process.cwd() }) + "\\n");
 const recordFile = path.join(recordDirectory, path.basename(recordPath) + "." + process.pid);
-const record = { scenario, argv, cwd: process.cwd(), pid: process.pid, attemptNumber, createdAt: Date.now(), sessionFile, prompt: fs.readFileSync(argv[promptIndex + 1], "utf8") };
+const record = { scenario, argv, cwd: process.cwd(), pid: process.pid, attemptNumber, createdAt: Date.now(), sessionFile, maxTurns: process.env.PI_SUBAGENT_MAX_TURNS, prompt: fs.readFileSync(argv[promptIndex + 1], "utf8") };
 fs.writeFileSync(recordFile, JSON.stringify(record));
 const usage = scenario === "telemetry"
   ? { input: 12, output: 7, cacheRead: 3, cacheWrite: 1, contextTokens: 40, totalTokens: 23, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }
@@ -1220,6 +1253,11 @@ if (scenario === "late-session") {
   emit("{not valid json");
   process.stderr.write("provider diagnostics\\n");
   process.exitCode = 1;
+} else if (scenario === "turn-budget" || scenario === "turn-budget-exact") {
+  const budget = Number(process.env.PI_SUBAGENT_MAX_TURNS);
+  const total = scenario === "turn-budget" ? budget + 1 : budget;
+  for (let index = 1; index < total; index++) emit({ type: "message_end", message: assistant("step " + index, "toolUse") });
+  emit({ type: "message_end", message: assistant("final report") });
 } else if (scenario === "oversized") {
   emit({ type: "message_end", message: assistant("🙂".repeat(30000)) });
 } else {
