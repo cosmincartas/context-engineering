@@ -21,14 +21,15 @@ function assertCatalog(definitions: readonly AgentDefinition[]): void {
     "openai-codex/gpt-5.6-luna",
     "openai-codex/gpt-5.6-luna",
     "openai-codex/gpt-5.6-sol",
-    "openai-codex/gpt-5.6-luna",
+    "openai-codex/gpt-5.6-terra",
   ]);
   assert.deepEqual(definitions.map((definition) => definition.thinkingLevel), [
     "medium",
     "high",
     "xhigh",
-    "max",
+    "high",
   ]);
+  assert.deepEqual(definitions.map((definition) => definition.maxTurns), [40, 60, 50, 40]);
   const oracle = definitions.find((definition) => definition.name === "oracle");
   assert.ok(oracle);
   assert.doesNotMatch(oracle.systemPrompt, /\bbash\b/i);
@@ -84,6 +85,32 @@ test("rejects blank prompts and invalid mapping fields", async () => {
       .replace(/\n[^]*$/, "\n"),
   );
 
+  await assert.rejects(loadBundledAgents(pathToDirectoryUrl(directory)), /oracle\.md/);
+});
+
+test("rejects a maxTurns that is not a positive integer", async () => {
+  for (const replacement of ["maxTurns: 0", "maxTurns: 2.5", "maxTurns: many"]) {
+    const directory = await copyCatalog();
+    const scoutPath = path.join(directory, "scout.md");
+    const scout = await readFile(scoutPath, "utf8");
+    await writeFile(scoutPath, scout.replace("maxTurns: 40", replacement));
+    await assert.rejects(loadBundledAgents(pathToDirectoryUrl(directory)), /scout\.md/);
+  }
+});
+
+test("rejects a missing maxTurns field", async () => {
+  const directory = await copyCatalog();
+  const workerPath = path.join(directory, "worker.md");
+  const worker = await readFile(workerPath, "utf8");
+  await writeFile(workerPath, worker.replace("maxTurns: 60\n", ""));
+  await assert.rejects(loadBundledAgents(pathToDirectoryUrl(directory)), /worker\.md/);
+});
+
+test("rejects a maxTurns that does not match the bundled mapping", async () => {
+  const directory = await copyCatalog();
+  const oraclePath = path.join(directory, "oracle.md");
+  const oracle = await readFile(oraclePath, "utf8");
+  await writeFile(oraclePath, oracle.replace("maxTurns: 50", "maxTurns: 51"));
   await assert.rejects(loadBundledAgents(pathToDirectoryUrl(directory)), /oracle\.md/);
 });
 

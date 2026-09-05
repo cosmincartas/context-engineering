@@ -73,7 +73,7 @@ After a Worker report passes the status inspection and its acceptance criteria a
 
 Mark every ready corresponding Reviewer `active` with `TaskUpdate`, then send all independent Reviewers together in one `Agent` batch. Preserve the ordered Reviewer task IDs and map outcomes by position. Inspect every returned Reviewer report before changing its task status: a normal child exit is not a passing review. Mark a Reviewer task `completed` only when its report finds no actionable issue, all applicable checks pass, and no blocker or missing evidence remains. Otherwise return it to `pending` and record the report, failed checks, blockers, actionable findings, and any missing or ambiguous evidence in its task text.
 
-A Reviewer must inspect independently rather than trust the Worker report. Its prompt must include the original requirements, acceptance criteria, exact review scope, changed-file summary, relevant evidence, required verification commands, and the requirement to preserve unrelated changes.
+A Reviewer must inspect independently rather than trust the Worker report. Its prompt must include the original requirements, acceptance criteria, exact review scope, changed-file summary, relevant evidence, required verification commands, and the requirement to preserve unrelated changes. Every verification command must already exist in the repository. If no automated check exists, the prompt must say so. The Reviewer must not build a validator.
 
 The review gate passes only after every required Reviewer report has been inspected and reports no actionable finding, all applicable checks pass, and no verification blocker or missing evidence remains.
 

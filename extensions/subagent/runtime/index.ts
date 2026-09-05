@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { StringDecoder } from "node:string_decoder";
+import { fileURLToPath } from "node:url";
 
 import type { Message, Usage } from "@earendil-works/pi-ai";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
@@ -14,8 +15,12 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 
 import type { AgentDefinition } from "../agents/index.ts";
+import { BUDGET_ENVIRONMENT_VARIABLE } from "./turn-budget.ts";
 
 export const MAX_RESULT_BYTES = 50 * 1024;
+
+/** Bounds each child by turns. See `turn-budget.ts`. */
+const TURN_BUDGET_EXTENSION = fileURLToPath(new URL("./turn-budget.ts", import.meta.url));
 
 /**
  * Streaming deltas arrive per token and each published snapshot rebuilds the
@@ -331,10 +336,27 @@ export async function executeSubagent(
       if (outcome.succeeded) {
         run.state = "succeeded";
         delete run.error;
+        // The child stops itself at its budget, so an extra turn means it was cut short.
+        const usedTurns = attempt.messages.filter((message) => message.role === "assistant").length;
+        const overBudget = usedTurns > definition.maxTurns;
+        if (overBudget) {
+          attempt.activity.push(`turn budget reached after ${definition.maxTurns} turns`);
+        }
         run.endedAt = Date.now();
         emit("finished");
         const output = finalOutput(attempt.messages);
-        return result(snapshotRun(run), resolved.warning ? `${resolved.warning}\n\n${output}` : output);
+        const notices = [
+          ...(resolved.warning ? [resolved.warning] : []),
+          ...(overBudget
+            ? [
+              `Turn budget reached: the report below was written after ${definition.maxTurns} turns and may be incomplete.`,
+            ]
+            : []),
+        ];
+        return result(
+          snapshotRun(run),
+          notices.length > 0 ? `${notices.join("\n\n")}\n\n${output}` : output,
+        );
       }
 
       run.error = outcome.error || attempt.stderr || "Subagent failed";
@@ -675,6 +697,8 @@ async function runAttempt(
       directory,
       "--name",
       request.title,
+      "-e",
+      TURN_BUDGET_EXTENSION,
       request.task,
     ];
 
@@ -682,6 +706,7 @@ async function runAttempt(
       cwd: ctx.cwd,
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, [BUDGET_ENVIRONMENT_VARIABLE]: String(definition.maxTurns) },
     });
 
     outcome = await new Promise<AttemptOutcome>((resolve) => {
