@@ -617,9 +617,9 @@ test("passes the mapped model, thinking level, tools, cwd, prompt, and literal t
     "-p",
     "--no-skills",
     "--model",
-    "openai-codex/gpt-5.6-luna",
+    "openai-codex/gpt-5.6-terra",
     "--thinking",
-    "high",
+    "medium",
   ]);
   assert.equal(record.argv[8], "--tools");
   assert.equal(record.argv[9], "read,bash,edit,write,grep,find,ls,mcp,mcpScript,web_search,web_fetch");
@@ -1050,7 +1050,7 @@ function makeContext(
   } = {},
 ): any {
   const model = overrides.model ?? { provider: "openai-codex", id: "parent" };
-  const available = overrides.available ?? ["openai-codex/gpt-5.6-luna", "openai-codex/gpt-5.6-sol"];
+  const available = overrides.available ?? ["openai-codex/gpt-5.6-luna", "openai-codex/gpt-5.6-terra", "openai-codex/gpt-6-astra", "openai-codex/gpt-5.6-sol"];
   return {
     cwd,
     model,

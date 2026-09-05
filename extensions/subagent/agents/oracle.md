@@ -3,8 +3,8 @@ version: 1
 name: oracle
 description: Read-only technical analysis and decision support.
 tools: [read, grep, find, ls, mcp, mcpScript, web_search, web_fetch]
-model: openai-codex/gpt-5.6-sol
-thinkingLevel: xhigh
+model: openai-codex/gpt-6-astra
+thinkingLevel: high
 maxTurns: 50
 ---
 

@@ -19,15 +19,15 @@ function assertCatalog(definitions: readonly AgentDefinition[]): void {
   );
   assert.deepEqual(definitions.map((definition) => definition.model), [
     "openai-codex/gpt-5.6-luna",
-    "openai-codex/gpt-5.6-luna",
-    "openai-codex/gpt-5.6-sol",
     "openai-codex/gpt-5.6-terra",
+    "openai-codex/gpt-6-astra",
+    "openai-codex/gpt-5.6-sol",
   ]);
   assert.deepEqual(definitions.map((definition) => definition.thinkingLevel), [
     "medium",
+    "medium",
     "high",
-    "xhigh",
-    "high",
+    "medium",
   ]);
   assert.deepEqual(definitions.map((definition) => definition.maxTurns), [40, 60, 50, 40]);
   const oracle = definitions.find((definition) => definition.name === "oracle");

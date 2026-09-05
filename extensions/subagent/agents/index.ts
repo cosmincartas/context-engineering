@@ -48,20 +48,20 @@ const AGENT_CONTRACTS: Readonly<Record<AgentName, AgentContract>> = {
   },
   worker: {
     tools: ["read", "bash", "edit", "write", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
-    model: "openai-codex/gpt-5.6-luna",
-    thinkingLevel: "high",
+    model: "openai-codex/gpt-5.6-terra",
+    thinkingLevel: "medium",
     maxTurns: 60,
   },
   oracle: {
     tools: ["read", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
-    model: "openai-codex/gpt-5.6-sol",
-    thinkingLevel: "xhigh",
+    model: "openai-codex/gpt-6-astra",
+    thinkingLevel: "high",
     maxTurns: 50,
   },
   reviewer: {
     tools: ["read", "bash", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
-    model: "openai-codex/gpt-5.6-terra",
-    thinkingLevel: "high",
+    model: "openai-codex/gpt-5.6-sol",
+    thinkingLevel: "medium",
     maxTurns: 40,
   },
 };

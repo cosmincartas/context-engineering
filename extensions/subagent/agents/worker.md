@@ -3,8 +3,8 @@ version: 1
 name: worker
 description: Implement and verify requested coding tasks.
 tools: [read, bash, edit, write, grep, find, ls, mcp, mcpScript, web_search, web_fetch]
-model: openai-codex/gpt-5.6-luna
-thinkingLevel: high
+model: openai-codex/gpt-5.6-terra
+thinkingLevel: medium
 maxTurns: 60
 ---
 

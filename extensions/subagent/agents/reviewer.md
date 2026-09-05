@@ -3,8 +3,8 @@ version: 1
 name: reviewer
 description: Read-only review of code changes.
 tools: [read, bash, grep, find, ls, mcp, mcpScript, web_search, web_fetch]
-model: openai-codex/gpt-5.6-terra
-thinkingLevel: high
+model: openai-codex/gpt-5.6-sol
+thinkingLevel: medium
 maxTurns: 40
 ---
 
