@@ -7,7 +7,7 @@ description: Use when the user wants to formalize delivery work, create or resum
 
 Write artifacts in ASD-STE100 Simplified Technical English: sentences of at most 20 words (instructions) or 25 (descriptions), active voice, imperative for steps, one meaning for each word, requirements use "must" (never "shall" or "should"). Chat stays in natural conversational language.
 
-Take one topic through three phases. Each phase produces one validated artifact in the topic folder. The pipeline ends with a validated implementation plan. Execution belongs to other skills. The pairing rhythm in `references/facilitation-rules.md` applies in phase 1. Phase 2 uses one combined requirements gate for scope, FRs, and NFRs and one combined HLD gate for architecture decisions and explained HLD. Explicit correction paths may rerun those same gates. It uses a UI gate only when the slice adds or changes UI. It then drafts applicable design sections autonomously before final validation. Phase 3 presents the complete plan for validation.
+Take one topic through three phases. Each phase produces one validated artifact in the topic folder. The pipeline ends with a validated implementation plan. Execution belongs to other skills. Phase 1 validates the complete intent. Phase 2 reviews requirements, UI when applicable, and HLD before autonomous design drafting and final validation. Phase 3 validates the complete plan. Use `references/facilitation-rules.md` for approvals and corrections in every phase.
 
 | Phase | Name | Artifact | Reference |
 |---|---|---|---|
@@ -22,7 +22,7 @@ These hold in every phase:
 - Use Scout for repository evidence in every phase whenever Scout is available. If Scout is unavailable, perform that work locally.
 - In phase 2, use Oracle for consequential design decisions whenever Oracle is available, before proposing each decision. If Oracle is unavailable, resolve the decision locally.
 - Never use Worker or Reviewer during SDLC planning, including as fallbacks for unavailable Scout or Oracle.
-- Never write production code. This skill plans; it does not implement. In `spec.md`, show implementation-shaped skeletons in the repository language. Preserve concrete owners, framework metadata, dependency wiring, fields, and method signatures. Keep structural bodies when they show required wiring. Replace executable logic with `...`.
+- Never write production code. The spec binds behavior, contracts, invariants, and consequential technical decisions. Private structure is discretionary unless an approved constraint depends on it. Apply phase 2's Design precision rules to code examples and skeletons.
 - Never run `git commit`, create branches, or push changes.
 - Validated artifacts are the state. Work each phase in conversation. Create the draft file once at first validation presentation. Apply requested corrections in place. Set `status: validated` only after approval. A session interrupted before the write restarts its phase from the validated upstream artifacts; do not reconstruct partial phase work from chat history.
 - Facilitate; do not transcribe. Before each phase, read shared `references/facilitation-rules.md` and that phase's active reference.
@@ -56,5 +56,5 @@ Each artifact records the SHA-256 hash of the exact upstream file: `spec.md` rec
 1. Resolve the topic and detect the active phase.
 2. Read `references/facilitation-rules.md` and the active phase reference file.
 3. Follow the phase reference fully, including its interaction gates and self-checks.
-4. When the user validates the artifact, set `status: validated`. Then offer one choice: continue to the next phase now, or stop. The topic resumes later from the artifacts.
+4. When the user validates the artifact, set `status: validated`. Continue to the next phase when it belongs to the user's requested scope. Otherwise report the artifact path and stop. Do not ask for separate continuation permission for an already requested phase.
 5. After phase 3 validates, report the plan path as the input for an external plan-execution skill.

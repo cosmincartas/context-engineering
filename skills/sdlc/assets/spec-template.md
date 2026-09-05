@@ -40,10 +40,12 @@ updated: "{{YYYY-MM-DD}}"
 
 **Architecture decisions:**
 
-- {{Decision, source, strongest alternative, and trade-off.}}
+<!-- For a new abstraction or dependency, name the present requirement and why existing code or capabilities are insufficient. -->
+
+- {{Decision, source, and reason. Include the strongest alternative and trade-off when a consequential choice was unresolved.}}
 
 ```mermaid
-{{Approved HLD Mermaid diagram; components named by the interface they implement or the functions they own}}
+{{Approved HLD Mermaid diagram; components named by existing entry points, required contracts, or owned responsibilities}}
 ```
 
 **Responsibilities:**
@@ -58,7 +60,7 @@ updated: "{{YYYY-MM-DD}}"
 
 - {{Approved HLD assumption, or omit.}}
 
-<!-- Include section 5 only when the design introduces or changes models. Omit the heading and contents otherwise. Keep this section number. -->
+<!-- Include section 5 when a model's structure expresses a required contract or invariant. Omit incidental internal representations. Keep this section number. -->
 ## 5. Models
 
 ### 5.1 `{{TypeName}}`
@@ -69,27 +71,26 @@ updated: "{{YYYY-MM-DD}}"
 
 - {{Invariant the type cannot express, or omit.}}
 
-<!-- Include section 6 only when the design introduces or changes interfaces. Omit the heading and contents otherwise. Keep this section number. -->
+<!-- Include section 6 for required public, shared, or important internal interfaces. Cite existing definitions when available. Keep this section number. -->
 ## 6. Interfaces
 
 ### 6.1 `{{InterfaceName}}`
 
 ```{{lang}}
-{{interface, protocol, trait, or abstract class with member signatures}}
+{{required interface signatures, or replace this block with a reference to the existing definition}}
 ```
 
-- **Not responsible for:** {{one line}}
+- **Responsibility and boundary:** {{one line}}
 
-<!-- Include section 7 only when the design introduces or changes concrete functions. Omit the heading and contents otherwise. Keep this section number. -->
+<!-- Include section 7 when entry points or function constraints need explanation. Keep this section number. -->
 ## 7. Functions
 
 ### 7.1 `{{owner: module, class, or component}}`
 
-```{{lang}}
-{{implementation-shaped class, module, or component skeleton; preserve framework metadata and dependency wiring; replace executable logic with ...}}
-```
+- **Entry point:** {{existing file:symbol, required new symbol, or component responsibility}}
+- **Behavior:** {{required effect and error behavior}}
 
-- {{Each method's effect and error behavior.}}
+<!-- Add a code block only to clarify required signatures, framework hooks, or wiring. Show those constraints and use ... for executable logic. Label optional examples "Illustrative; private structure may change within approved constraints". -->
 
 <!-- Include section 8 only when the design introduces or changes an external contract. Omit the heading and contents otherwise. Keep this section number. -->
 ## 8. Contracts
@@ -112,7 +113,7 @@ updated: "{{YYYY-MM-DD}}"
 ### 9.1 {{Flow or state machine}}
 
 - **Condition:** {{Precondition.}}
-- **Steps:** {{Ordered calls to designed functions. State write order and interruption recovery when related persistent writes exist.}}
+- **Steps:** {{Ordered component responsibilities, contracts, or existing entry points. State write order and interruption recovery when related persistent writes exist.}}
 - **Result:** {{Postcondition.}}
 
 <!-- Include section 10 only when the design has relevant failures to record. Omit the heading and contents otherwise. Keep this section number. -->
@@ -126,8 +127,8 @@ updated: "{{YYYY-MM-DD}}"
 <!-- Include section 11 when traceability entries apply. Omit the heading and contents otherwise. Keep this section number. -->
 ## 11. Traceability
 
-- **FR-1** → {{UI-* entry when one exists, section numbers, or element names}}
-- **NFR-1** → {{section numbers or element names}}
+- **FR-1** → {{UI-* entry when one exists, component responsibility, contract, invariant, or required design element}}
+- **NFR-1** → {{component responsibility, contract, invariant, or required design element}}
 
 <!-- Include section 12 only when a widening option or behavior leaves scope. Omit the heading and contents otherwise. Keep this section number. -->
 ## 12. Parked

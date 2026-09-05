@@ -17,7 +17,9 @@ explore (optional) → sdlc: intent → requirements → design → plan
 explore (optional) → quickie: align → plan
 ```
 
-`sdlc` pairs on context. In design, one requirements gate covers scope, FRs, and NFRs. A UI gate follows only when the slice adds or changes UI. One HLD gate combines decisions with the explained design. The agent then drafts applicable sections autonomously before final validation.
+`sdlc` clarifies material gaps and validates the complete intent once. In design, one requirements gate covers scope, FRs, and NFRs. A UI gate follows only when the slice adds or changes UI. One HLD gate combines decisions with the explained design. The agent then drafts applicable sections autonomously before final validation. Corrections reopen the earliest affected approval and require reassessing later decisions. Alternatives address unresolved consequential choices. Approval includes inferred interpretations, without separate section or inference rounds.
+
+Specifications fix required behavior, contracts, invariants, and consequential technical decisions. Private implementation structure remains discretionary within those constraints. Designs check existing code and capabilities before adding abstractions or dependencies. When the user requests the complete pipeline, artifact approval advances to the next phase without a separate continuation prompt.
 
 `quickie` covers one deliverable that fits five tasks or fewer, changes no public contract, and has no open design decision. When a criterion fails, it stops and hands the confirmed understanding to `sdlc`.
 
