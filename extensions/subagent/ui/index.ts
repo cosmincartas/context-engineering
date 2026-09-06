@@ -770,16 +770,20 @@ export class ChildSessionView extends VStack {
       this.onExit({ type: "orchestrator" });
       return;
     }
-    if (!matchesKey(data, Key.up) && !matchesKey(data, Key.down)) return;
+    const pageUp = matchesKey(data, Key.pageUp);
+    const pageDown = matchesKey(data, Key.pageDown);
+    const wheelDirection = /^\x1b\[<(64|65);\d+;\d+M$/.exec(data)?.[1];
+    if (!matchesKey(data, Key.up) && !matchesKey(data, Key.down) && !pageUp && !pageDown && !wheelDirection) return;
     this.ensureScrollLayout();
-    if (matchesKey(data, Key.up)) {
-      this.scroll.scrollBy(-1);
+    const pageSize = Math.max(1, this.scroll.viewportHeight - 2);
+    if (matchesKey(data, Key.up) || pageUp || wheelDirection === "64") {
+      this.scroll.scrollBy(pageUp ? -pageSize : wheelDirection ? -3 : -1);
       this.tui.setFocus?.(this);
       this.tui.requestRender();
       return;
     }
-    const remaining = this.scroll.scrollBy(1);
-    if (remaining > 0) this.footer.focus();
+    const remaining = this.scroll.scrollBy(pageDown ? pageSize : wheelDirection ? 3 : 1);
+    if (matchesKey(data, Key.down) && remaining > 0) this.footer.focus();
     else this.tui.requestRender();
   }
 
@@ -1026,6 +1030,9 @@ export function installSubagentUI(ctx: ExtensionContext): SubagentUIHandle {
         activeView = created;
         void created.refresh();
         return created;
+      }, {
+        overlay: true,
+        overlayOptions: { anchor: "top-left", width: "100%" },
       });
     } finally {
       if (activeView === view) activeView = undefined;

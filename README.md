@@ -17,6 +17,8 @@ explore (optional) → sdlc: intent → requirements → design → plan
 explore (optional) → quickie: align → plan
 ```
 
+The `sdlc` pipeline is heavily inspired by Anthropic's [AI-native SDLC playbook](https://claude.com/blog/the-ai-native-sdlc-playbook). It adapts the playbook's phased, artifact-driven approach into skills that run inside the coding agent.
+
 `sdlc` clarifies material gaps and validates the complete intent once. In design, one requirements gate covers scope, FRs, and NFRs. A UI gate follows only when the slice adds or changes UI. One HLD gate combines decisions with the explained design. The agent then drafts applicable sections autonomously before final validation. Corrections reopen the earliest affected approval and require reassessing later decisions. Alternatives address unresolved consequential choices. Approval includes inferred interpretations, without separate section or inference rounds.
 
 Specifications fix required behavior, contracts, invariants, and consequential technical decisions. Private implementation structure remains discretionary within those constraints. Designs check existing code and capabilities before adding abstractions or dependencies. When the user requests the complete pipeline, artifact approval advances to the next phase without a separate continuation prompt.

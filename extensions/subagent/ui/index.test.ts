@@ -868,6 +868,47 @@ test("renders a changed viewport after scrolling a long child transcript", () =>
   footer.dispose();
 });
 
+test("scrolls a long child transcript by page", () => {
+  const registry = new SubagentRegistry();
+  const run = child("page-scroll");
+  run.run.attempts[0].messages = Array.from({ length: 12 }, (_, index) => assistantMessage(`line-${index}`));
+  registry.add(run);
+  const tui: any = { requestRender() {}, setFocus() {}, terminal: { rows: 6, columns: 80 } };
+  const footer = new AgentFooter(tui, plainTheme, footerData(), registry, footerContext());
+  const view = new ChildSessionView(tui, plainTheme, footer, registry, run, () => {});
+
+  view.render(80);
+  const bottom = (view as any).scroll.scrollTop;
+  view.handleInput("\x1b[5~");
+  const above = (view as any).scroll.scrollTop;
+  assert.ok(above < bottom);
+  view.handleInput("\x1b[6~");
+  assert.equal((view as any).scroll.scrollTop, bottom);
+
+  view.dispose();
+  footer.dispose();
+});
+
+test("scrolls a long child transcript with legacy overlay wheel input", () => {
+  const registry = new SubagentRegistry();
+  const run = child("wheel-scroll");
+  run.run.attempts[0].messages = Array.from({ length: 12 }, (_, index) => assistantMessage(`line-${index}`));
+  registry.add(run);
+  const tui: any = { requestRender() {}, setFocus() {}, terminal: { rows: 6, columns: 80 } };
+  const footer = new AgentFooter(tui, plainTheme, footerData(), registry, footerContext());
+  const view = new ChildSessionView(tui, plainTheme, footer, registry, run, () => {});
+
+  view.render(80);
+  const bottom = (view as any).scroll.scrollTop;
+  view.handleInput("\x1b[<64;40;3M");
+  assert.ok((view as any).scroll.scrollTop < bottom);
+  view.handleInput("\x1b[<65;40;3M");
+  assert.equal((view as any).scroll.scrollTop, bottom);
+
+  view.dispose();
+  footer.dispose();
+});
+
 test("reserves the rendered footer and header before scrolling narrow child transcripts", () => {
   for (const statuses of [[], ["status one"], ["status one", "status two", "status three", "status four", "status five"]]) {
     for (const width of [20, 32]) {
@@ -939,7 +980,7 @@ test("advances running and retrying telemetry while active", () => {
 });
 
 function integrationContext(): any {
-  const state: any = { previousFactory: () => baseEditor(), footerFactory: undefined, editorFactory: undefined, component: undefined, done: undefined, customCalls: 0 };
+  const state: any = { previousFactory: () => baseEditor(), footerFactory: undefined, editorFactory: undefined, component: undefined, done: undefined, customCalls: 0, customOptions: undefined };
   const tui = { requestRender() {}, setFocus(value: any) { state.focused = value; }, terminal: { rows: 24, columns: 80 } };
   state.tui = tui;
   state.ui = {
@@ -952,8 +993,9 @@ function integrationContext(): any {
       state.footerFactory = factory;
       state.footer = factory ? factory(tui, plainTheme, footerData()) : undefined;
     },
-    custom(factory: any) {
+    custom(factory: any, options: any) {
       state.customCalls++;
+      state.customOptions = options;
       return new Promise((resolve: any, reject: any) => {
         try {
           state.component = factory(tui, plainTheme, {}, (result: any) => {
@@ -996,6 +1038,10 @@ test("opens a child view and closes it through the orchestrator action", async (
   const pending = handle.openChild(run);
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(state.customCalls, 1);
+  assert.deepEqual(state.customOptions, {
+    overlay: true,
+    overlayOptions: { anchor: "top-left", width: "100%" },
+  });
   assert.ok(state.component instanceof ChildSessionView);
   (state.component as ChildSessionView).handleFooterAction({ type: "openOrchestrator" });
   await pending;
