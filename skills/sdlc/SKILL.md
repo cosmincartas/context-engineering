@@ -20,7 +20,7 @@ Take one topic through three phases. Each phase produces one validated artifact 
 These hold in every phase:
 
 - Use Scout for repository evidence in every phase whenever Scout is available. If Scout is unavailable, perform that work locally.
-- In phase 2, use Oracle for consequential design decisions whenever Oracle is available, before proposing each decision. If Oracle is unavailable, resolve the decision locally.
+- Use Oracle only inside the phase 2 HLD gate, under that gate's Oracle rule. Never use Oracle in the requirements gate, the UI gate, autopilot, phase 1, phase 3, or to answer a user question.
 - Never use Worker or Reviewer during SDLC planning, including as fallbacks for unavailable Scout or Oracle.
 - Never write production code. The spec binds behavior, contracts, invariants, and consequential technical decisions. Private structure is discretionary unless an approved constraint depends on it. Apply phase 2's Design precision rules to code examples and skeletons.
 - Never run `git commit`, create branches, or push changes.

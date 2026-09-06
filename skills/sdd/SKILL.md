@@ -73,7 +73,7 @@ After a Worker report passes the status inspection and its acceptance criteria a
 
 Mark every ready corresponding Reviewer `active` with `TaskUpdate`, then send all independent Reviewers together in one `Agent` batch. Preserve the ordered Reviewer task IDs and map outcomes by position. Inspect every returned Reviewer report before changing its task status: a normal child exit is not a passing review. Mark a Reviewer task `completed` only when its report finds no actionable issue, all applicable checks pass, and no blocker or missing evidence remains. Otherwise return it to `pending` and record the report, failed checks, blockers, actionable findings, and any missing or ambiguous evidence in its task text.
 
-A Reviewer must inspect independently rather than trust the Worker report. Its prompt must include the original requirements, acceptance criteria, exact review scope, changed-file summary, relevant evidence, required verification commands, and the requirement to preserve unrelated changes. Every verification command must already exist in the repository. If no automated check exists, the prompt must say so. The Reviewer must not build a validator.
+A Reviewer must inspect independently rather than trust the Worker report. Its prompt must cite the spec and plan file paths when they exist instead of paraphrasing requirements, and must include the acceptance criteria, exact review scope, deferred tasks that are not findings, changed-file summary, relevant evidence, required verification commands, and the requirement to preserve unrelated changes. Every verification command must already exist in the repository. If no automated check exists, the prompt must say so. The Reviewer must not build a validator.
 
 The review gate passes only after every required Reviewer report has been inspected and reports no actionable finding, all applicable checks pass, and no verification blocker or missing evidence remains.
 
@@ -84,7 +84,7 @@ When a Worker or Reviewer report fails status inspection—including failed chec
 1. Record the location, triggering path, prior Worker report/evidence, Reviewer findings (or the recorded absence of a review), and correction in the affected task text with `TaskUpdate`.
 2. Return the affected task to `pending`.
 3. Recompute readiness with `TaskList`.
-4. Dispatch a new corrected Worker, then its corresponding Reviewer, using the same parallel rules. The correction Worker prompt must include the original requirements, prior Worker evidence, Reviewer findings, failed checks, blockers, and recorded correction; do not resume or rely on the exited Worker session.
+4. Dispatch a new corrected Worker, then its corresponding Reviewer, using the same parallel rules. The re-review prompt must request a complete review of the task scope, not only the correction. The correction Worker prompt must cite the spec and plan file paths when they exist and name the requirement behind each finding, and must include prior Worker evidence, Reviewer findings, failed checks, blockers, and recorded correction; do not resume or rely on the exited Worker session.
 5. Repeat until the review gate passes or the user must decide an external issue.
 
 Keep unrelated successful tasks `completed`. Serialize any correction that shares a write scope or mutable verification with another task. Use Oracle only when the disagreement or root cause still needs a decision.

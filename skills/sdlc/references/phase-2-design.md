@@ -86,7 +86,7 @@ Never drop a legal, security, privacy, accessibility, or data-loss obligation.
 1. Collect every known decision that can change the HLD.
 2. Include component boundaries, data ownership, integrations, contracts, trust boundaries, deployment, public compatibility, material cost, and irreversible data behavior.
 3. Separate repository constraints, user decisions, reversible defaults, and policy concerns.
-4. Apply the phase 2 Oracle invariant before each consequential decision.
+4. Use Oracle at most once per HLD gate run, and only when at least one consequential decision remains unresolved after Scout evidence. Ask Oracle about all such decisions in that one task. If no such decision exists, or Oracle is unavailable, resolve the decisions locally. On a correction, do not run Oracle again unless the correction introduces a new consequential decision.
 5. Apply the shared challenge duty to unresolved consequential choices. Recommend a supported option and explain the strongest realistic alternative; do not force a fixed number of options.
 6. Draft the recommended decisions and one simple Mermaid component diagram.
 7. Add concise responsibilities, architectural flow, and important assumptions.
