@@ -135,6 +135,7 @@ export type SubagentRuntimeCallbacks = {
 export type SubagentBatchRuntimeCallbacks = {
   readonly onToolUpdate?: AgentToolUpdateCallback<SubagentBatchDetails>;
   readonly onMonitorEvent: (event: SubagentMonitorEvent) => void;
+  readonly onOutcome?: (outcome: Extract<SubagentBatchOutcome, { run: SubagentRun }>) => void;
 };
 
 type MutableAttempt = {
@@ -424,33 +425,8 @@ export async function executeSubagentBatch(
   if (typeof batchId !== "string" || batchId.trim() === "") {
     throw new TypeError("Invalid subagent batch request: batch id must not be blank");
   }
-  let requestKeys: (string | symbol)[];
-  try {
-    if (!isRecord(request)) throw new TypeError();
-    requestKeys = Reflect.ownKeys(request);
-  } catch {
-    throw new TypeError("Invalid subagent batch request: tasks must be a non-empty array");
-  }
-  if (
-    requestKeys.length !== 1 ||
-    requestKeys[0] !== "tasks" ||
-    !Array.isArray(request.tasks) ||
-    request.tasks.length === 0
-  ) {
-    throw new TypeError("Invalid subagent batch request: tasks must be a non-empty array");
-  }
-
+  const outcomes = classifyBatch(request);
   const dispatchSnapshot = captureDispatchSnapshot(ctx, settings);
-  const outcomes: SubagentBatchOutcome[] = [];
-  for (let index = 0; index < request.tasks.length; index++) {
-    outcomes.push(index >= 8
-      ? {
-          index,
-          status: "over-limit",
-          reason: "Task was not run because the batch limit is eight items.",
-        }
-      : classifyTask(index, request.tasks[index]));
-  }
   const queued = outcomes.filter((outcome): outcome is Extract<SubagentBatchOutcome, { status: "queued" }> => outcome.status === "queued");
 
   signal?.throwIfAborted();
@@ -460,6 +436,7 @@ export async function executeSubagentBatch(
     signal?.throwIfAborted();
     const childRunId = `${batchId}:${outcome.index}`;
     let monitorStarted = false;
+    let finalOutcome!: Extract<SubagentBatchOutcome, { run: SubagentRun }>;
     try {
       const child = await executeSubagent(
         childRunId,
@@ -484,15 +461,17 @@ export async function executeSubagentBatch(
         },
         dispatchSnapshot,
       );
-      outcomes[outcome.index] = {
+      finalOutcome = {
         index: outcome.index,
         status: child.details.state,
         run: child.details,
       };
+      outcomes[outcome.index] = finalOutcome;
     } catch (error) {
       if (signal?.aborted) throw error;
       const run = failedRun(outcome.request, error);
-      outcomes[outcome.index] = { index: outcome.index, status: "failed", run };
+      finalOutcome = { index: outcome.index, status: "failed", run };
+      outcomes[outcome.index] = finalOutcome;
       if (monitorStarted) {
         callbacks.onMonitorEvent({
           type: "finished",
@@ -501,6 +480,7 @@ export async function executeSubagentBatch(
       }
       publishBatchUpdate(callbacks, outcomes);
     }
+    callbacks.onOutcome?.(finalOutcome);
   };
   const settled = await Promise.allSettled(queued.map(runQueued));
   if (signal?.aborted) throw signal.reason;
@@ -512,6 +492,36 @@ export async function executeSubagentBatch(
     content: [{ type: "text", text: formatSubagentBatch(details) }],
     details,
   };
+}
+
+export function classifyBatch(request: unknown): SubagentBatchOutcome[] {
+  let requestKeys: (string | symbol)[];
+  try {
+    if (!isRecord(request)) throw new TypeError();
+    requestKeys = Reflect.ownKeys(request);
+  } catch {
+    throw new TypeError("Invalid subagent batch request: tasks must be a non-empty array");
+  }
+  if (
+    requestKeys.length !== 1 ||
+    requestKeys[0] !== "tasks" ||
+    !Array.isArray(request.tasks) ||
+    request.tasks.length === 0
+  ) {
+    throw new TypeError("Invalid subagent batch request: tasks must be a non-empty array");
+  }
+
+  const outcomes: SubagentBatchOutcome[] = [];
+  for (let index = 0; index < request.tasks.length; index++) {
+    outcomes.push(index >= 8
+      ? {
+          index,
+          status: "over-limit",
+          reason: "Task was not run because the batch limit is eight items.",
+        }
+      : classifyTask(index, request.tasks[index]));
+  }
+  return outcomes;
 }
 
 function classifyTask(index: number, value: unknown): SubagentBatchOutcome {
@@ -1056,20 +1066,22 @@ function safeTitle(title: unknown): string {
 }
 
 export function formatSubagentBatch(details: SubagentBatchDetails): string {
-  return truncateOutput(details.outcomes.map((outcome) => {
-    if (outcome.status === "malformed" || outcome.status === "over-limit") {
-      return `${outcome.index + 1}. ${outcome.status}: ${outcome.reason}`;
-    }
-    if (outcome.status === "queued") {
-      return `${outcome.index + 1}. ${safeTitle(outcome.request.title)} — queued`;
-    }
-    if (!("run" in outcome)) throw new TypeError("Invalid subagent batch outcome");
-    const output = outcome.status === "succeeded"
-      ? finalOutput(outcome.run.attempts.at(-1)?.messages ?? [])
-      : failureOutput(outcome.run);
-    const warnings = outcome.run.warnings.length > 0 ? `${outcome.run.warnings.join("\n")}\n` : "";
-    return `${outcome.index + 1}. ${safeTitle(outcome.run.title)} — ${outcome.status}\n${warnings}${output}`;
-  }).join("\n\n"));
+  return truncateOutput(details.outcomes.map(formatSubagentOutcome).join("\n\n"));
+}
+
+export function formatSubagentOutcome(outcome: SubagentBatchOutcome): string {
+  if (outcome.status === "malformed" || outcome.status === "over-limit") {
+    return `${outcome.index + 1}. ${outcome.status}: ${outcome.reason}`;
+  }
+  if (outcome.status === "queued") {
+    return `${outcome.index + 1}. ${safeTitle(outcome.request.title)} — queued`;
+  }
+  if (!("run" in outcome)) throw new TypeError("Invalid subagent batch outcome");
+  const output = outcome.status === "succeeded"
+    ? finalOutput(outcome.run.attempts.at(-1)?.messages ?? [])
+    : failureOutput(outcome.run);
+  const warnings = outcome.run.warnings.length > 0 ? `${outcome.run.warnings.join("\n")}\n` : "";
+  return truncateOutput(`${outcome.index + 1}. ${safeTitle(outcome.run.title)} — ${outcome.status}\n${warnings}${output}`);
 }
 
 function finalOutput(messages: readonly Message[]): string {
