@@ -87,6 +87,14 @@ pi install git:github.com/cosmincartas/context-engineering
 
 Explicit invocation syntax is host-specific: `$agentic-workflow:sdlc` in Codex, `/agentic-workflow:sdlc` in Claude Code, `/agentic-workflow/sdlc` in Copilot, and `/skill:sdlc` in Pi.
 
+## Subagent configuration
+
+In Pi's interactive TUI, run `/subagent-config` (no arguments) to set model/provider and supported reasoning defaults for `scout`, `worker`, `oracle`, and `reviewer`. Settings apply to later child batches only; they do not alter the parent model or reasoning level.
+
+Settings are global to the current Pi profile, across projects and sessions, in `~/.pi/agent/subagent-config.json` by default or `$PI_CODING_AGENT_DIR/subagent-config.json`. The role list starts focused: use **Up**/**Down** to choose a role and **Enter** for its details. There, **Up**/**Down** select Model, Effort, Reset, Save, or Cancel; **Enter** activates the row. Model and Effort open option lists, where **Up**/**Down** and **Enter** choose a value; **Escape** closes an option list unchanged, returns from details to roles, then closes the modal. **Page Up**/**Page Down** scroll diagnostics. **Save** persists the complete draft, **Cancel** discards it, and **Reset** removes the selected role's override so it uses its bundled default. The model picker searches all currently available models, including custom providers; unavailable saved models fall back to the parent model/reasoning with a warning. Unsupported saved reasoning is adjusted to the selected model's supported level with a warning.
+
+If the file is malformed or unreadable, children use bundled defaults with a warning. The modal shows the path and blocks Save: repair or remove the file, then reopen. Save failures retain the editable draft and leave existing settings unchanged. If neither the parent nor Pi's effective reasoning level is available for an unavailable configured model, the child fails before spawning.
+
 ## Releases
 
 Keep the versions in `package.json`, `.codex-plugin/plugin.json`, and `.claude-plugin/plugin.json` equal, tag the commit as `v<version>`, and publish a GitHub Release.

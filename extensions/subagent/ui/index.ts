@@ -1229,6 +1229,7 @@ function copyMonitoredRun(value: MonitoredRun): MonitoredRun {
 function copyRun(value: SubagentRun): SubagentRun {
   return {
     ...value,
+    warnings: [...value.warnings],
     attempts: value.attempts.map(copyAttempt),
   };
 }

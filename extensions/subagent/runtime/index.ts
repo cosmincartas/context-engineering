@@ -5,7 +5,13 @@ import path from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 
-import type { Message, Usage } from "@earendil-works/pi-ai";
+import {
+  clampThinkingLevel,
+  getSupportedThinkingLevels,
+  type Message,
+  type Model,
+  type Usage,
+} from "@earendil-works/pi-ai";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import type {
   AgentToolResult,
@@ -15,6 +21,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 
 import type { AgentDefinition } from "../agents/index.ts";
+import type { ProfileSettingsSnapshot } from "../state/index.ts";
 import { BUDGET_ENVIRONMENT_VARIABLE } from "./turn-budget.ts";
 
 export const MAX_RESULT_BYTES = 50 * 1024;
@@ -95,6 +102,7 @@ export type SubagentRun = {
   readonly endedAt?: number;
   readonly model?: AgentDefinition["model"];
   readonly thinkingLevel?: AgentDefinition["thinkingLevel"];
+  readonly warnings: readonly string[];
   readonly attempts: readonly ProcessAttempt[];
   readonly error?: string;
 };
@@ -152,6 +160,7 @@ type MutableRun = {
   endedAt?: number;
   model?: AgentDefinition["model"];
   thinkingLevel?: AgentDefinition["thinkingLevel"];
+  warnings: string[];
   attempts: MutableAttempt[];
   error?: string;
 };
@@ -176,6 +185,13 @@ const ZERO_USAGE: SubagentUsage = {
   inputTokens: 0,
   outputTokens: 0,
   contextTokens: 0,
+};
+
+type DispatchSnapshot = {
+  readonly settings: ProfileSettingsSnapshot;
+  readonly available: readonly Model<any>[];
+  readonly parentModel?: { readonly provider: string; readonly id: string };
+  readonly parentThinkingLevel?: AgentDefinition["thinkingLevel"];
 };
 
 export function normalizeTitle(title: string): string {
@@ -203,6 +219,7 @@ export async function executeSubagent(
   sessionRoot: string,
   signal: AbortSignal | undefined,
   callbacks: SubagentRuntimeCallbacks,
+  dispatchSnapshot?: DispatchSnapshot,
 ): Promise<AgentToolResult<SubagentRun>> {
   if (typeof runId !== "string" || runId.trim() === "") {
     throw new TypeError("Invalid subagent request: run id must not be blank");
@@ -228,6 +245,7 @@ export async function executeSubagent(
     task: request.task,
     state: "running",
     startedAt: Date.now(),
+    warnings: [],
     attempts: [],
   };
   const sessions: MutableChildSessionState[] = [];
@@ -256,6 +274,7 @@ export async function executeSubagent(
 
   emit("started");
 
+  const snapshot = dispatchSnapshot ?? captureDispatchSnapshot(ctx);
   const definition = catalog.find((candidate) => candidate.name === request.agent);
   if (!definition) {
     const available = catalog.map((candidate) => candidate.name).join(", ") || "none";
@@ -267,9 +286,10 @@ export async function executeSubagent(
     return result(snapshotRun(run), error);
   }
 
-  const resolved = resolveModel(definition, ctx);
+  const resolved = resolveModel(definition, snapshot);
+  run.warnings.push(...resolved.warnings);
   if (!resolved.model) {
-    const error = resolved.warning ?? "Unable to resolve a model for the subagent";
+    const error = resolved.warnings.at(-1) ?? "Unable to resolve a model for the subagent";
     run.state = "failed";
     run.error = error;
     run.endedAt = Date.now();
@@ -286,10 +306,7 @@ export async function executeSubagent(
       const attempt: MutableAttempt = {
         number,
         state: "running",
-        activity: [
-          ...(number === 1 && resolved.warning ? [resolved.warning] : []),
-          ...(number === 2 ? ["Retrying after attempt 1 failed."] : []),
-        ],
+        activity: number === 2 ? ["Retrying after attempt 1 failed."] : [],
         messages: Object.freeze([]),
         usage: {
           ...ZERO_USAGE,
@@ -346,7 +363,7 @@ export async function executeSubagent(
         emit("finished");
         const output = finalOutput(attempt.messages);
         const notices = [
-          ...(resolved.warning ? [resolved.warning] : []),
+          ...resolved.warnings,
           ...(overBudget
             ? [
               `Turn budget reached: the report below was written after ${definition.maxTurns} turns and may be incomplete.`,
@@ -377,7 +394,7 @@ export async function executeSubagent(
       run.endedAt = Date.now();
       const output = failureOutput(run);
       emit("finished");
-      return result(snapshotRun(run), resolved.warning ? `${resolved.warning}\n${output}` : output);
+      return result(snapshotRun(run), resolved.warnings.length > 0 ? `${resolved.warnings.join("\n")}\n${output}` : output);
     }
   } catch (error) {
     if (signal?.aborted) {
@@ -402,6 +419,7 @@ export async function executeSubagentBatch(
   sessionRoot: string,
   signal: AbortSignal | undefined,
   callbacks: SubagentBatchRuntimeCallbacks,
+  settings: ProfileSettingsSnapshot = { settings: { version: 1, agents: {} } },
 ): Promise<AgentToolResult<SubagentBatchDetails>> {
   if (typeof batchId !== "string" || batchId.trim() === "") {
     throw new TypeError("Invalid subagent batch request: batch id must not be blank");
@@ -422,6 +440,7 @@ export async function executeSubagentBatch(
     throw new TypeError("Invalid subagent batch request: tasks must be a non-empty array");
   }
 
+  const dispatchSnapshot = captureDispatchSnapshot(ctx, settings);
   const outcomes: SubagentBatchOutcome[] = [];
   for (let index = 0; index < request.tasks.length; index++) {
     outcomes.push(index >= 8
@@ -463,6 +482,7 @@ export async function executeSubagentBatch(
             callbacks.onMonitorEvent(event);
           },
         },
+        dispatchSnapshot,
       );
       outcomes[outcome.index] = {
         index: outcome.index,
@@ -579,6 +599,7 @@ function cloneOutcome(outcome: SubagentBatchOutcome): SubagentBatchOutcome {
 function cloneRun(run: SubagentRun): SubagentRun {
   return {
     ...run,
+    warnings: [...run.warnings],
     attempts: run.attempts.map((attempt) => ({
       ...attempt,
       activity: [...attempt.activity],
@@ -604,6 +625,7 @@ function failedRun(request: SubagentRequest, error: unknown): SubagentRun {
     state: "failed",
     startedAt: now,
     endedAt: now,
+    warnings: [],
     attempts: [],
     error: error instanceof Error ? error.message : String(error),
   };
@@ -617,31 +639,58 @@ function startedWork(attempt: MutableAttempt): boolean {
   return attempt.messages.some((message) => message.role === "assistant");
 }
 
+function captureDispatchSnapshot(
+  ctx: ExtensionContext,
+  settings: ProfileSettingsSnapshot = { settings: { version: 1, agents: {} } },
+): DispatchSnapshot {
+  const parent = ctx.model;
+  return Object.freeze({
+    settings: Object.freeze({
+      settings: Object.freeze({
+        version: 1,
+        agents: Object.freeze(Object.fromEntries(Object.entries(settings.settings.agents).map(([role, value]) => [role, Object.freeze({ ...value })]))),
+      }),
+      ...(settings.error ? { error: settings.error } : {}),
+    }),
+    available: Object.freeze(ctx.modelRegistry.getAvailable().map((model) => Object.freeze({
+      ...model,
+      ...(model.thinkingLevelMap ? { thinkingLevelMap: Object.freeze({ ...model.thinkingLevelMap }) } : {}),
+    })) as Model<any>[]),
+    ...(parent ? { parentModel: Object.freeze({ provider: parent.provider, id: parent.id }) } : {}),
+    ...(ctx.thinkingLevel ? { parentThinkingLevel: ctx.thinkingLevel as AgentDefinition["thinkingLevel"] } : {}),
+  });
+}
+
 function resolveModel(
   definition: AgentDefinition,
-  ctx: ExtensionContext,
-): { model?: AgentDefinition["model"]; thinkingLevel?: AgentDefinition["thinkingLevel"]; warning?: string } {
-  const available = ctx.modelRegistry.getAvailable();
-  const mappedAvailable = available.some(
-    (model) => `${model.provider}/${model.id}` === definition.model,
-  );
-  if (mappedAvailable) {
-    return { model: definition.model, thinkingLevel: definition.thinkingLevel };
+  snapshot: DispatchSnapshot,
+): { model?: AgentDefinition["model"]; thinkingLevel?: AgentDefinition["thinkingLevel"]; warnings: string[] } {
+  const override = snapshot.settings.settings.agents[definition.name];
+  const configuredModel = override
+    ? `${override.provider}/${override.model}` as AgentDefinition["model"]
+    : definition.model;
+  const configuredThinking = override?.thinkingLevel ?? definition.thinkingLevel;
+  const warnings = snapshot.settings.error ? [snapshot.settings.error] : [];
+  const available = snapshot.available.find((model) => `${model.provider}/${model.id}` === configuredModel);
+  if (available) {
+    const supported = getSupportedThinkingLevels(available);
+    const thinkingLevel = supported.includes(configuredThinking)
+      ? configuredThinking
+      : clampThinkingLevel(available, configuredThinking);
+    if (thinkingLevel !== configuredThinking) {
+      warnings.push(`Configured reasoning ${configuredThinking} is unsupported by ${configuredModel}; using ${thinkingLevel}.`);
+    }
+    return { model: configuredModel, thinkingLevel, warnings };
   }
 
-  if (!ctx.model) {
-    return {
-      warning: `Fallback unavailable: mapped model ${definition.model} and the parent model are unavailable.`,
-    };
+  if (!snapshot.parentModel || !snapshot.parentThinkingLevel) {
+    warnings.push(`Fallback unavailable: configured model ${configuredModel} is unavailable and the parent model or reasoning level is unavailable.`);
+    return { warnings };
   }
 
-  const model = `${ctx.model.provider}/${ctx.model.id}` as AgentDefinition["model"];
-  const thinkingLevel = ctx.thinkingLevel ?? definition.thinkingLevel;
-  return {
-    model,
-    thinkingLevel,
-    warning: `Fallback: mapped model ${definition.model} is unavailable; using parent model ${model}.`,
-  };
+  const model = `${snapshot.parentModel.provider}/${snapshot.parentModel.id}` as AgentDefinition["model"];
+  warnings.push(`Fallback: configured model ${configuredModel} is unavailable; using parent model ${model} and reasoning ${snapshot.parentThinkingLevel}.`);
+  return { model, thinkingLevel: snapshot.parentThinkingLevel, warnings };
 }
 
 async function runAttempt(
@@ -1018,7 +1067,8 @@ export function formatSubagentBatch(details: SubagentBatchDetails): string {
     const output = outcome.status === "succeeded"
       ? finalOutput(outcome.run.attempts.at(-1)?.messages ?? [])
       : failureOutput(outcome.run);
-    return `${outcome.index + 1}. ${safeTitle(outcome.run.title)} — ${outcome.status}\n${output}`;
+    const warnings = outcome.run.warnings.length > 0 ? `${outcome.run.warnings.join("\n")}\n` : "";
+    return `${outcome.index + 1}. ${safeTitle(outcome.run.title)} — ${outcome.status}\n${warnings}${output}`;
   }).join("\n\n"));
 }
 
@@ -1054,6 +1104,7 @@ function snapshotRun(run: MutableRun): SubagentRun {
     ...(run.endedAt !== undefined ? { endedAt: run.endedAt } : {}),
     model: run.model,
     thinkingLevel: run.thinkingLevel,
+    warnings: [...run.warnings],
     attempts: run.attempts.map((attempt) => ({
       number: attempt.number,
       state: attempt.state,

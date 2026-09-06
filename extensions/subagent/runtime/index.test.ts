@@ -6,6 +6,7 @@ import path from "node:path";
 import test, { mock } from "node:test";
 
 import { loadBundledAgents } from "../agents/index.ts";
+import { loadProfileSettings } from "../state/index.ts";
 import { executeSubagent as executeRuntime, executeSubagentBatch, MAX_RESULT_BYTES } from "./index.ts";
 
 const bundledAgents = await loadBundledAgents(new URL("../agents/", import.meta.url));
@@ -655,7 +656,149 @@ test("falls back to the parent model and thinking level when the mapped model is
   assert.equal(result.details.thinkingLevel, "high");
   assert.equal(record.argv[5], "openai-codex/parent-model");
   assert.equal(record.argv[7], "high");
-  assert.match(result.details.attempts[0].activity[0], /unavailable/i);
+  assert.match(result.details.warnings[0], /unavailable/i);
+  assert.deepEqual(result.details.attempts[0].activity, []);
+});
+
+test("uses saved role overrides for batch dispatch", async () => {
+  const before = (await records()).length;
+  const result = await executeSubagentBatch(
+    "configured-batch",
+    { tasks: [{ agent: "scout", title: "configured", task: "use saved configuration" }] },
+    bundledAgents,
+    makeContext(undefined, { available: ["test/override-model"] }),
+    testSessionRoot,
+    undefined,
+    { onMonitorEvent: () => {} },
+    {
+      settings: {
+        version: 1,
+        agents: { scout: { provider: "test", model: "override-model", thinkingLevel: "high" } },
+      },
+    },
+  );
+  const record = (await records()).slice(before)[0];
+  const run: any = (result.details.outcomes[0] as any).run;
+
+  assert.equal(record.argv[5], "test/override-model");
+  assert.equal(record.argv[7], "high");
+  assert.equal(run.model, "test/override-model");
+  assert.deepEqual(run.warnings, []);
+});
+
+test("freezes active batch disk settings through retries and reads repaired disk on the next batch", async () => {
+  const profileDirectory = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-snapshot-"));
+  const previousDirectory = process.env.PI_CODING_AGENT_DIR;
+  const statePath = path.join(profileDirectory, "subagent-config.json");
+  const before = (await records()).length;
+  const available = [bundledAgents[0].model];
+  const ctx = makeContext(undefined, { available });
+  ctx.modelRegistry = { getAvailable: () => available.map((name) => {
+    const [provider, id] = name.split("/", 2);
+    return { provider, id, reasoning: true };
+  }) };
+  process.env.PI_CODING_AGENT_DIR = profileDirectory;
+  try {
+    await writeFile(statePath, JSON.stringify({ version: 1, agents: {} }));
+    const settings = (await loadProfileSettings()).snapshot();
+    const pending = withScenario("snapshot-retry", () => executeSubagentBatch(
+      "frozen-dispatch",
+      { tasks: [{ agent: "scout", title: "frozen", task: "retry with original configuration" }] },
+      bundledAgents, ctx, testSessionRoot, undefined, { onMonitorEvent: () => {} }, settings,
+    ));
+    await waitForScenarioRecord("snapshot-retry", before);
+    await writeFile(statePath, JSON.stringify({ version: 1, agents: { scout: { provider: "test", model: "changed", thinkingLevel: "high" } } }));
+    available.splice(0, available.length, "test/changed");
+    const active = await pending;
+    const activeRecords = (await records()).slice(before).filter((record) => record.scenario === "snapshot-retry");
+
+    assert.equal(active.details.outcomes[0].status, "succeeded");
+    assert.equal(activeRecords.length, 2);
+    assert.ok(activeRecords.every((record) => record.argv[5] === bundledAgents[0].model));
+    assert.ok(activeRecords.every((record) => record.argv[7] === bundledAgents[0].thinkingLevel));
+
+    const next = await executeSubagentBatch(
+      "changed-dispatch",
+      { tasks: [{ agent: "scout", title: "changed", task: "read changed configuration" }] },
+      bundledAgents, ctx, testSessionRoot, undefined, { onMonitorEvent: () => {} },
+      (await loadProfileSettings()).snapshot(),
+    );
+    const nextRun: any = (next.details.outcomes[0] as any).run;
+    assert.equal(nextRun.model, "test/changed");
+    assert.equal(nextRun.thinkingLevel, "high");
+  } finally {
+    if (previousDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    else process.env.PI_CODING_AGENT_DIR = previousDirectory;
+    await rm(profileDirectory, { recursive: true, force: true });
+  }
+});
+
+test("clamps unsupported saved reasoning without changing the override", async () => {
+  const result = await executeSubagentBatch(
+    "clamped-reasoning",
+    { tasks: [{ agent: "scout", title: "clamped", task: "use supported reasoning" }] },
+    bundledAgents,
+    {
+      ...makeContext(undefined, { available: [] }),
+      modelRegistry: { getAvailable: () => [{ provider: "test", id: "no-reasoning", reasoning: false }] },
+    },
+    testSessionRoot,
+    undefined,
+    { onMonitorEvent: () => {} },
+    {
+      settings: {
+        version: 1,
+        agents: { scout: { provider: "test", model: "no-reasoning", thinkingLevel: "high" } },
+      },
+    },
+  );
+  const run: any = (result.details.outcomes[0] as any).run;
+
+  assert.equal(run.thinkingLevel, "off");
+  assert.match(run.warnings[0], /unsupported.*using off/i);
+});
+
+test("uses bundled defaults with a visible corrupt-settings warning", async () => {
+  const result = await executeSubagentBatch(
+    "corrupt-settings",
+    { tasks: [{ agent: "scout", title: "repair later", task: "use defaults" }] },
+    bundledAgents,
+    makeContext(),
+    testSessionRoot,
+    undefined,
+    { onMonitorEvent: () => {} },
+    { settings: { version: 1, agents: {} }, error: "Failed to read profile settings: invalid JSON" },
+  );
+  const run: any = (result.details.outcomes[0] as any).run;
+
+  assert.equal(run.model, bundledAgents[0].model);
+  assert.match(run.warnings[0], /Failed to read profile settings/);
+  assert.match(outputText(result), /Failed to read profile settings/);
+});
+
+test("fails before spawn when an unavailable configured model has no parent reasoning", async () => {
+  const before = await records();
+  const result = await executeSubagentBatch(
+    "no-parent-reasoning",
+    { tasks: [{ agent: "scout", title: "no parent", task: "must not spawn" }] },
+    bundledAgents,
+    makeContext(undefined, { available: [], thinkingLevel: undefined }),
+    testSessionRoot,
+    undefined,
+    { onMonitorEvent: () => {} },
+    {
+      settings: {
+        version: 1,
+        agents: { scout: { provider: "missing", model: "model", thinkingLevel: "high" } },
+      },
+    },
+  );
+  const run: any = (result.details.outcomes[0] as any).run;
+
+  assert.equal(run.attempts.length, 0);
+  assert.match(run.error, /parent model or reasoning/i);
+  assert.match(outputText(result), /Fallback unavailable/i);
+  assert.deepEqual(await records(), before);
 });
 
 test("uses a distinct child process for each delegated call", async () => {
@@ -1046,7 +1189,7 @@ function makeContext(
   overrides: {
     available?: readonly string[];
     model?: { provider: string; id: string };
-    thinkingLevel?: string;
+    thinkingLevel?: string | undefined;
   } = {},
 ): any {
   const model = overrides.model ?? { provider: "openai-codex", id: "parent" };
@@ -1054,11 +1197,11 @@ function makeContext(
   return {
     cwd,
     model,
-    thinkingLevel: overrides.thinkingLevel ?? "medium",
+    thinkingLevel: overrides.thinkingLevel === undefined && !("thinkingLevel" in overrides) ? "medium" : overrides.thinkingLevel,
     modelRegistry: {
       getAvailable: () => available.map((name) => {
         const [provider, id] = name.split("/", 2);
-        return { provider, id };
+        return { provider, id, reasoning: true };
       }),
     },
   };
@@ -1203,7 +1346,7 @@ if (scenario === "late-session") {
 } else if (scenario === "hang") {
   process.on("SIGTERM", () => { recordSignal("SIGTERM"); });
   setInterval(() => {}, 1000);
-} else if (((scenario === "retry-startup" || scenario === "retry-startup-worker") && attemptNumber === 1) || scenario === "fail-twice" || scenario === "batch-fail-twice") {
+} else if (((scenario === "retry-startup" || scenario === "retry-startup-worker" || scenario === "snapshot-retry") && attemptNumber === 1) || scenario === "fail-twice" || scenario === "batch-fail-twice") {
   process.stderr.write("failure attempt " + attemptNumber + "\\n");
   process.exitCode = 1;
 } else if (scenario === "telemetry-retry-no-usage" && attemptNumber === 1) {
