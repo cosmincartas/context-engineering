@@ -25,6 +25,7 @@ function monitored(runId: string, state = "running"): any {
       task: "inspect",
       state,
       startedAt: 1,
+      warnings: [],
       attempts: [],
     },
     sessions: [],
@@ -57,7 +58,10 @@ test("notifies once for each accepted mutation and publishes copies", () => {
   registry.add(monitored("one"));
   const published = registry.get("one")!;
   (published.run as any).title = "changed";
+  (published.run.warnings as string[]).push("changed");
+  (registry.list()[0].run.warnings as string[]).push("changed");
   assert.equal(registry.get("one")?.run.title, "Title one");
+  assert.deepEqual(registry.get("one")?.run.warnings, []);
 });
 
 test("shares immutable message arrays through registry copies", () => {

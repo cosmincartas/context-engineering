@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, chmod, cp, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { access, chmod, cp, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test, { mock } from "node:test";
@@ -30,11 +30,14 @@ function harness(parentToolNames: readonly string[] = defaultParentTools) {
   let sessionStart: ((event: unknown, ctx: any) => Promise<void>) | undefined;
   let sessionShutdown: ((event: unknown, ctx: any) => Promise<void>) | undefined;
   const tools: any[] = [];
+  const commands = new Map<string, any>();
+  let thinkingLevel = "medium";
+  let thinkingCalls = 0;
   const notifications: Array<{ message: string; level: string }> = [];
   const messages: Array<{ message: any; options: any }> = [];
   const messageRenderers = new Map<string, any>();
   let sendMessageError: Error | undefined;
-  const uiState: any = { footerFactory: undefined, editorFactory: undefined, custom: undefined };
+  const uiState: any = { footerFactory: undefined, editorFactory: undefined, custom: undefined, customCalls: [] as any[] };
   const theme: any = {
     fg: (_color: string, text: string) => text,
     bg: (_color: string, text: string) => text,
@@ -66,8 +69,9 @@ function harness(parentToolNames: readonly string[] = defaultParentTools) {
       uiState.footerFactory = factory;
       uiState.footer = factory ? factory(tui, theme, footerData) : undefined;
     },
-    custom(factory: any) {
+    custom(factory: any, options: any) {
       uiState.custom = factory;
+      uiState.customCalls.push({ factory, options });
       return new Promise(() => {});
     },
   };
@@ -87,8 +91,15 @@ function harness(parentToolNames: readonly string[] = defaultParentTools) {
       if (sendMessageError) throw sendMessageError;
       messages.push({ message, options });
     },
+    registerCommand(name: string, command: any) {
+      commands.set(name, command);
+    },
     getAllTools() {
       return parentToolNames.map((name) => ({ name }));
+    },
+    getThinkingLevel() {
+      thinkingCalls++;
+      return thinkingLevel;
     },
   };
   const context = (mode: "tui" | "rpc" | "json" | "print") => ({
@@ -105,12 +116,17 @@ function harness(parentToolNames: readonly string[] = defaultParentTools) {
   return {
     pi,
     tools,
+    commands,
     notifications,
     messages,
     messageRenderers,
     failSendMessage(error: Error) { sendMessageError = error; },
     uiState,
     context,
+    thinking: {
+      get calls() { return thinkingCalls; },
+      set level(value: string) { thinkingLevel = value; },
+    },
     async start(mode: "tui" | "rpc" | "json" | "print") {
       assert.ok(sessionStart, "session_start handler was not registered");
       await sessionStart({}, context(mode));
@@ -122,6 +138,27 @@ function harness(parentToolNames: readonly string[] = defaultParentTools) {
   };
 }
 
+/**
+ * Background dispatch reads the profile settings from disk before it starts the
+ * batch, so a fixed one-tick wait races that read. Poll for the condition.
+ */
+async function waitFor(condition: () => boolean, description: string): Promise<void> {
+  for (let attempt = 0; attempt < 500; attempt++) {
+    if (condition()) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error(`Timed out waiting for ${description}`);
+}
+
+async function completedRun(testHarness: any, runId: string): Promise<any> {
+  for (let attempt = 0; attempt < 500; attempt++) {
+    const found = testHarness.messages.find(({ message }: any) => message.details?.runId === runId);
+    if (found) return found.message.details.run;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error(`No subagent-result message for ${runId}`);
+}
+
 test("registers the tool only after a TUI session starts", async () => {
   const subagentExtension = await loadExtension();
 
@@ -130,6 +167,7 @@ test("registers the tool only after a TUI session starts", async () => {
     subagentExtension(testHarness.pi);
     await testHarness.start(mode);
     assert.equal(testHarness.tools.length, 0, `${mode} registered the subagent tool`);
+    assert.equal(testHarness.commands.size, 0, `${mode} registered the configuration command`);
   }
 
   const tuiHarness = harness();
@@ -138,8 +176,104 @@ test("registers the tool only after a TUI session starts", async () => {
   try {
     await tuiHarness.start("tui");
     assert.equal(tuiHarness.tools.length, 1);
+    assert.ok(tuiHarness.commands.has("subagent-config"));
   } finally {
     await tuiHarness.shutdown();
+  }
+});
+
+test("dispatch snapshots fallback reasoning from the host API once", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-thinking-fallback-"));
+  const profileDirectory = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-thinking-profile-"));
+  const previousPath = process.env.PATH;
+  const previousProfileDirectory = process.env.PI_CODING_AGENT_DIR;
+  await writeFile(path.join(directory, "pi"), `#!/usr/bin/env node
+const fs = require("node:fs");
+const dir = process.argv[process.argv.indexOf("--session-dir") + 1];
+fs.mkdirSync(dir, { recursive: true });
+fs.writeFileSync(dir + "/child.jsonl", "");
+process.stdout.write(JSON.stringify({ type: "session", id: "child" }) + "\\n");
+process.stdout.write(JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "ok" }], stopReason: "stop" } }) + "\\n");
+`);
+  await chmod(path.join(directory, "pi"), 0o755);
+  process.env.PATH = `${directory}${path.delimiter}${previousPath ?? ""}`;
+  process.env.PI_CODING_AGENT_DIR = profileDirectory;
+  try {
+    const testHarness = harness();
+    (await loadExtension())(testHarness.pi);
+    await testHarness.start("tui");
+    const context = testHarness.context("tui");
+    delete (context as any).thinkingLevel;
+    context.modelRegistry = { getAvailable: () => [] };
+    const started = await testHarness.tools[0].execute("fallback", { tasks: [{ agent: "scout", title: "fallback", task: "test" }] }, undefined, undefined, context);
+    testHarness.thinking.level = "high";
+    assert.equal(started.details.outcomes[0].status, "started");
+    const run = await completedRun(testHarness, "fallback:0");
+    assert.equal(testHarness.thinking.calls, 1);
+    assert.equal(run.thinkingLevel, "medium");
+    const explicitContext = testHarness.context("tui");
+    explicitContext.thinkingLevel = "high";
+    explicitContext.modelRegistry = { getAvailable: () => [] };
+    await testHarness.tools[0].execute("explicit", { tasks: [{ agent: "scout", title: "explicit", task: "test" }] }, undefined, undefined, explicitContext);
+    assert.equal((await completedRun(testHarness, "explicit:0")).thinkingLevel, "high");
+    assert.equal(testHarness.thinking.calls, 1);
+    await testHarness.shutdown();
+  } finally {
+    process.env.PATH = previousPath;
+    if (previousProfileDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    else process.env.PI_CODING_AGENT_DIR = previousProfileDirectory;
+    await rm(directory, { recursive: true, force: true });
+    await rm(profileDirectory, { recursive: true, force: true });
+  }
+});
+
+test("opens fresh global configuration with the current model catalog", async () => {
+  const profileDirectory = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-config-command-"));
+  const previousProfileDirectory = process.env.PI_CODING_AGENT_DIR;
+  process.env.PI_CODING_AGENT_DIR = profileDirectory;
+  try {
+    const first = harness();
+    (await loadExtension())(first.pi);
+    await first.start("tui");
+    const command = first.commands.get("subagent-config");
+    assert.ok(command);
+    await command.handler("unexpected", first.context("tui"));
+    assert.deepEqual(first.notifications, [{ message: "Usage: /subagent-config", level: "error" }]);
+    assert.equal(first.uiState.customCalls.length, 0);
+
+    let firstCatalogReads = 0;
+    const firstContext = first.context("tui");
+    firstContext.modelRegistry = { getAvailable: () => { firstCatalogReads++; return [{ provider: "custom", id: "first", reasoning: true }]; } } as any;
+    const parent = { model: firstContext.model, thinkingLevel: firstContext.thinkingLevel };
+    void command.handler("", firstContext);
+    for (let attempt = 0; attempt < 20 && first.uiState.customCalls.length === 0; attempt++) await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(firstCatalogReads, 1);
+    assert.equal(first.uiState.customCalls.length, 1);
+    assert.deepEqual(first.uiState.customCalls[0].options, { overlay: true, overlayOptions: { anchor: "center", width: "70%", maxHeight: "80%", minWidth: 40 } });
+    const firstModal = first.uiState.customCalls[0].factory({ requestRender() {}, terminal: { rows: 24, columns: 80 } }, { fg: (_: string, text: string) => text }, {}, () => {});
+    assert.match(firstModal.render(100).join("\n"), /scout|worker|oracle|reviewer/i);
+    assert.deepEqual({ model: firstContext.model, thinkingLevel: firstContext.thinkingLevel }, parent);
+    assert.equal(first.tools.length, 1);
+    await first.shutdown();
+
+    await writeFile(path.join(profileDirectory, "subagent-config.json"), JSON.stringify({ version: 1, agents: { scout: { provider: "custom", model: "second", thinkingLevel: "high" } } }));
+    const second = harness();
+    (await loadExtension())(second.pi);
+    await second.start("tui");
+    const secondContext = second.context("tui");
+    let secondCatalogReads = 0;
+    secondContext.modelRegistry = { getAvailable: () => { secondCatalogReads++; return [{ provider: "custom", id: "second", reasoning: true }]; } } as any;
+    void second.commands.get("subagent-config").handler("", secondContext);
+    for (let attempt = 0; attempt < 20 && second.uiState.customCalls.length === 0; attempt++) await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(secondCatalogReads, 1);
+    const secondModal = second.uiState.customCalls[0].factory({ requestRender() {}, terminal: { rows: 24, columns: 80 } }, { fg: (_: string, text: string) => text }, {}, () => {});
+    assert.match(secondModal.render(100).join("\n"), /│ > Scout\s+│\s+Model: custom\/second[\s\S]*Source: saved/);
+    assert.equal(second.tools.length, 1);
+    await second.shutdown();
+  } finally {
+    if (previousProfileDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    else process.env.PI_CODING_AGENT_DIR = previousProfileDirectory;
+    await rm(profileDirectory, { recursive: true, force: true });
   }
 });
 
@@ -328,7 +462,7 @@ test("registers the parallel batch contract", async () => {
     );
     assert.equal(result.details.outcomes[0].status, "started");
     assert.equal(result.details.outcomes[0].runId, "call:0");
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await waitFor(() => testHarness.messages.length > 0, "the unknown-agent result message");
     assert.equal(testHarness.messages.length, 1);
     assert.equal(testHarness.messages[0].message.details.run.state, "failed");
     assert.match(testHarness.messages[0].message.content, /Unknown agent: missing/);
@@ -347,11 +481,101 @@ test("notifies when a background batch rejects", async () => {
     await testHarness.tools[0].execute(
       "rejected", { tasks: [{ agent: "missing", title: "missing", task: "fail" }] }, undefined, undefined, testHarness.context("tui"),
     );
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await waitFor(() => testHarness.notifications.length > 0, "the background rejection notification");
     assert.equal(testHarness.notifications.length, 1);
     assert.match(testHarness.notifications[0].message, /delivery unavailable/i);
   } finally {
     await testHarness.shutdown();
+  }
+});
+
+test("public Agent dispatch freezes corrupt settings for a retry and reloads repaired overrides", { timeout: 10_000 }, async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-settings-dispatch-"));
+  const profileDirectory = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-profile-"));
+  const executable = path.join(directory, "pi");
+  const recordsDirectory = path.join(directory, "records");
+  const release = path.join(directory, "release");
+  const statePath = path.join(profileDirectory, "subagent-config.json");
+  const previousPath = process.env.PATH;
+  const previousProfileDirectory = process.env.PI_CODING_AGENT_DIR;
+  const previousRecordsDirectory = process.env.PI_SUBAGENT_SETTINGS_RECORDS;
+  const previousRelease = process.env.PI_SUBAGENT_SETTINGS_RELEASE;
+  await fsPromises.mkdir(recordsDirectory);
+  await writeFile(
+    executable,
+    `#!/usr/bin/env node
+const fs = require("node:fs");
+const path = require("node:path");
+const argv = process.argv.slice(2);
+const records = process.env.PI_SUBAGENT_SETTINGS_RECORDS;
+const attempt = fs.readdirSync(records).length + 1;
+fs.writeFileSync(path.join(records, String(attempt)), JSON.stringify({ argv, attempt }));
+const sessionDirectory = argv[argv.indexOf("--session-dir") + 1];
+const sessionId = "settings-" + process.pid;
+fs.mkdirSync(sessionDirectory, { recursive: true });
+fs.writeFileSync(path.join(sessionDirectory, sessionId + ".jsonl"), "");
+function finish() {
+  process.stdout.write(JSON.stringify({ type: "session", id: sessionId }) + "\\n");
+  process.stdout.write(JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "ok" }], stopReason: "stop" } }) + "\\n");
+}
+if (attempt === 1) process.exit(1);
+if (attempt === 2) setInterval(() => { if (fs.existsSync(process.env.PI_SUBAGENT_SETTINGS_RELEASE)) { finish(); process.exit(0); } }, 10);
+else finish();
+`,
+  );
+  await chmod(executable, 0o755);
+  process.env.PATH = `${directory}${path.delimiter}${previousPath ?? ""}`;
+  process.env.PI_CODING_AGENT_DIR = profileDirectory;
+  process.env.PI_SUBAGENT_SETTINGS_RECORDS = recordsDirectory;
+  process.env.PI_SUBAGENT_SETTINGS_RELEASE = release;
+
+  const records = async () => Promise.all((await readdir(recordsDirectory)).map(async (file) => JSON.parse(await readFile(path.join(recordsDirectory, file), "utf8"))));
+  const waitForRecords = async (count: number) => {
+    for (let attempt = 0; attempt < 100; attempt++) {
+      if ((await records()).length >= count) return;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error(`Expected ${count} child attempts`);
+  };
+  try {
+    await writeFile(statePath, "{ corrupt");
+    const subagentExtension = await loadExtension();
+    const testHarness = harness();
+    subagentExtension(testHarness.pi);
+    await testHarness.start("tui");
+    const toolContext = testHarness.context("tui");
+    toolContext.modelRegistry = { getAvailable: () => [
+      { provider: "openai-codex", id: "gpt-5.6-luna", reasoning: true },
+      { provider: "test", id: "override-model", reasoning: true },
+    ] } as any;
+    const [tool] = testHarness.tools;
+    const started = await tool.execute("corrupt", { tasks: [{ agent: "scout", title: "corrupt", task: "retry" }] }, undefined, undefined, toolContext);
+    assert.equal(started.details.outcomes[0].status, "started");
+    await waitForRecords(2);
+    await writeFile(statePath, JSON.stringify({ version: 1, agents: { scout: { provider: "test", model: "override-model", thinkingLevel: "high" } } }));
+    await writeFile(release, "release");
+    const currentRun = await completedRun(testHarness, "corrupt:0");
+    assert.equal(currentRun.model, "openai-codex/gpt-5.6-luna");
+    assert.equal(currentRun.thinkingLevel, "medium");
+    assert.match(currentRun.warnings[0], /Failed to read profile settings/i);
+    assert.ok((await records()).slice(0, 2).every((record) => record.argv[5] === "openai-codex/gpt-5.6-luna"));
+
+    await tool.execute("repaired", { tasks: [{ agent: "scout", title: "repaired", task: "reload" }] }, undefined, undefined, toolContext);
+    const laterRun = await completedRun(testHarness, "repaired:0");
+    assert.equal(laterRun.model, "test/override-model");
+    assert.equal(laterRun.thinkingLevel, "high");
+    assert.deepEqual(laterRun.warnings, []);
+    await testHarness.shutdown();
+  } finally {
+    process.env.PATH = previousPath;
+    if (previousProfileDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    else process.env.PI_CODING_AGENT_DIR = previousProfileDirectory;
+    if (previousRecordsDirectory === undefined) delete process.env.PI_SUBAGENT_SETTINGS_RECORDS;
+    else process.env.PI_SUBAGENT_SETTINGS_RECORDS = previousRecordsDirectory;
+    if (previousRelease === undefined) delete process.env.PI_SUBAGENT_SETTINGS_RELEASE;
+    else process.env.PI_SUBAGENT_SETTINGS_RELEASE = previousRelease;
+    await rm(directory, { recursive: true, force: true });
+    await rm(profileDirectory, { recursive: true, force: true });
   }
 });
 
@@ -452,7 +676,7 @@ const timer = setInterval(() => {
     ));
     const firstCompletion = testHarness.messages.find(({ message }) => message.details.runId === "batch-call:0");
     assert.ok(firstCompletion);
-    assert.match(firstCompletion.message.content, /^1\. Child 0 — succeeded\nlifecycle child$/);
+    assert.match(firstCompletion.message.content, /^1\. Child 0 — succeeded\n(?:Fallback: [^\n]*\n)?lifecycle child$/);
     const finishedText = testHarness.uiState.footer.render(120).join("\n");
     assert.match(finishedText, /\(openai-codex\) parent • medium/);
     assert.doesNotMatch(finishedText, /orchestrator|^subagent /m);
@@ -629,6 +853,7 @@ test("notifies once and registers nothing when session root setup fails", async 
     subagentExtension(testHarness.pi);
     await testHarness.start("tui");
     assert.equal(testHarness.tools.length, 0);
+    assert.equal(testHarness.commands.size, 0);
     assert.equal(testHarness.notifications.length, 1);
     assert.match(testHarness.notifications[0].message, /session root unavailable/i);
   } finally {
@@ -654,7 +879,7 @@ test("notifies the TUI and registers nothing when the bundled catalog fails", as
     for (const file of ["index.ts", "package.json"]) {
       await cp(new URL(file, import.meta.url), path.join(directory, file));
     }
-    for (const module of ["runtime", "ui"]) {
+    for (const module of ["runtime", "ui", "state"]) {
       await cp(new URL(`./${module}/`, import.meta.url), path.join(directory, module), {
         recursive: true,
       });
@@ -671,6 +896,7 @@ test("notifies the TUI and registers nothing when the bundled catalog fails", as
       await testHarness.start("tui");
 
       assert.equal(testHarness.tools.length, 0);
+      assert.equal(testHarness.commands.size, 0);
       assert.equal(testHarness.notifications.length, 1);
       assert.equal(testHarness.notifications[0].level, "error");
       assert.match(testHarness.notifications[0].message, /reviewer\.md/i);
@@ -726,10 +952,11 @@ function renderFixture(state: string): any {
           endedAt: state === "running" ? undefined : 2,
           model: "openai-codex/gpt-5.6-luna",
           thinkingLevel: "medium",
+          warnings: ["Fallback: mapped model unavailable; using parent model."],
           attempts: [{
             number: 1,
             state: state === "retrying" ? "failed" : state,
-            activity: ["Fallback: mapped model unavailable; using parent model."],
+            activity: [],
             messages: [],
             stderr: "provider diagnostic output",
             exitCode: 1,
@@ -854,6 +1081,51 @@ test("expands task, attempts, warnings, tool calls, Markdown output, and diagnos
   assert.doesNotMatch(text, /^# Final heading/m);
 });
 
+test("expands historical run details without warnings and falls back for malformed warnings", async () => {
+  const renderSubagentResult = (await loadModule()).renderSubagentResult;
+  const fixture = renderFixture("succeeded");
+  delete fixture.details.outcomes[0].run.warnings;
+
+  const text = renderSubagentResult(
+    fixture,
+    { expanded: true, isPartial: false },
+    plainTheme,
+  ).render(120).join("\n");
+
+  assert.match(text, /Inspect a deliberately long task description/);
+  assert.match(text, /Attempt 1/);
+
+  for (const warnings of ["not-an-array", ["valid warning", 1]]) {
+    const malformed = renderFixture("succeeded");
+    malformed.details.outcomes[0].run.warnings = warnings;
+    const fallback = renderSubagentResult(malformed, { expanded: true, isPartial: false }, plainTheme).render(120).join("\n");
+    assert.match(fallback, /Final \*\*answer\*\*/);
+    assert.doesNotMatch(fallback, /Subagents/);
+  }
+});
+
+test("renders every warning before a pre-spawn model failure", async () => {
+  const renderSubagentResult = (await loadModule()).renderSubagentResult;
+  const fixture = renderFixture("failed");
+  const run = fixture.details.outcomes[0].run;
+  run.attempts = [];
+  run.warnings = [
+    "Failed to read profile settings: invalid JSON",
+    "Fallback unavailable: configured model missing/model is unavailable and the parent model or reasoning level is unavailable.",
+  ];
+  run.error = run.warnings[1];
+
+  const text = renderSubagentResult(
+    fixture,
+    { expanded: true, isPartial: false },
+    plainTheme,
+  ).render(160).join("\n");
+
+  for (const warning of run.warnings) {
+    assert.equal(text.split(`Warning: ${warning}`).length - 1, 1);
+  }
+});
+
 function batchRenderFixture(): any {
   return {
     content: [{ type: "text", text: "batch fallback" }],
@@ -869,6 +1141,7 @@ function batchRenderFixture(): any {
             state: "succeeded",
             startedAt: 1,
             endedAt: 2,
+            warnings: [],
             attempts: [{ number: 1, state: "succeeded", activity: [], messages: [assistantMessage([{ type: "text", text: "first output" }])], stderr: "", exitCode: 0 }],
           },
         },
