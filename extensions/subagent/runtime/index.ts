@@ -127,6 +127,7 @@ export type SubagentRuntimeCallbacks = {
 export type SubagentBatchRuntimeCallbacks = {
   readonly onToolUpdate?: AgentToolUpdateCallback<SubagentBatchDetails>;
   readonly onMonitorEvent: (event: SubagentMonitorEvent) => void;
+  readonly onOutcome?: (outcome: Extract<SubagentBatchOutcome, { run: SubagentRun }>) => void;
 };
 
 type MutableAttempt = {
@@ -406,6 +407,74 @@ export async function executeSubagentBatch(
   if (typeof batchId !== "string" || batchId.trim() === "") {
     throw new TypeError("Invalid subagent batch request: batch id must not be blank");
   }
+  const outcomes = classifyBatch(request);
+  const queued = outcomes.filter((outcome): outcome is Extract<SubagentBatchOutcome, { status: "queued" }> => outcome.status === "queued");
+
+  signal?.throwIfAborted();
+  const runQueued = async (
+    outcome: Extract<SubagentBatchOutcome, { status: "queued" }>,
+  ): Promise<void> => {
+    signal?.throwIfAborted();
+    const childRunId = `${batchId}:${outcome.index}`;
+    let monitorStarted = false;
+    let finalOutcome!: Extract<SubagentBatchOutcome, { run: SubagentRun }>;
+    try {
+      const child = await executeSubagent(
+        childRunId,
+        outcome.request,
+        catalog,
+        ctx,
+        sessionRoot,
+        signal,
+        {
+          onToolUpdate: (update) => {
+            outcomes[outcome.index] = {
+              index: outcome.index,
+              status: update.details.state,
+              run: update.details,
+            };
+            publishBatchUpdate(callbacks, outcomes);
+          },
+          onMonitorEvent: (event) => {
+            if (event.type === "started") monitorStarted = true;
+            callbacks.onMonitorEvent(event);
+          },
+        },
+      );
+      finalOutcome = {
+        index: outcome.index,
+        status: child.details.state,
+        run: child.details,
+      };
+      outcomes[outcome.index] = finalOutcome;
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      const run = failedRun(outcome.request, error);
+      finalOutcome = { index: outcome.index, status: "failed", run };
+      outcomes[outcome.index] = finalOutcome;
+      if (monitorStarted) {
+        callbacks.onMonitorEvent({
+          type: "finished",
+          run: { runId: childRunId, run, sessions: [] },
+        });
+      }
+      publishBatchUpdate(callbacks, outcomes);
+    }
+    callbacks.onOutcome?.(finalOutcome);
+  };
+  const settled = await Promise.allSettled(queued.map(runQueued));
+  if (signal?.aborted) throw signal.reason;
+  const rejection = settled.find((result): result is PromiseRejectedResult => result.status === "rejected");
+  if (rejection) throw rejection.reason;
+
+  const details = snapshotBatch(outcomes);
+  return {
+    content: [{ type: "text", text: formatSubagentBatch(details) }],
+    details,
+  };
+}
+
+export function classifyBatch(request: unknown): SubagentBatchOutcome[] {
   let requestKeys: (string | symbol)[];
   try {
     if (!isRecord(request)) throw new TypeError();
@@ -432,66 +501,7 @@ export async function executeSubagentBatch(
         }
       : classifyTask(index, request.tasks[index]));
   }
-  const queued = outcomes.filter((outcome): outcome is Extract<SubagentBatchOutcome, { status: "queued" }> => outcome.status === "queued");
-
-  signal?.throwIfAborted();
-  const runQueued = async (
-    outcome: Extract<SubagentBatchOutcome, { status: "queued" }>,
-  ): Promise<void> => {
-    signal?.throwIfAborted();
-    const childRunId = `${batchId}:${outcome.index}`;
-    let monitorStarted = false;
-    try {
-      const child = await executeSubagent(
-        childRunId,
-        outcome.request,
-        catalog,
-        ctx,
-        sessionRoot,
-        signal,
-        {
-          onToolUpdate: (update) => {
-            outcomes[outcome.index] = {
-              index: outcome.index,
-              status: update.details.state,
-              run: update.details,
-            };
-            publishBatchUpdate(callbacks, outcomes);
-          },
-          onMonitorEvent: (event) => {
-            if (event.type === "started") monitorStarted = true;
-            callbacks.onMonitorEvent(event);
-          },
-        },
-      );
-      outcomes[outcome.index] = {
-        index: outcome.index,
-        status: child.details.state,
-        run: child.details,
-      };
-    } catch (error) {
-      if (signal?.aborted) throw error;
-      const run = failedRun(outcome.request, error);
-      outcomes[outcome.index] = { index: outcome.index, status: "failed", run };
-      if (monitorStarted) {
-        callbacks.onMonitorEvent({
-          type: "finished",
-          run: { runId: childRunId, run, sessions: [] },
-        });
-      }
-      publishBatchUpdate(callbacks, outcomes);
-    }
-  };
-  const settled = await Promise.allSettled(queued.map(runQueued));
-  if (signal?.aborted) throw signal.reason;
-  const rejection = settled.find((result): result is PromiseRejectedResult => result.status === "rejected");
-  if (rejection) throw rejection.reason;
-
-  const details = snapshotBatch(outcomes);
-  return {
-    content: [{ type: "text", text: formatSubagentBatch(details) }],
-    details,
-  };
+  return outcomes;
 }
 
 function classifyTask(index: number, value: unknown): SubagentBatchOutcome {
@@ -1007,19 +1017,21 @@ function safeTitle(title: unknown): string {
 }
 
 export function formatSubagentBatch(details: SubagentBatchDetails): string {
-  return truncateOutput(details.outcomes.map((outcome) => {
-    if (outcome.status === "malformed" || outcome.status === "over-limit") {
-      return `${outcome.index + 1}. ${outcome.status}: ${outcome.reason}`;
-    }
-    if (outcome.status === "queued") {
-      return `${outcome.index + 1}. ${safeTitle(outcome.request.title)} — queued`;
-    }
-    if (!("run" in outcome)) throw new TypeError("Invalid subagent batch outcome");
-    const output = outcome.status === "succeeded"
-      ? finalOutput(outcome.run.attempts.at(-1)?.messages ?? [])
-      : failureOutput(outcome.run);
-    return `${outcome.index + 1}. ${safeTitle(outcome.run.title)} — ${outcome.status}\n${output}`;
-  }).join("\n\n"));
+  return truncateOutput(details.outcomes.map(formatSubagentOutcome).join("\n\n"));
+}
+
+export function formatSubagentOutcome(outcome: SubagentBatchOutcome): string {
+  if (outcome.status === "malformed" || outcome.status === "over-limit") {
+    return `${outcome.index + 1}. ${outcome.status}: ${outcome.reason}`;
+  }
+  if (outcome.status === "queued") {
+    return `${outcome.index + 1}. ${safeTitle(outcome.request.title)} — queued`;
+  }
+  if (!("run" in outcome)) throw new TypeError("Invalid subagent batch outcome");
+  const output = outcome.status === "succeeded"
+    ? finalOutput(outcome.run.attempts.at(-1)?.messages ?? [])
+    : failureOutput(outcome.run);
+  return truncateOutput(`${outcome.index + 1}. ${safeTitle(outcome.run.title)} — ${outcome.status}\n${output}`);
 }
 
 function finalOutput(messages: readonly Message[]): string {

@@ -15,7 +15,7 @@ This package provides only these orchestration tools:
 - `TaskUpdate` accepts `{ id, text?, status? }`. Its status values are `pending`, `active`, and `completed`.
 - `TaskList` accepts `{}` and returns every task for the current session.
 - `TaskGet` accepts `{ id }` and returns one task for the current session.
-- `Agent` accepts `{ tasks: [{ agent, title, task }] }`. It runs independent batch items synchronously and in parallel. A batch contains at most eight items. The bundled `agent` values are lowercase: `scout`, `oracle`, `worker`, and `reviewer`.
+- `Agent` accepts `{ tasks: [{ agent, title, task }] }`. It returns at once with a started stub for each valid item. Each started stub includes a run id. Each child later sends one `subagent-result` completion message with that run id and its report. A batch contains at most eight items. The bundled `agent` values are lowercase: `scout`, `oracle`, `worker`, and `reviewer`.
 
 Keep task objects to the fields supplied by these tools. Put role, dependency, scope, and evidence information in the task's `text`; do not add task fields or invent a scheduler or structured dependency API.
 
@@ -40,6 +40,7 @@ Dependencies: none
 Scope: extensions/example/index.ts
 Acceptance: ...
 Verification: ...
+Run: none
 ```
 
 Use `TaskList` and `TaskGet` to inspect the current work. The orchestrator, not a task API, decides which tasks are ready by reading their text and the latest evidence.
@@ -54,40 +55,33 @@ Scout and Oracle work may run together when their scopes are independent. Do not
 
 ## 3. Dispatch ready work
 
-At each transition, use `TaskList` to recompute readiness from the task text and completed evidence.
+Use `TaskList` to recompute readiness from task text and completed evidence. Identify every ready independent task. Split more than eight ready tasks into batches of at most eight. Mark each batch `active` immediately before its `Agent` call; never mark unsent work `active`.
 
-1. Identify every ready independent task in the current dispatch group.
-2. Use `TaskUpdate` to mark all ready tasks in that group `active`.
-3. Build one ordered `Agent` item for each task. Use the task's role as the lowercase `agent` value, a concise `title`, and a self-contained `task` prompt.
-4. Keep the ordered task IDs beside the ordered Agent items. Map each returned outcome by its batch position to the corresponding task ID.
-5. Inspect each returned report before changing its task status. A normal child exit (`succeeded`) is process evidence only, not task success. Compare the report's verdict and evidence with the task's acceptance criteria and required checks. Mark a task `completed` only when the report supports a passing verdict, all applicable checks pass, and no blocker, actionable finding, or missing evidence remains. Otherwise return it to `pending` and record the report, failed checks, blockers, actionable findings, and any missing or ambiguous evidence in the task text.
-6. Use `TaskList` again before the next transition.
+Build one `Agent` item for each task. Use the task role as the lowercase `agent` value, a concise `title`, and a self-contained `task` prompt. When `Agent` returns its started stub, record `Run: <runId>` in each matching started task's text with `TaskUpdate`. Do not map later completion messages by batch position. If an item is `malformed` or `over-limit`, return that task to `pending` and record the reason as evidence. It is not ready again until its request or batch is corrected; redispatch the corrected item, or record an external blocker and end the turn. Never retry an unchanged malformed or over-limit item.
 
-Send independent tasks together in one `Agent` batch. Keep each batch at or below eight items. If more ready work exists than one batch can hold, use another dispatch group after recording the first group's outcomes; never mark unsent work `active`.
+Send every ready batch before ending the turn. End the turn when nothing is ready; completion messages wake the orchestrator later.
 
 A Worker prompt must include the original requirements, its exact scope, relevant evidence, acceptance criteria, verification commands, explicit exclusions, and a requirement to preserve unrelated changes. The Worker owns implementation and focused checks.
 
-## 4. Review the implementation
+## 4. Process completion messages
 
-After a Worker report passes the status inspection and its acceptance criteria and checks, its corresponding Reviewer task becomes ready according to the dependency recorded in its text. Create that Reviewer task with `TaskCreate` if it was not created during framing.
+On every `subagent-result` message:
 
-Mark every ready corresponding Reviewer `active` with `TaskUpdate`, then send all independent Reviewers together in one `Agent` batch. Preserve the ordered Reviewer task IDs and map outcomes by position. Inspect every returned Reviewer report before changing its task status: a normal child exit is not a passing review. Mark a Reviewer task `completed` only when its report finds no actionable issue, all applicable checks pass, and no blocker or missing evidence remains. Otherwise return it to `pending` and record the report, failed checks, blockers, actionable findings, and any missing or ambiguous evidence in its task text.
-
-A Reviewer must inspect independently rather than trust the Worker report. Its prompt must cite the spec and plan file paths when they exist instead of paraphrasing requirements, and must include the acceptance criteria, exact review scope, deferred tasks that are not findings, changed-file summary, relevant evidence, required verification commands, and the requirement to preserve unrelated changes. Every verification command must already exist in the repository. If no automated check exists, the prompt must say so. The Reviewer must not build a validator.
+1. Read its `runId`. Use `TaskList` and `TaskGet` to find the one task whose text has the matching `Run: <runId>` line. Do not use batch position.
+2. Inspect the report against that task's acceptance criteria and required checks. A normal child exit (`succeeded`) is process evidence only, not task success.
+3. Mark the task `completed` only when the report supports a passing verdict, all applicable checks pass, and no blocker, actionable finding, or missing evidence remains. Otherwise return it to `pending`, record the report, failed checks, blockers, actionable findings, and missing or ambiguous evidence, then apply section 5.
+4. If a passed Worker makes its Reviewer ready, create the Reviewer task with `TaskCreate` when framing did not create it. A Reviewer must inspect independently rather than trust the Worker report. Its prompt must cite spec and plan paths when present, and include acceptance criteria, exact scope, deferred non-findings, changed files, evidence, existing verification commands, and unrelated-change preservation. State when no automated check exists; do not build a validator.
+5. Use `TaskList` to recompute readiness. Dispatch every ready independent task through section 3, including ready Reviewers. End the turn when nothing else is ready.
 
 The review gate passes only after every required Reviewer report has been inspected and reports no actionable finding, all applicable checks pass, and no verification blocker or missing evidence remains.
 
 ## 5. Correct and repeat
 
-When a Worker or Reviewer report fails status inspection—including failed checks, blockers, actionable findings, or missing or ambiguous evidence:
+When completion inspection returns a Worker or Reviewer task to `pending`, record the location, triggering path, prior Worker report/evidence, Reviewer findings (or recorded absence), failed checks, blockers, and correction in its text. Keep unrelated successful tasks `completed`. Serialize corrections that share a write scope or mutable verification with another task.
 
-1. Record the location, triggering path, prior Worker report/evidence, Reviewer findings (or the recorded absence of a review), and correction in the affected task text with `TaskUpdate`.
-2. Return the affected task to `pending`.
-3. Recompute readiness with `TaskList`.
-4. Dispatch a new corrected Worker, then its corresponding Reviewer, using the same parallel rules. The re-review prompt must request a complete review of the task scope, not only the correction. The correction Worker prompt must cite the spec and plan file paths when they exist and name the requirement behind each finding, and must include prior Worker evidence, Reviewer findings, failed checks, blockers, and recorded correction; do not resume or rely on the exited Worker session.
-5. Repeat until the review gate passes or the user must decide an external issue.
+For a failed Reviewer, return the Reviewer to `pending` and create a corresponding correction Worker with `TaskCreate`, or reset an undispatched correction Worker with `TaskUpdate`. Put the original requirements, exact scope, acceptance criteria, verification commands, prior Worker report/evidence, Reviewer findings, failed checks, blockers, triggering path, and recorded correction in the correction Worker's text and prompt. Replace the Reviewer's dependency in its text with that correction Worker and mark it blocked; do not dispatch the Reviewer until the correction Worker passes completion inspection. A passed correction Worker makes that Reviewer ready for a complete re-review of the task scope, not only the correction.
 
-Keep unrelated successful tasks `completed`. Serialize any correction that shares a write scope or mutable verification with another task. Use Oracle only when the disagreement or root cause still needs a decision.
+That wake-up recomputes readiness and dispatches correction Workers and only their unblocked, ready Reviewers through section 3. A correction Worker prompt must cite spec and plan paths when present and name the requirement behind each finding. Do not resume or rely on the exited Worker session. Use Oracle only when the disagreement or root cause still needs a decision. Repeat until the review gate passes or the user must decide an external issue.
 
 ## 6. Report
 
