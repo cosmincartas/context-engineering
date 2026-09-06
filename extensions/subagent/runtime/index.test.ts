@@ -6,7 +6,6 @@ import path from "node:path";
 import test, { mock } from "node:test";
 
 import { loadBundledAgents } from "../agents/index.ts";
-import { loadProfileSettings } from "../state/index.ts";
 import { classifyBatch, executeSubagent as executeRuntime, executeSubagentBatch, MAX_RESULT_BYTES } from "./index.ts";
 
 const bundledAgents = await loadBundledAgents(new URL("../agents/", import.meta.url));

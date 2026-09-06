@@ -37,7 +37,7 @@ function harness(parentToolNames: readonly string[] = defaultParentTools) {
   const messages: Array<{ message: any; options: any }> = [];
   const messageRenderers = new Map<string, any>();
   let sendMessageError: Error | undefined;
-  const uiState: any = { footerFactory: undefined, editorFactory: undefined, custom: undefined, customCalls: [] as any[] };
+  const uiState: any = { footerFactory: undefined, editorFactory: undefined, custom: undefined };
   const theme: any = {
     fg: (_color: string, text: string) => text,
     bg: (_color: string, text: string) => text,
@@ -90,9 +90,6 @@ function harness(parentToolNames: readonly string[] = defaultParentTools) {
     sendMessage(message: any, options: any) {
       if (sendMessageError) throw sendMessageError;
       messages.push({ message, options });
-    },
-    registerCommand(name: string, command: any) {
-      commands.set(name, command);
     },
     getAllTools() {
       return parentToolNames.map((name) => ({ name }));
@@ -462,10 +459,28 @@ test("registers the parallel batch contract", async () => {
     );
     assert.equal(result.details.outcomes[0].status, "started");
     assert.equal(result.details.outcomes[0].runId, "call:0");
-    await waitFor(() => testHarness.messages.length > 0, "the unknown-agent result message");
+    await new Promise((resolve) => setTimeout(resolve, 0));
     assert.equal(testHarness.messages.length, 1);
     assert.equal(testHarness.messages[0].message.details.run.state, "failed");
     assert.match(testHarness.messages[0].message.content, /Unknown agent: missing/);
+  } finally {
+    await testHarness.shutdown();
+  }
+});
+
+test("notifies when a background batch rejects", async () => {
+  const subagentExtension = await loadExtension();
+  const testHarness = harness();
+  subagentExtension(testHarness.pi);
+  try {
+    await testHarness.start("tui");
+    testHarness.failSendMessage(new Error("delivery unavailable"));
+    await testHarness.tools[0].execute(
+      "rejected", { tasks: [{ agent: "missing", title: "missing", task: "fail" }] }, undefined, undefined, testHarness.context("tui"),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(testHarness.notifications.length, 1);
+    assert.match(testHarness.notifications[0].message, /delivery unavailable/i);
   } finally {
     await testHarness.shutdown();
   }
@@ -676,7 +691,7 @@ const timer = setInterval(() => {
     ));
     const firstCompletion = testHarness.messages.find(({ message }) => message.details.runId === "batch-call:0");
     assert.ok(firstCompletion);
-    assert.match(firstCompletion.message.content, /^1\. Child 0 — succeeded\n(?:Fallback: [^\n]*\n)?lifecycle child$/);
+    assert.match(firstCompletion.message.content, /^1\. Child 0 — succeeded\nlifecycle child$/);
     const finishedText = testHarness.uiState.footer.render(120).join("\n");
     assert.match(finishedText, /\(openai-codex\) parent • medium/);
     assert.doesNotMatch(finishedText, /orchestrator|^subagent /m);

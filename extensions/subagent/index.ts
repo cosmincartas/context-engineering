@@ -390,17 +390,6 @@ export default function subagentExtension(pi: ExtensionAPI): void {
       };
       activeSession = session;
       pi.registerMessageRenderer<SubagentResultDetails>("subagent-result", renderSubagentMessage);
-      pi.registerCommand("subagent-config", {
-        description: "Configure subagent models and reasoning levels",
-        handler: async (args, commandContext) => {
-          if (commandContext.mode !== "tui") return;
-          if (args.trim() !== "") {
-            commandContext.ui.notify("Usage: /subagent-config", "error");
-            return;
-          }
-          await showSubagentConfiguration(commandContext, await loadProfileSettings(), catalog);
-        },
-      });
       const description = [
         "Delegate independent tasks to bundled subagents in parallel. This call returns immediately with started run IDs; each final report arrives later as a subagent-result message. Provide a non-empty tasks array of items with agent, title, and task fields; only the first eight items can run.",
         ...catalog.map((agent) => `${agent.name}: ${agent.description}`),
@@ -414,21 +403,7 @@ export default function subagentExtension(pi: ExtensionAPI): void {
         executionMode: "parallel",
         execute(toolCallId, params: ToolSubagentRequest, _signal, _onUpdate, toolContext) {
           const outcomes = classifyBatch(params);
-          // Capture host state before asynchronous settings I/O so this batch and its retries cannot drift.
-          const availableModels = toolContext.modelRegistry.getAvailable().map((model) => ({
-            ...model,
-            ...(model.thinkingLevelMap ? { thinkingLevelMap: { ...model.thinkingLevelMap } } : {}),
-          }));
-          const modelRegistry = Object.assign(Object.create(toolContext.modelRegistry), {
-            getAvailable: () => availableModels,
-          }) as typeof toolContext.modelRegistry;
-          const dispatchContext = {
-            ...toolContext,
-            ...(toolContext.model ? { model: { ...toolContext.model } } : {}),
-            thinkingLevel: toolContext.thinkingLevel ?? pi.getThinkingLevel(),
-            modelRegistry,
-          };
-          const execution = loadProfileSettings().then((store) => executeSubagentBatch(
+          const execution = executeSubagentBatch(
             toolCallId,
             params,
             catalog,

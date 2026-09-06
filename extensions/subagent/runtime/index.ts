@@ -426,7 +426,6 @@ export async function executeSubagentBatch(
     throw new TypeError("Invalid subagent batch request: batch id must not be blank");
   }
   const outcomes = classifyBatch(request);
-  const dispatchSnapshot = captureDispatchSnapshot(ctx, settings);
   const queued = outcomes.filter((outcome): outcome is Extract<SubagentBatchOutcome, { status: "queued" }> => outcome.status === "queued");
 
   signal?.throwIfAborted();
@@ -459,7 +458,6 @@ export async function executeSubagentBatch(
             callbacks.onMonitorEvent(event);
           },
         },
-        dispatchSnapshot,
       );
       finalOutcome = {
         index: outcome.index,
@@ -1080,8 +1078,7 @@ export function formatSubagentOutcome(outcome: SubagentBatchOutcome): string {
   const output = outcome.status === "succeeded"
     ? finalOutput(outcome.run.attempts.at(-1)?.messages ?? [])
     : failureOutput(outcome.run);
-  const warnings = outcome.run.warnings.length > 0 ? `${outcome.run.warnings.join("\n")}\n` : "";
-  return truncateOutput(`${outcome.index + 1}. ${safeTitle(outcome.run.title)} — ${outcome.status}\n${warnings}${output}`);
+  return truncateOutput(`${outcome.index + 1}. ${safeTitle(outcome.run.title)} — ${outcome.status}\n${output}`);
 }
 
 function finalOutput(messages: readonly Message[]): string {
