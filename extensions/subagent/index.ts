@@ -21,7 +21,9 @@ import {
   type SubagentBatchOutcome,
   type SubagentRun,
 } from "./runtime/index.ts";
+import { loadProfileSettings } from "./state/index.ts";
 import { installSubagentUI, type SubagentUIHandle } from "./ui/index.ts";
+import { showSubagentConfiguration } from "./ui/configuration.ts";
 
 const SubagentParameters = Type.Object(
   {
@@ -130,6 +132,11 @@ function addRunDetails(container: Container, run: SubagentRun, theme: Theme): vo
   container.addChild(new Text(theme.fg("muted", "Task"), 0, 0));
   container.addChild(new Text(run.task, 0, 0));
 
+  for (const warning of run.warnings ?? []) {
+    container.addChild(new Spacer(1));
+    container.addChild(new Text(`Warning: ${warning}`, 0, 0));
+  }
+
   for (const attempt of run.attempts) {
     container.addChild(new Spacer(1));
     container.addChild(
@@ -222,6 +229,7 @@ function isRun(value: unknown): value is SubagentRun {
     typeof run.startedAt === "number" && Number.isFinite(run.startedAt) &&
     (run.endedAt === undefined || typeof run.endedAt === "number" && Number.isFinite(run.endedAt)) &&
     (run.error === undefined || typeof run.error === "string") &&
+    (run.warnings === undefined || Array.isArray(run.warnings) && run.warnings.every((warning: unknown) => typeof warning === "string")) &&
     Array.isArray(run.attempts) &&
     run.attempts.every((attempt: any) =>
       attempt && typeof attempt === "object" &&
@@ -302,14 +310,14 @@ export default function subagentExtension(pi: ExtensionAPI): void {
     let ui: SubagentUIHandle | undefined;
     try {
       const parentToolNames = new Set(pi.getAllTools().map((tool) => tool.name));
-      const catalog = (await loadBundledAgents(new URL("./agents/", import.meta.url))).map((agent): AgentDefinition => ({
+      const catalog = Object.freeze((await loadBundledAgents(new URL("./agents/", import.meta.url))).map((agent): AgentDefinition => Object.freeze({
         ...agent,
-        tools: agent.tools.map((tool) =>
+        tools: Object.freeze(agent.tools.map((tool) =>
           tool === "find" && parentToolNames.has("fffind") ? "fffind" :
           tool === "grep" && parentToolNames.has("ffgrep") ? "ffgrep" :
           tool,
-        ) as AgentDefinition["tools"],
-      }));
+        )) as AgentDefinition["tools"],
+      })));
       root = await fs.mkdtemp(path.join(os.tmpdir(), "pi-subagent-sessions-"));
       ui = installSubagentUI(ctx);
       const session: ActiveSubagentSession = {
@@ -319,6 +327,17 @@ export default function subagentExtension(pi: ExtensionAPI): void {
         executions: new Set(),
       };
       activeSession = session;
+      pi.registerCommand("subagent-config", {
+        description: "Configure subagent models and reasoning levels",
+        handler: async (args, commandContext) => {
+          if (commandContext.mode !== "tui") return;
+          if (args.trim() !== "") {
+            commandContext.ui.notify("Usage: /subagent-config", "error");
+            return;
+          }
+          await showSubagentConfiguration(commandContext, await loadProfileSettings(), catalog);
+        },
+      });
       const description = [
         "Delegate independent tasks to bundled subagents in parallel. Provide a non-empty tasks array of items with agent, title, and task fields; only the first eight items can run.",
         ...catalog.map((agent) => `${agent.name}: ${agent.description}`),
@@ -334,18 +353,33 @@ export default function subagentExtension(pi: ExtensionAPI): void {
           const combinedSignal = signal
             ? AbortSignal.any([session.abortController.signal, signal])
             : session.abortController.signal;
-          const execution = executeSubagentBatch(
+          // Capture host state before asynchronous settings I/O so this batch and its retries cannot drift.
+          const availableModels = toolContext.modelRegistry.getAvailable().map((model) => ({
+            ...model,
+            ...(model.thinkingLevelMap ? { thinkingLevelMap: { ...model.thinkingLevelMap } } : {}),
+          }));
+          const modelRegistry = Object.assign(Object.create(toolContext.modelRegistry), {
+            getAvailable: () => availableModels,
+          }) as typeof toolContext.modelRegistry;
+          const dispatchContext = {
+            ...toolContext,
+            ...(toolContext.model ? { model: { ...toolContext.model } } : {}),
+            thinkingLevel: toolContext.thinkingLevel ?? pi.getThinkingLevel(),
+            modelRegistry,
+          };
+          const execution = loadProfileSettings().then((store) => executeSubagentBatch(
             toolCallId,
             params,
             catalog,
-            toolContext,
+            dispatchContext,
             session.root,
             combinedSignal,
             {
               onToolUpdate: onUpdate,
               onMonitorEvent: session.ui.onMonitorEvent,
             },
-          );
+            store.snapshot(),
+          ));
           session.executions.add(execution);
           void execution.then(
             () => session.executions.delete(execution),
