@@ -18,6 +18,7 @@ type Tool = {
 function captureExtension() {
   const handlers = new Map<string, Function>();
   const tools = new Map<string, Tool>();
+  const commands = new Map<string, { handler: Function }>();
   tasksExtension({
     on(event: string, handler: Function) {
       handlers.set(event, handler);
@@ -26,8 +27,11 @@ function captureExtension() {
       assert.equal(tools.has(tool.name), false, `duplicate tool ${tool.name}`);
       tools.set(tool.name, tool);
     },
+    registerCommand(name: string, command: { handler: Function }) {
+      commands.set(name, command);
+    },
   } as any);
-  return { handlers, tools };
+  return { handlers, tools, commands };
 }
 
 function context(options: {
@@ -81,6 +85,39 @@ async function startEphemeralSession(handlers: Map<string, Function>) {
   return ctx;
 }
 
+test("registers /tasks only for TUI, validates arguments, and opens a current snapshot", async () => {
+  await withAgentDir(async () => {
+    const { handlers, tools, commands } = captureExtension();
+    await handlers.get("session_start")!({ type: "session_start", reason: "startup" }, context({ mode: "rpc" }));
+    assert.equal(commands.has("tasks"), false);
+
+    const notices: string[] = [];
+    const ctx: any = context({ mode: "tui", notices });
+    let opened = 0;
+    let rendered: string[] = [];
+    ctx.ui.custom = async (factory: Function) => {
+      opened += 1;
+      rendered = factory({ requestRender() {} }, {
+        fg: (_color: string, text: string) => text,
+        bold: (text: string) => text,
+      }, {}, () => undefined).render(100);
+    };
+    await handlers.get("session_start")!({ type: "session_start", reason: "startup" }, ctx);
+    const command = commands.get("tasks");
+    assert.ok(command);
+    await command!.handler(" unexpected ", ctx);
+    assert.equal(opened, 0);
+    assert.deepEqual(notices, ["error:/tasks does not take arguments"]);
+
+    await tools.get("TaskCreate")!.execute("create", { text: "First" }, undefined, undefined, ctx);
+    await tools.get("TaskCreate")!.execute("create", { text: "Second" }, undefined, undefined, ctx);
+    await command!.handler("", ctx);
+    assert.equal(opened, 1);
+    assert.match(rendered.join("\n"), /#1 First/);
+    assert.match(rendered.join("\n"), /#2 Second/);
+  });
+});
+
 test("model task tools register closed schemas and intended execution modes", () => {
   const { tools } = captureExtension();
   assert.deepEqual([...tools.keys()].sort(), ["TaskCreate", "TaskGet", "TaskList", "TaskUpdate"]);
@@ -116,7 +153,7 @@ test("model task tools register closed schemas and intended execution modes", ()
 
 test("session lifecycle restores UUID stores, isolates new and fork sessions, and reports load errors", async () => {
   await withAgentDir(async (agentDir) => {
-    const { handlers, tools } = captureExtension();
+    const { handlers, tools, commands } = captureExtension();
     const oldContext = context({
       mode: "tui",
       sessionFile: "/sessions/old.jsonl",
@@ -162,6 +199,11 @@ test("session lifecycle restores UUID stores, isolates new and fork sessions, an
       { type: "session_start", reason: "resume" },
       invalidContext,
     );
+    assert.deepEqual(notices, ["error:Failed to load tasks: invalid JSON: Unexpected token 'o', \"not json\" is not valid JSON"]);
+    let opened = false;
+    (invalidContext as any).ui.custom = async () => { opened = true; };
+    await commands.get("tasks")!.handler("", invalidContext);
+    assert.equal(opened, false);
     assert.deepEqual(notices, ["error:Failed to load tasks: invalid JSON: Unexpected token 'o', \"not json\" is not valid JSON"]);
     await assert.rejects(
       tools.get("TaskList")!.execute("list", {}, undefined, undefined, invalidContext),

@@ -35,6 +35,20 @@ function assertTasks(actual: readonly Task[], expected: readonly Task[]): void {
   assert.deepEqual(actual, expected);
 }
 
+test("store listeners observe mutations and stop after unsubscribe", async () => {
+  const store = await TaskStore.load(cwd);
+  let changes = 0;
+  const unsubscribe = store.subscribe(() => { changes += 1; });
+  await store.create("First");
+  await store.update("1", { status: "active" });
+  store.cancelFailedWrite();
+  assert.ok(changes >= 3);
+  unsubscribe();
+  const before = changes;
+  await store.create("Second");
+  assert.equal(changes, before);
+});
+
 test("empty stores open persisted and ephemeral sessions as empty ready stores", async () => {
   await withAgentDir(async (agentDir) => {
     const persisted = await TaskStore.load(cwd, sessionId);

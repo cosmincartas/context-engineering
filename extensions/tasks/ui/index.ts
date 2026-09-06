@@ -1,10 +1,18 @@
-import type {
-  AgentToolResult,
-  ExtensionContext,
-  Theme,
-  ToolRenderResultOptions,
+import {
+  type AgentToolResult,
+  type ExtensionCommandContext,
+  type ExtensionContext,
+  type Theme,
+  type ToolRenderResultOptions,
 } from "@earendil-works/pi-coding-agent";
-import { Text, truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
+import {
+  matchesKey,
+  ScrollView,
+  Text,
+  truncateToWidth,
+  visibleWidth,
+  type Component,
+} from "@earendil-works/pi-tui";
 
 import { TaskStore, type Task, type TaskStatus } from "../state/index.ts";
 
@@ -40,13 +48,19 @@ function isTask(value: unknown): value is Task {
     (task.status === "pending" || task.status === "active" || task.status === "completed");
 }
 
-function taskLine(task: Task, theme: WidgetTheme): string {
+function taskLine(task: Task, theme: WidgetTheme, activeGlyph = "▪"): string {
   const glyph =
     task.status === "completed" ? theme.fg("success", "✓") :
-    task.status === "active" ? theme.fg("accent", "▪") :
+    task.status === "active" ? theme.fg("accent", activeGlyph) :
     theme.fg("muted", "▫");
   const [firstLine, ...rest] = task.text.split("\n");
   return `${glyph} #${task.id} ${firstLine!.replaceAll("\t", "  ")}${rest.length > 0 ? "…" : ""}`;
+}
+
+function taskSummary(tasks: readonly Task[]): string {
+  const counts: Record<TaskStatus, number> = { pending: 0, active: 0, completed: 0 };
+  for (const task of tasks) counts[task.status] += 1;
+  return `${tasks.length} task${tasks.length === 1 ? "" : "s"} (${counts.completed} completed, ${counts.active} active, ${counts.pending} pending)`;
 }
 
 function fallbackText(result: AgentToolResult<unknown>): Component {
@@ -75,9 +89,7 @@ export function renderTaskListResult(
   if (!Array.isArray(details) || !details.every(isTask)) return fallbackText(result);
   const tasks: readonly Task[] = details;
 
-  const counts: Record<TaskStatus, number> = { pending: 0, active: 0, completed: 0 };
-  for (const task of tasks) counts[task.status] += 1;
-  const summary = `${tasks.length} task${tasks.length === 1 ? "" : "s"} (${counts.completed} completed, ${counts.active} active, ${counts.pending} pending)`;
+  const summary = taskSummary(tasks);
   if (!options.expanded || tasks.length === 0) return new Text(summary, 0, 0);
   return new Text(
     [summary, ...tasks.map((task) => `  ${taskLine(task, theme)}`)].join("\n"),
@@ -101,7 +113,7 @@ export function renderTaskWidget(
   const summary = `● ${tasks.length} task${tasks.length === 1 ? "" : "s"} (${counts.completed} completed, ${counts.active} active, ${counts.pending} pending)${unsaved ? " [unsaved]" : ""}`;
   const lines = [theme.fg("accent", theme.bold(summary))];
 
-  for (const task of tasks) {
+  for (const task of tasks.slice(0, 3)) {
     let glyph: string;
     let color: "success" | "accent" | "muted";
     if (task.status === "completed") {
@@ -123,9 +135,119 @@ export function renderTaskWidget(
     );
   }
 
+  if (tasks.length > 3) lines.push(theme.fg("muted", `  ${tasks.length - 3} more, run /tasks to see all`));
+
   return lines.map((line) =>
     visibleWidth(line) <= renderWidth ? line : truncateToWidth(line, renderWidth, "", false),
   );
+}
+
+export async function showTaskList(
+  ctx: Pick<ExtensionCommandContext, "ui">,
+  store: TaskStore,
+): Promise<void> {
+  store.list(); // Preserve load errors before opening the modal.
+  let unsubscribe: (() => void) | undefined;
+  let timer: ReturnType<typeof setInterval> | undefined;
+  let frame = 0;
+  let closed = false;
+  const close = () => {
+    closed = true;
+    unsubscribe?.();
+    unsubscribe = undefined;
+    if (timer !== undefined) {
+      clearInterval(timer);
+      timer = undefined;
+    }
+  };
+  try {
+    await ctx.ui.custom((tui, theme, _keybindings, done) => {
+      const list: Component = {
+        render: (width) => {
+          const renderWidth = Math.max(1, Math.floor(width));
+          const tasks = store.list();
+          return [taskSummary(tasks), ...tasks.map((task) => taskLine(task, theme, ACTIVE_FRAMES[frame]!))].map((line) =>
+            visibleWidth(line) <= renderWidth ? line : truncateToWidth(line, renderWidth, "", false),
+          );
+        },
+        invalidate: () => undefined,
+      };
+      const scroll = new ScrollView(list, { overscroll: "contain" });
+      const syncTimer = () => {
+        const active = store.list().some((task) => task.status === "active");
+        if (!closed && active && timer === undefined) {
+          frame = 0;
+          timer = setInterval(() => {
+            if (closed || !store.list().some((task) => task.status === "active")) {
+              if (timer !== undefined) clearInterval(timer);
+              timer = undefined;
+              return;
+            }
+            frame = (frame + 1) % ACTIVE_FRAMES.length;
+            tui.requestRender();
+          }, ACTIVE_FRAME_INTERVAL_MS);
+        } else if ((!active || closed) && timer !== undefined) {
+          clearInterval(timer);
+          timer = undefined;
+          frame = 0;
+        }
+      };
+      unsubscribe = store.subscribe(() => {
+        if (closed) return;
+        syncTimer();
+        list.invalidate();
+        tui.requestRender();
+      });
+      syncTimer();
+      return {
+      render: (width) => {
+        const renderWidth = Math.max(4, Math.floor(width));
+        const contentWidth = renderWidth - 4;
+        const border = (text: string) => theme.fg("accent", text);
+        const frame = (line: string) => `${border("│")} ${truncateToWidth(line, contentWidth, "", true)} ${border("│")}`;
+        const title = truncateToWidth(` ${theme.bold("Tasks")} `, renderWidth - 2);
+        const left = "─".repeat(Math.floor((renderWidth - 2 - visibleWidth(title)) / 2));
+        const right = "─".repeat(renderWidth - 2 - visibleWidth(title) - left.length);
+        const tasks = store.list();
+        const lines = list.render(contentWidth);
+        const maxHeight = tui.terminal?.rows === undefined ? Number.MAX_SAFE_INTEGER : Math.max(3, Math.floor(tui.terminal.rows * 0.8));
+        const top = [`${border(`╭${left}`)}${title}${border(`${right}╮`)}`];
+        const bottom = [border(`╰${"─".repeat(renderWidth - 2)}╯`)];
+        let footerLines = new Text(tasks.length === 0 ? "esc close" : "↑↓ scroll  page up/down scroll  esc close", 0, 0).render(contentWidth);
+        const minimumViewportHeight = tasks.length > 0 ? 2 : 1;
+        if (top.length + footerLines.length + bottom.length + minimumViewportHeight > maxHeight) footerLines = [];
+        const viewportHeight = Math.min(lines.length, Math.max(1, maxHeight - top.length - footerLines.length - bottom.length));
+        scroll.updateLayout(lines.length, viewportHeight, () => tui.requestRender());
+        return [
+          ...top,
+          ...lines.slice(scroll.scrollTop, scroll.scrollTop + viewportHeight).map(frame),
+          ...footerLines.map(frame),
+          ...bottom,
+        ];
+      },
+        invalidate: () => list.invalidate(),
+        dispose: close,
+        handleInput: (data) => {
+          if (matchesKey(data, "escape")) {
+            close();
+            done(undefined);
+            return;
+          }
+        else if (matchesKey(data, "up")) scroll.scrollBy(-1);
+        else if (matchesKey(data, "down")) scroll.scrollBy(1);
+        else if (matchesKey(data, "pageUp")) scroll.scrollBy(-Math.max(1, scroll.viewportHeight));
+        else if (matchesKey(data, "pageDown")) scroll.scrollBy(Math.max(1, scroll.viewportHeight));
+          else return;
+          tui.requestRender();
+        },
+      };
+    }, {
+      overlay: true,
+      overlayOptions: { anchor: "center", width: "70%", maxHeight: "80%", minWidth: 40 },
+    });
+  } finally {
+    close();
+  }
 }
 
 export class TaskWidget {

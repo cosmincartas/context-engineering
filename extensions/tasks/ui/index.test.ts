@@ -9,6 +9,7 @@ import {
   renderTaskListResult,
   renderTaskResult,
   renderTaskWidget,
+  showTaskList,
   TaskWidget,
 } from "./index.ts";
 
@@ -28,7 +29,16 @@ const tasks: readonly Task[] = [
   { id: "4", text: "Pending task", status: "pending" },
 ];
 
-test("static task widget shows every status, identifier, text, summary, and unsaved marker", () => {
+async function taskStore(initialTasks: readonly Task[]): Promise<TaskStore> {
+  const store = await TaskStore.load("/workspace/task-list-modal");
+  for (const task of initialTasks) {
+    await store.create(task.text);
+    if (task.status !== "pending") await store.update(task.id, { status: task.status });
+  }
+  return store;
+}
+
+test("static task widget limits rows and reports hidden tasks without changing its summary", () => {
   const lines = renderTaskWidget(tasks, true, false, 0, plainTheme, 100);
   const output = lines.join("\n");
 
@@ -36,10 +46,15 @@ test("static task widget shows every status, identifier, text, summary, and unsa
   assert.match(output, /  ✓ #1 Completed task/);
   assert.match(output, /  ▪ #2 Active task/);
   assert.match(output, /  ▪ #3 Another active task/);
-  assert.match(output, /  ▫ #4 Pending task/);
+  assert.doesNotMatch(output, /  ▫ #4 Pending task/);
+  assert.equal(lines.at(-1), "  1 more, run /tasks to see all");
 
   const savedLines = renderTaskWidget(tasks, false, false, 0, plainTheme, 100);
   assert.equal(savedLines[0].includes("[unsaved]"), false);
+  assert.deepEqual(renderTaskWidget([], false, false, 0, plainTheme, 100), ["● 0 tasks (0 completed, 0 active, 0 pending)"]);
+  assert.equal(renderTaskWidget(tasks.slice(0, 3), false, false, 0, plainTheme, 100).length, 4);
+  const six = renderTaskWidget([...tasks, ...tasks.slice(0, 2)], false, false, 0, plainTheme, 100).join("\n");
+  assert.match(six, /3 more/);
 });
 
 test("static task widget renders only the first line of multiline text with safe tabs", () => {
@@ -67,6 +82,212 @@ test("static task widget truncates every line to the supplied width", () => {
 
   assert.ok(lines.length > 0);
   assert.ok(lines.every((line) => visibleWidth(line) <= 12));
+});
+
+test("task list modal is bordered, width-safe, and scrolls within a short overlay", async () => {
+  const overflowTasks = [...tasks, ...Array.from({ length: 16 }, (_, index) => ({
+    id: String(index + 5), text: `Task ${index + 5}`, status: "pending" as const,
+  }))];
+  let component: { render(width: number): string[]; handleInput(data: string): void } | undefined;
+  let doneCalls = 0;
+  let renderRequests = 0;
+  let options: unknown;
+  const store = await taskStore(overflowTasks);
+  await showTaskList({
+    ui: {
+      custom: async (factory: Function, customOptions: unknown) => {
+        options = customOptions;
+        component = factory({ terminal: { rows: 10 }, requestRender() { renderRequests += 1; } }, plainTheme, {}, () => { doneCalls += 1; });
+      },
+    },
+  } as any, store);
+
+  const render = () => component!.render(40);
+  let lines = render();
+  let output = lines.join("\n");
+  assert.equal(lines.length, 8); // 80% of ten rows
+  assert.ok(component!.render(12).every((line) => visibleWidth(line) <= 12));
+  assert.ok(lines.every((line) => visibleWidth(line) <= 40));
+  assert.match(output, /─/);
+  assert.ok(lines.slice(1, -1).every((line) => line.startsWith("│ ") && line.endsWith(" │")));
+  assert.match(lines[0]!, /^╭─+ Tasks ─+╮$/);
+  assert.match(lines.at(-1)!, /^╰─+╯$/);
+  assert.match(output, /Tasks/);
+  assert.match(output, /esc/);
+  assert.match(output, /close/);
+  assert.match(output, /#1/);
+  assert.match(output, /#2/);
+  assert.match(output, /#3/);
+  assert.doesNotMatch(output, /#4/);
+  assert.ok(output.indexOf("#1") < output.indexOf("#2"));
+  assert.match(lines.at(-1)!, /─/);
+
+  component!.handleInput("\u001b[B");
+  output = render().join("\n");
+  assert.match(output, /#4/);
+  component!.handleInput("\u001b[A");
+  output = render().join("\n");
+  assert.match(output, /#1/);
+  assert.doesNotMatch(output, /#4/);
+  component!.handleInput("\u001b[6~");
+  output = render().join("\n");
+  assert.match(output, /#7/);
+  assert.doesNotMatch(output, /#1/);
+  component!.handleInput("\u001b[5~");
+  output = render().join("\n");
+  assert.match(output, /#1/);
+  assert.doesNotMatch(output, /#7/);
+  for (const taskId of ["5", "8", "12", "16", "17", "20"]) {
+    component!.handleInput("\u001b[6~");
+    lines = render();
+    assert.match(lines.join("\n"), new RegExp(`#${taskId}`));
+  }
+  assert.match(lines.at(-1)!, /─/);
+  assert.ok(renderRequests >= 10);
+  component!.handleInput("\u001b");
+  assert.equal(doneCalls, 1);
+  assert.deepEqual(options, {
+    overlay: true,
+    overlayOptions: { anchor: "center", width: "70%", maxHeight: "80%", minWidth: 40 },
+  });
+});
+
+test("task list modal reserves a row for scrolling below its fixed chrome height", async () => {
+  const overflowTasks = [...tasks, ...Array.from({ length: 16 }, (_, index) => ({
+    id: String(index + 5), text: `Task ${index + 5}`, status: "pending" as const,
+  }))];
+  let component: { render(width: number): string[]; handleInput(data: string): void } | undefined;
+  const store = await taskStore(overflowTasks);
+  await showTaskList({
+    ui: {
+      custom: async (factory: Function) => {
+        component = factory({ terminal: { rows: 6 }, requestRender() {} }, plainTheme, {}, () => undefined);
+      },
+    },
+  } as any, store);
+
+  let lines = component!.render(40);
+  assert.equal(lines.length, 4); // 80% of six rows
+  assert.match(lines.join("\n"), /20 tasks/);
+  assert.match(lines.join("\n"), /#1/);
+  assert.match(lines.join("\n"), /Tasks/);
+  assert.doesNotMatch(lines.join("\n"), /esc close/);
+  assert.match(lines[0]!, /─/);
+  assert.match(lines.at(-1)!, /─/);
+  for (let index = 0; index < 20; index += 1) component!.handleInput("\u001b[B");
+  lines = component!.render(40);
+  assert.match(lines.join("\n"), /#20/);
+});
+
+test("task list modal shows the zero-task summary", async () => {
+  let rendered: string[] = [];
+  const store = await taskStore([]);
+  await showTaskList({
+    ui: {
+      custom: async (factory: Function) => {
+        rendered = factory({ requestRender() {} }, plainTheme, {}, () => undefined).render(100);
+      },
+    },
+  } as any, store);
+  assert.match(rendered.join("\n"), /0 tasks \(0 completed, 0 active, 0 pending\)/);
+});
+
+test("task list modal animates active tasks and stops with live status changes or close", async () => {
+  const store = await taskStore([{ id: "1", text: "Task", status: "pending" }]);
+  let component: { render(width: number): string[]; handleInput(data: string): void; dispose?(): void } | undefined;
+  let renderRequests = 0;
+  const shown = showTaskList({
+    ui: {
+      custom: async (factory: Function) => new Promise<void>((resolve) => {
+        component = factory({ requestRender() { renderRequests += 1; } }, plainTheme, {}, resolve);
+      }),
+    },
+  } as any, store);
+
+  await Promise.resolve();
+  assert.match(component!.render(100).join("\n"), /▫ #1 Task/);
+  await store.update("1", { status: "active" });
+  assert.match(component!.render(100).join("\n"), /⠋ #1 Task/);
+  const afterActive = renderRequests;
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.ok(renderRequests > afterActive);
+  assert.doesNotMatch(component!.render(100).join("\n"), /⠋ #1 Task/);
+
+  await store.update("1", { status: "completed" });
+  assert.match(component!.render(100).join("\n"), /✓ #1 Task/);
+  const afterCompleted = renderRequests;
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(renderRequests, afterCompleted);
+
+  await store.update("1", { status: "active" });
+  component!.handleInput("\u001b");
+  await shown;
+  const afterClose = renderRequests;
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(renderRequests, afterClose);
+});
+
+test("task list modal host disposal stops active animation and unsubscribes", async () => {
+  const store = await taskStore([{ id: "1", text: "Task", status: "active" }]);
+  let component: { render(width: number): string[]; dispose?(): void } | undefined;
+  let finishCustom: (() => void) | undefined;
+  let renderRequests = 0;
+  const shown = showTaskList({
+    ui: {
+      custom: async (factory: Function) => new Promise<void>((resolve) => {
+        component = factory({ requestRender() { renderRequests += 1; } }, plainTheme, {}, () => undefined);
+        finishCustom = resolve;
+      }),
+    },
+  } as any, store);
+
+  await Promise.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.ok(renderRequests > 0);
+  const dispose = component!.dispose;
+  assert.ok(dispose);
+  dispose();
+  const afterDispose = renderRequests;
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal(renderRequests, afterDispose);
+  await store.update("1", { text: "Ignored after host disposal" });
+  assert.equal(renderRequests, afterDispose);
+
+  finishCustom!();
+  await shown;
+});
+
+test("task list modal follows store changes and unsubscribes on close", async () => {
+  const store = await taskStore([...tasks, ...Array.from({ length: 16 }, (_, index) => ({
+    id: String(index + 5), text: `Task ${index + 5}`, status: "pending" as const,
+  }))]);
+  let component: { render(width: number): string[]; handleInput(data: string): void } | undefined;
+  let renderRequests = 0;
+  const shown = showTaskList({
+    ui: {
+      custom: async (factory: Function) => new Promise<void>((resolve) => {
+        component = factory({ terminal: { rows: 6 }, requestRender() { renderRequests += 1; } }, plainTheme, {}, resolve);
+      }),
+    },
+  } as any, store);
+
+  await Promise.resolve();
+  component!.render(40);
+  for (let index = 0; index < 20; index += 1) component!.handleInput("\u001b[B");
+  assert.match(component!.render(40).join("\n"), /#20/);
+  await store.update("20", { text: "Last task", status: "completed" });
+  assert.match(component!.render(40).join("\n"), /✓ #20 Last task/);
+  store.cancelFailedWrite();
+  assert.match(component!.render(40).join("\n"), /0 tasks/);
+  assert.ok(renderRequests > 0);
+
+  component!.handleInput("\u001b");
+  await shown;
+  const afterClose = renderRequests;
+  await store.create("Ignored after close");
+  assert.equal(renderRequests, afterClose);
+  await new Promise((resolve) => setTimeout(resolve, 1_100));
+  assert.equal(renderRequests, afterClose);
 });
 
 test("single-task tool results render one line per task", () => {

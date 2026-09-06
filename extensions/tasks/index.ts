@@ -13,6 +13,7 @@ import {
   handleWriteFailure,
   renderTaskListResult,
   renderTaskResult,
+  showTaskList,
   TaskWidget,
 } from "./ui/index.ts";
 
@@ -95,6 +96,21 @@ export default function tasksExtension(pi: ExtensionAPI): void {
     if (ctx.mode === "tui") {
       widget = new TaskWidget(ctx.ui, store);
       widget.refresh();
+      pi.registerCommand("tasks", {
+        description: "Show all tasks",
+        handler: async (args, commandContext) => {
+          if (commandContext.mode !== "tui") return;
+          if (args.trim() !== "") {
+            commandContext.ui.notify("/tasks does not take arguments", "error");
+            return;
+          }
+          try {
+            await showTaskList(commandContext, currentStore(store));
+          } catch (error) {
+            if (store?.getState().kind !== "load-error") throw error;
+          }
+        },
+      });
     }
   });
 

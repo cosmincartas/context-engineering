@@ -34,6 +34,7 @@ export class TaskStore {
   private tasks: Task[];
   private readonly statePath: string | undefined;
   private state: TaskStoreState;
+  private readonly listeners = new Set<() => void>();
 
   private constructor(tasks: Task[], statePath: string | undefined, state: TaskStoreState) {
     this.tasks = tasks;
@@ -63,6 +64,11 @@ export class TaskStore {
     return this.state;
   }
 
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
   list(): readonly Task[] {
     this.assertReady();
     return this.tasks.map(copyTask);
@@ -84,6 +90,7 @@ export class TaskStore {
       status: "pending",
     };
     this.tasks = [...this.tasks, task];
+    this.notify();
     return this.finishMutation(task);
   }
 
@@ -101,6 +108,7 @@ export class TaskStore {
       status: nextStatus,
     };
     this.tasks = this.tasks.map((task, index) => index === taskIndex ? nextTask : task);
+    this.notify();
     return this.finishMutation(nextTask);
   }
 
@@ -108,6 +116,7 @@ export class TaskStore {
     if (this.state.kind !== "ready") return;
     this.tasks = [];
     this.state = readyState(false);
+    this.notify();
   }
 
   private async finishMutation(task: Task): Promise<TaskMutationResult> {
@@ -116,6 +125,7 @@ export class TaskStore {
       return { task: copyTask(task) };
     } catch (error) {
       this.state = readyState(true);
+      this.notify();
       return { task: copyTask(task), writeError: formatError("save", error) };
     }
   }
@@ -124,6 +134,7 @@ export class TaskStore {
     // ponytail: no cross-process lock; add one if multiple Pi processes share a session.
     if (this.statePath === undefined) {
       this.state = readyState(false);
+      this.notify();
       return;
     }
 
@@ -148,6 +159,11 @@ export class TaskStore {
     }
 
     this.state = readyState(false);
+    this.notify();
+  }
+
+  private notify(): void {
+    for (const listener of this.listeners) listener();
   }
 
   private assertReady(): void {

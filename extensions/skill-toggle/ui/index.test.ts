@@ -7,6 +7,11 @@ import test from "node:test";
 import { loadSkillSelection } from "../state/index.ts";
 import { showSkillToggle } from "./index.ts";
 
+const plainTheme = {
+	fg: (_color: string, text: string) => text,
+	bold: (text: string) => text,
+};
+
 function skill(name: string, disableModelInvocation = false) {
 	return { name, description: `${name} description`, filePath: `/skills/${name}/SKILL.md`, baseDir: `/skills/${name}`, sourceInfo: {}, disableModelInvocation };
 }
@@ -51,13 +56,16 @@ test("shows searchable textual skill states and persists a toggle", async () => 
 		let rendered: string[] = [];
 		await showSkillToggle(
 			contextFor([skill("automatic"), skill("manual-only", true)], async (factory) => {
-				component = factory({ requestRender() {} }, {}, {}, () => undefined);
+				component = factory({ requestRender() {} }, plainTheme, {}, () => undefined);
 				rendered = component!.render(100);
 				component!.handleInput("\r");
 				await new Promise((resolve) => setTimeout(resolve, 10));
 			}),
 			selection,
 		);
+		assert.match(rendered[0]!, /^╭─+ Skills ─+╮$/);
+		assert.ok(rendered.slice(1, -1).every((line) => line.startsWith("│ ") && line.endsWith(" │")));
+		assert.match(rendered.at(-1)!, /^╰─+╯$/);
 		assert.match(rendered.join("\n"), /automatic/);
 		assert.match(rendered.join("\n"), /enabled/);
 		assert.match(rendered.join("\n"), /manual-only/);
@@ -82,7 +90,7 @@ test("shows a failed-write error and restores the committed row", async () => {
 	await showSkillToggle(
 		contextFor([skill("one")], async (factory) => {
 			const tui = { requestRender() {} };
-			component = factory(tui, {}, {}, () => undefined);
+			component = factory(tui, plainTheme, {}, () => undefined);
 			component!.handleInput("\r");
 			await new Promise((resolve) => setTimeout(resolve, 10));
 			assert.match(component!.render(100).join("\n"), /Failed to save skill selection: read-only/);
@@ -115,7 +123,7 @@ test("renders the committed value after repeated input during a delayed write", 
 
 	await showSkillToggle(
 		contextFor([skill("one")], async (factory) => {
-			const component = factory({ requestRender() {} }, {}, {}, () => undefined) as { render(width: number): string[]; handleInput(data: string): void };
+			const component = factory({ requestRender() {} }, plainTheme, {}, () => undefined) as { render(width: number): string[]; handleInput(data: string): void };
 			component.handleInput("\r");
 			await started;
 			component.handleInput("\r");
@@ -146,7 +154,7 @@ test("does not let a second toggle race the first write", async () => {
 	};
 	await showSkillToggle(
 		contextFor([skill("one"), skill("two")], async (factory) => {
-			const component = factory({ requestRender() {} }, {}, {}, () => undefined) as { handleInput(data: string): void };
+			const component = factory({ requestRender() {} }, plainTheme, {}, () => undefined) as { handleInput(data: string): void };
 			component.handleInput("\r");
 			component.handleInput("\u001b[B");
 			await new Promise((resolve) => setTimeout(resolve, 40));

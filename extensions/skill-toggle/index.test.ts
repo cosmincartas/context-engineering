@@ -108,7 +108,10 @@ test("validates command arguments and opens with the current skill list", async 
 				notify(message: string) { notifications.push(message); },
 				custom: async (factory: Function) => {
 					opened = true;
-					const component = factory({ requestRender() {} }, {}, {}, () => undefined);
+					const component = factory({ requestRender() {} }, {
+						fg: (_color: string, text: string) => text,
+						bold: (text: string) => text,
+					}, {}, () => undefined);
 					rendered = component.render(100);
 				},
 			},
