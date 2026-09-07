@@ -6,7 +6,6 @@ import {
   getMarkdownTheme,
   type AgentToolResult,
   type ExtensionAPI,
-  type MessageRenderer,
   type Theme,
   type ToolRenderResultOptions,
 } from "@earendil-works/pi-coding-agent";
@@ -15,14 +14,11 @@ import { Type, type Static } from "typebox";
 
 import { loadBundledAgents, type AgentDefinition } from "./agents/index.ts";
 import {
-  classifyBatch,
   executeSubagentBatch,
-  formatSubagentOutcome,
   normalizeTitle,
   type ProcessAttempt,
   type SubagentBatchDetails,
   type SubagentBatchOutcome,
-  type SubagentRequest,
   type SubagentRun,
 } from "./runtime/index.ts";
 import { loadProfileSettings } from "./state/index.ts";
@@ -37,14 +33,6 @@ const SubagentParameters = Type.Object(
 );
 
 type ToolSubagentRequest = Static<typeof SubagentParameters>;
-
-type StartedSubagentBatchOutcome =
-  | { readonly index: number; readonly status: "started"; readonly runId: string; readonly request: SubagentRequest }
-  | { readonly index: number; readonly status: "malformed" | "over-limit"; readonly reason: string };
-
-type StartedSubagentBatchDetails = { readonly outcomes: readonly StartedSubagentBatchOutcome[] };
-
-type SubagentResultDetails = { readonly runId: string; readonly index: number; readonly run: SubagentRun };
 
 function contentText(result: AgentToolResult<unknown>): string {
   return result.content
@@ -101,7 +89,7 @@ function safeTitle(title: unknown): string {
 }
 
 export function renderSubagentResult(
-  result: AgentToolResult<SubagentBatchDetails | StartedSubagentBatchDetails>,
+  result: AgentToolResult<SubagentBatchDetails>,
   options: ToolRenderResultOptions,
   theme: Theme,
 ): Component {
@@ -121,12 +109,6 @@ export function renderSubagentResult(
     if (isRunOutcome(outcome)) {
       container.addChild(new Text(theme.fg("muted", `Task ${outcome.index + 1}`), 0, 0));
       addRunDetails(container, outcome.run, theme);
-    } else if (isStartedOutcome(outcome)) {
-      container.addChild(new Text(
-        `${theme.fg("muted", `Task ${outcome.index + 1}`)} — ${safeTitle(outcome.request.title)} — started (run ${outcome.runId})`,
-        0,
-        0,
-      ));
     } else {
       const text = outcome.status === "queued"
         ? `${theme.fg("muted", `Task ${outcome.index + 1}`)} — queued: ${safeTitle(outcome.request.title)}`
@@ -137,28 +119,11 @@ export function renderSubagentResult(
   return container;
 }
 
-function batchSummary(outcomes: readonly (SubagentBatchOutcome | StartedSubagentBatchOutcome)[]): string {
+function batchSummary(outcomes: readonly SubagentBatchOutcome[]): string {
   const counts = new Map<string, number>();
   for (const outcome of outcomes) counts.set(outcome.status, (counts.get(outcome.status) ?? 0) + 1);
   const summary = [...counts.entries()].map(([status, count]) => `${count} ${status}`).join(", ");
   return `Subagents (${outcomes.length}): ${summary || "no outcomes"}`;
-}
-
-export const renderSubagentMessage: MessageRenderer<SubagentResultDetails> = (
-  message,
-  options,
-  theme,
-): Component => {
-  if (!isSubagentResultDetails(message.details)) return new Text(typeof message.content === "string" ? message.content : "", 0, 0);
-  if (!options.expanded) return new Text(stateHeader(message.details.run, theme), 0, 0);
-  const container = new Container();
-  addRunDetails(container, message.details.run, theme);
-  return container;
-};
-
-function isSubagentResultDetails(value: unknown): value is SubagentResultDetails {
-  return Boolean(value && typeof value === "object" && typeof (value as any).runId === "string" &&
-    Number.isInteger((value as any).index) && (value as any).index >= 0 && isRun((value as any).run));
 }
 
 function addRunDetails(container: Container, run: SubagentRun, theme: Theme): void {
@@ -212,7 +177,7 @@ function addRunDetails(container: Container, run: SubagentRun, theme: Theme): vo
   }
 }
 
-function isBatchDetails(value: unknown): value is SubagentBatchDetails | StartedSubagentBatchDetails {
+function isBatchDetails(value: unknown): value is SubagentBatchDetails {
   if (!value || typeof value !== "object" || !Array.isArray((value as any).outcomes)) return false;
   if ((value as any).outcomes.length === 0) return false;
   return (value as any).outcomes.every((outcome: unknown, index: number) =>
@@ -220,15 +185,14 @@ function isBatchDetails(value: unknown): value is SubagentBatchDetails | Started
   );
 }
 
-function isBatchOutcome(value: unknown): value is SubagentBatchOutcome | StartedSubagentBatchOutcome {
+function isBatchOutcome(value: unknown): value is SubagentBatchOutcome {
   if (!value || typeof value !== "object") return false;
   const outcome = value as any;
   if (!Number.isInteger(outcome.index) || outcome.index < 0) return false;
   if (outcome.status === "malformed" || outcome.status === "over-limit") {
     return typeof outcome.reason === "string";
   }
-  if (outcome.status === "queued" || outcome.status === "started") return isRequest(outcome.request) &&
-    (outcome.status !== "started" || typeof outcome.runId === "string" && outcome.runId.trim() !== "");
+  if (outcome.status === "queued") return isRequest(outcome.request);
   if (!isRunState(outcome.status)) return false;
   return isRunOutcome(outcome) && outcome.run.state === outcome.status;
 }
@@ -247,11 +211,6 @@ function isRequest(value: unknown): boolean {
   return typeof request.agent === "string" &&
     typeof request.title === "string" &&
     typeof request.task === "string";
-}
-
-function isStartedOutcome(value: unknown): value is Extract<StartedSubagentBatchOutcome, { status: "started" }> {
-  return Boolean(value && typeof value === "object" && (value as any).status === "started" &&
-    typeof (value as any).runId === "string" && isRequest((value as any).request));
 }
 
 function isRunOutcome(value: unknown): value is Extract<SubagentBatchOutcome, { run: SubagentRun }> {
@@ -298,27 +257,6 @@ function isMessage(value: unknown): boolean {
       Array.isArray(message.content) && message.content.every((part: unknown) =>
         part && typeof part === "object" && typeof (part as any).type === "string"
       ));
-}
-
-function startedBatchResult(
-  batchId: string,
-  outcomes: readonly SubagentBatchOutcome[],
-): AgentToolResult<StartedSubagentBatchDetails> {
-  const started = outcomes.map((outcome): StartedSubagentBatchOutcome => {
-    if (outcome.status === "queued") {
-      return { index: outcome.index, status: "started", runId: `${batchId}:${outcome.index}`, request: outcome.request };
-    }
-    if (outcome.status === "malformed" || outcome.status === "over-limit") {
-      return { index: outcome.index, status: outcome.status, reason: outcome.reason };
-    }
-    throw new TypeError("Invalid classified subagent batch outcome");
-  });
-  return {
-    content: [{ type: "text", text: started.map((outcome) => outcome.status === "started"
-      ? `${outcome.index + 1}. ${safeTitle(outcome.request.title)} — started (run ${outcome.runId})`
-      : `${outcome.index + 1}. ${outcome.status}: ${outcome.reason}`).join("\n") }],
-    details: { outcomes: started },
-  };
 }
 
 type ActiveSubagentSession = {
@@ -389,9 +327,19 @@ export default function subagentExtension(pi: ExtensionAPI): void {
         executions: new Set(),
       };
       activeSession = session;
-      pi.registerMessageRenderer<SubagentResultDetails>("subagent-result", renderSubagentMessage);
+      pi.registerCommand("subagent-config", {
+        description: "Configure subagent models and reasoning levels",
+        handler: async (args, commandContext) => {
+          if (commandContext.mode !== "tui") return;
+          if (args.trim() !== "") {
+            commandContext.ui.notify("Usage: /subagent-config", "error");
+            return;
+          }
+          await showSubagentConfiguration(commandContext, await loadProfileSettings(), catalog);
+        },
+      });
       const description = [
-        "Delegate independent tasks to bundled subagents in parallel. This call returns immediately with started run IDs; each final report arrives later as a subagent-result message. Provide a non-empty tasks array of items with agent, title, and task fields; only the first eight items can run.",
+        "Delegate independent tasks to bundled subagents in parallel and wait for every accepted child to finish. Inspect every returned outcome before continuing. The returned batch contains final outcomes in request order. Provide a non-empty tasks array of items with agent, title, and task fields; only the first eight items can run.",
         ...catalog.map((agent) => `${agent.name}: ${agent.description}`),
       ].join(" ");
 
@@ -401,40 +349,43 @@ export default function subagentExtension(pi: ExtensionAPI): void {
         description,
         parameters: SubagentParameters,
         executionMode: "parallel",
-        execute(toolCallId, params: ToolSubagentRequest, _signal, _onUpdate, toolContext) {
-          const outcomes = classifyBatch(params);
-          const execution = executeSubagentBatch(
+        execute(toolCallId, params: ToolSubagentRequest, signal, onUpdate, toolContext) {
+          const combinedSignal = signal
+            ? AbortSignal.any([session.abortController.signal, signal])
+            : session.abortController.signal;
+          // Capture host state before asynchronous settings I/O so this batch and its retries cannot drift.
+          const availableModels = toolContext.modelRegistry.getAvailable().map((model) => ({
+            ...model,
+            ...(model.thinkingLevelMap ? { thinkingLevelMap: { ...model.thinkingLevelMap } } : {}),
+          }));
+          const modelRegistry = Object.assign(Object.create(toolContext.modelRegistry), {
+            getAvailable: () => availableModels,
+          }) as typeof toolContext.modelRegistry;
+          const dispatchContext = {
+            ...toolContext,
+            ...(toolContext.model ? { model: { ...toolContext.model } } : {}),
+            thinkingLevel: toolContext.thinkingLevel ?? pi.getThinkingLevel(),
+            modelRegistry,
+          };
+          const execution = loadProfileSettings().then((store) => executeSubagentBatch(
             toolCallId,
             params,
             catalog,
             dispatchContext,
             session.root,
-            session.abortController.signal,
+            combinedSignal,
             {
+              onToolUpdate: onUpdate,
               onMonitorEvent: session.ui.onMonitorEvent,
-              onOutcome: (outcome) => pi.sendMessage(
-                {
-                  customType: "subagent-result",
-                  content: formatSubagentOutcome(outcome),
-                  display: true,
-                  details: { runId: `${toolCallId}:${outcome.index}`, index: outcome.index, run: outcome.run },
-                },
-                { triggerTurn: true, deliverAs: "followUp" },
-              ),
             },
             store.snapshot(),
           ));
           session.executions.add(execution);
           void execution.then(
             () => session.executions.delete(execution),
-            (error) => {
-              session.executions.delete(execution);
-              if (!session.abortController.signal.aborted) {
-                toolContext.ui.notify(`Subagent batch failed: ${error instanceof Error ? error.message : String(error)}`, "error");
-              }
-            },
+            () => session.executions.delete(execution),
           );
-          return Promise.resolve(startedBatchResult(toolCallId, outcomes));
+          return execution;
         },
         renderResult: renderSubagentResult,
       });

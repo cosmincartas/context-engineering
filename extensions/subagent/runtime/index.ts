@@ -135,7 +135,6 @@ export type SubagentRuntimeCallbacks = {
 export type SubagentBatchRuntimeCallbacks = {
   readonly onToolUpdate?: AgentToolUpdateCallback<SubagentBatchDetails>;
   readonly onMonitorEvent: (event: SubagentMonitorEvent) => void;
-  readonly onOutcome?: (outcome: Extract<SubagentBatchOutcome, { run: SubagentRun }>) => void;
 };
 
 type MutableAttempt = {
@@ -426,6 +425,7 @@ export async function executeSubagentBatch(
     throw new TypeError("Invalid subagent batch request: batch id must not be blank");
   }
   const outcomes = classifyBatch(request);
+  const dispatchSnapshot = captureDispatchSnapshot(ctx, settings);
   const queued = outcomes.filter((outcome): outcome is Extract<SubagentBatchOutcome, { status: "queued" }> => outcome.status === "queued");
 
   signal?.throwIfAborted();
@@ -458,6 +458,7 @@ export async function executeSubagentBatch(
             callbacks.onMonitorEvent(event);
           },
         },
+        dispatchSnapshot,
       );
       finalOutcome = {
         index: outcome.index,
@@ -478,7 +479,6 @@ export async function executeSubagentBatch(
       }
       publishBatchUpdate(callbacks, outcomes);
     }
-    callbacks.onOutcome?.(finalOutcome);
   };
   const settled = await Promise.allSettled(queued.map(runQueued));
   if (signal?.aborted) throw signal.reason;
@@ -1078,7 +1078,8 @@ export function formatSubagentOutcome(outcome: SubagentBatchOutcome): string {
   const output = outcome.status === "succeeded"
     ? finalOutput(outcome.run.attempts.at(-1)?.messages ?? [])
     : failureOutput(outcome.run);
-  return truncateOutput(`${outcome.index + 1}. ${safeTitle(outcome.run.title)} — ${outcome.status}\n${output}`);
+  const warnings = outcome.run.warnings.length > 0 ? `${outcome.run.warnings.join("\n")}\n` : "";
+  return truncateOutput(`${outcome.index + 1}. ${safeTitle(outcome.run.title)} — ${outcome.status}\n${warnings}${output}`);
 }
 
 function finalOutput(messages: readonly Message[]): string {

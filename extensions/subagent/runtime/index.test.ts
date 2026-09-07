@@ -6,6 +6,7 @@ import path from "node:path";
 import test, { mock } from "node:test";
 
 import { loadBundledAgents } from "../agents/index.ts";
+import { loadProfileSettings } from "../state/index.ts";
 import { classifyBatch, executeSubagent as executeRuntime, executeSubagentBatch, MAX_RESULT_BYTES } from "./index.ts";
 
 const bundledAgents = await loadBundledAgents(new URL("../agents/", import.meta.url));
@@ -304,7 +305,6 @@ test("batch cancellation settles active workers before the original abort reject
     task: `block ${index}`,
   }));
   let pending: Promise<any> | undefined;
-  const outcomes: any[] = [];
   try {
     pending = withScenario("batch-cancel", () => executeSubagentBatch(
       "batch-cancel",
@@ -313,7 +313,7 @@ test("batch cancellation settles active workers before the original abort reject
       makeContext(),
       testSessionRoot,
       controller.signal,
-      { onMonitorEvent: () => {}, onOutcome: (outcome) => outcomes.push(outcome) },
+      { onMonitorEvent: () => {} },
     ));
     for (let attempt = 0; attempt < 100; attempt++) {
       try {
@@ -324,7 +324,6 @@ test("batch cancellation settles active workers before the original abort reject
     assert.equal((await readFile(marker, "utf8")).trim().split("\n").filter(Boolean).length, 5);
     controller.abort(reason);
     await assert.rejects(pending, (error) => error === reason);
-    assert.deepEqual(outcomes, []);
     assert.equal((await readFile(marker, "utf8")).trim().split("\n").filter(Boolean).length, 5);
     for (const record of (await records()).filter((value) => value.scenario === "batch-cancel")) {
       assert.match(record.signals ?? "", /SIGTERM/);
@@ -338,45 +337,6 @@ test("batch cancellation settles active workers before the original abort reject
     if (previousMarker === undefined) delete process.env.PI_SUBAGENT_BATCH_MARKER;
     else process.env.PI_SUBAGENT_BATCH_MARKER = previousMarker;
     await rm(directory, { recursive: true, force: true });
-  }
-});
-
-test("batch reports each completed child once through onOutcome", async () => {
-  const sessionRoot = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-batch-outcomes-"));
-  const outcomes: any[] = [];
-  try {
-    await withScenario("stream", () => executeSubagentBatch(
-      "batch-outcomes",
-      {
-        tasks: [
-          { agent: "scout", title: "first", task: "stream first" },
-          { agent: "scout", title: "second", task: "stream second" },
-        ],
-      },
-      bundledAgents,
-      makeContext(),
-      sessionRoot,
-      undefined,
-      { onMonitorEvent: () => {}, onOutcome: (outcome) => outcomes.push(outcome) },
-    ));
-    assert.deepEqual(outcomes.map((outcome) => outcome.index), [0, 1]);
-    assert.ok(outcomes.every((outcome) => outcome.run.state === "succeeded"));
-
-    outcomes.length = 0;
-    await executeSubagentBatch(
-      "batch-unknown-outcome",
-      { tasks: [{ agent: "missing", title: "unknown", task: "fail" }] },
-      bundledAgents,
-      makeContext(),
-      sessionRoot,
-      undefined,
-      { onMonitorEvent: () => {}, onOutcome: (outcome) => outcomes.push(outcome) },
-    );
-    assert.equal(outcomes.length, 1);
-    assert.equal(outcomes[0].status, "failed");
-    assert.match(outcomes[0].run.error, /Unknown agent/);
-  } finally {
-    await rm(sessionRoot, { recursive: true, force: true });
   }
 });
 

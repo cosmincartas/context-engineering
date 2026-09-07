@@ -37,7 +37,7 @@ function harness(parentToolNames: readonly string[] = defaultParentTools) {
   const messages: Array<{ message: any; options: any }> = [];
   const messageRenderers = new Map<string, any>();
   let sendMessageError: Error | undefined;
-  const uiState: any = { footerFactory: undefined, editorFactory: undefined, custom: undefined };
+  const uiState: any = { footerFactory: undefined, editorFactory: undefined, custom: undefined, customCalls: [] };
   const theme: any = {
     fg: (_color: string, text: string) => text,
     bg: (_color: string, text: string) => text,
@@ -83,6 +83,9 @@ function harness(parentToolNames: readonly string[] = defaultParentTools) {
     },
     registerTool(tool: any) {
       tools.push(tool);
+    },
+    registerCommand(name: string, command: any) {
+      commands.set(name, command);
     },
     registerMessageRenderer(type: string, renderer: any) {
       messageRenderers.set(type, renderer);
@@ -147,15 +150,6 @@ async function waitFor(condition: () => boolean, description: string): Promise<v
   throw new Error(`Timed out waiting for ${description}`);
 }
 
-async function completedRun(testHarness: any, runId: string): Promise<any> {
-  for (let attempt = 0; attempt < 500; attempt++) {
-    const found = testHarness.messages.find(({ message }: any) => message.details?.runId === runId);
-    if (found) return found.message.details.run;
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  throw new Error(`No subagent-result message for ${runId}`);
-}
-
 test("registers the tool only after a TUI session starts", async () => {
   const subagentExtension = await loadExtension();
 
@@ -202,17 +196,17 @@ process.stdout.write(JSON.stringify({ type: "message_end", message: { role: "ass
     const context = testHarness.context("tui");
     delete (context as any).thinkingLevel;
     context.modelRegistry = { getAvailable: () => [] };
-    const started = await testHarness.tools[0].execute("fallback", { tasks: [{ agent: "scout", title: "fallback", task: "test" }] }, undefined, undefined, context);
+    const result = await testHarness.tools[0].execute("fallback", { tasks: [{ agent: "scout", title: "fallback", task: "test" }] }, undefined, undefined, context);
     testHarness.thinking.level = "high";
-    assert.equal(started.details.outcomes[0].status, "started");
-    const run = await completedRun(testHarness, "fallback:0");
+    const run = result.details.outcomes[0].run;
+    assert.equal(result.details.outcomes[0].status, "succeeded");
     assert.equal(testHarness.thinking.calls, 1);
     assert.equal(run.thinkingLevel, "medium");
     const explicitContext = testHarness.context("tui");
     explicitContext.thinkingLevel = "high";
     explicitContext.modelRegistry = { getAvailable: () => [] };
-    await testHarness.tools[0].execute("explicit", { tasks: [{ agent: "scout", title: "explicit", task: "test" }] }, undefined, undefined, explicitContext);
-    assert.equal((await completedRun(testHarness, "explicit:0")).thinkingLevel, "high");
+    const explicit = await testHarness.tools[0].execute("explicit", { tasks: [{ agent: "scout", title: "explicit", task: "test" }] }, undefined, undefined, explicitContext);
+    assert.equal(explicit.details.outcomes[0].run.thinkingLevel, "high");
     assert.equal(testHarness.thinking.calls, 1);
     await testHarness.shutdown();
   } finally {
@@ -335,12 +329,10 @@ process.stdout.write(JSON.stringify({ type: "message_end", message: { role: "ass
           testHarness.context("tui"),
         );
         assert.deepEqual(result.details.outcomes.map((outcome: any) => outcome.status), [
-          "started", "started", "started", "started",
+          "succeeded", "succeeded", "succeeded", "succeeded",
         ]);
+        assert.equal(testHarness.messages.length, 0);
 
-        for (let attempt = 0; attempt < 100 && testHarness.messages.length < 4; attempt++) {
-          await new Promise((resolve) => setTimeout(resolve, 10));
-        }
         const records = (await readFile(recordPath, "utf8"))
           .trim()
           .split("\n")
@@ -417,8 +409,9 @@ test("registers the parallel batch contract", async () => {
 
     assert.equal(tool.name, "Agent");
     assert.equal(tool.label, "Agent");
-    assert.match(tool.description, /returns at once|returns immediately/i);
-    assert.match(tool.description, /subagent-result/i);
+    assert.match(tool.description, /wait.*every accepted child|final outcomes/i);
+    assert.match(tool.description, /inspect every returned outcome before continuing/i);
+    assert.doesNotMatch(tool.description, /subagent-result|returns immediately/i);
     assert.equal(tool.executionMode, "parallel");
     assert.equal(tool.parameters.additionalProperties, false);
     assert.deepEqual(tool.parameters.required, ["tasks"]);
@@ -457,48 +450,10 @@ test("registers the parallel batch contract", async () => {
       undefined,
       testHarness.context("tui"),
     );
-    assert.equal(result.details.outcomes[0].status, "started");
-    assert.equal(result.details.outcomes[0].runId, "call:0");
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.equal(testHarness.messages.length, 1);
-    assert.equal(testHarness.messages[0].message.details.run.state, "failed");
-    assert.match(testHarness.messages[0].message.content, /Unknown agent: missing/);
-  } finally {
-    await testHarness.shutdown();
-  }
-});
-
-test("notifies when a background batch rejects", async () => {
-  const subagentExtension = await loadExtension();
-  const testHarness = harness();
-  subagentExtension(testHarness.pi);
-  try {
-    await testHarness.start("tui");
-    testHarness.failSendMessage(new Error("delivery unavailable"));
-    await testHarness.tools[0].execute(
-      "rejected", { tasks: [{ agent: "missing", title: "missing", task: "fail" }] }, undefined, undefined, testHarness.context("tui"),
-    );
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.equal(testHarness.notifications.length, 1);
-    assert.match(testHarness.notifications[0].message, /delivery unavailable/i);
-  } finally {
-    await testHarness.shutdown();
-  }
-});
-
-test("notifies when a background batch rejects", async () => {
-  const subagentExtension = await loadExtension();
-  const testHarness = harness();
-  subagentExtension(testHarness.pi);
-  try {
-    await testHarness.start("tui");
-    testHarness.failSendMessage(new Error("delivery unavailable"));
-    await testHarness.tools[0].execute(
-      "rejected", { tasks: [{ agent: "missing", title: "missing", task: "fail" }] }, undefined, undefined, testHarness.context("tui"),
-    );
-    await waitFor(() => testHarness.notifications.length > 0, "the background rejection notification");
-    assert.equal(testHarness.notifications.length, 1);
-    assert.match(testHarness.notifications[0].message, /delivery unavailable/i);
+    assert.equal(result.details.outcomes[0].status, "failed");
+    assert.equal(result.details.outcomes[0].run.state, "failed");
+    assert.equal(testHarness.messages.length, 0);
+    assert.match(result.content[0].text, /Unknown agent: missing/);
   } finally {
     await testHarness.shutdown();
   }
@@ -564,19 +519,20 @@ else finish();
       { provider: "test", id: "override-model", reasoning: true },
     ] } as any;
     const [tool] = testHarness.tools;
-    const started = await tool.execute("corrupt", { tasks: [{ agent: "scout", title: "corrupt", task: "retry" }] }, undefined, undefined, toolContext);
-    assert.equal(started.details.outcomes[0].status, "started");
+    const pending = tool.execute("corrupt", { tasks: [{ agent: "scout", title: "corrupt", task: "retry" }] }, undefined, undefined, toolContext);
     await waitForRecords(2);
     await writeFile(statePath, JSON.stringify({ version: 1, agents: { scout: { provider: "test", model: "override-model", thinkingLevel: "high" } } }));
     await writeFile(release, "release");
-    const currentRun = await completedRun(testHarness, "corrupt:0");
+    const current = await pending;
+    assert.equal(current.details.outcomes[0].status, "succeeded");
+    const currentRun = current.details.outcomes[0].run;
     assert.equal(currentRun.model, "openai-codex/gpt-5.6-luna");
     assert.equal(currentRun.thinkingLevel, "medium");
     assert.match(currentRun.warnings[0], /Failed to read profile settings/i);
     assert.ok((await records()).slice(0, 2).every((record) => record.argv[5] === "openai-codex/gpt-5.6-luna"));
 
-    await tool.execute("repaired", { tasks: [{ agent: "scout", title: "repaired", task: "reload" }] }, undefined, undefined, toolContext);
-    const laterRun = await completedRun(testHarness, "repaired:0");
+    const repaired = await tool.execute("repaired", { tasks: [{ agent: "scout", title: "repaired", task: "reload" }] }, undefined, undefined, toolContext);
+    const laterRun = repaired.details.outcomes[0].run;
     assert.equal(laterRun.model, "test/override-model");
     assert.equal(laterRun.thinkingLevel, "high");
     assert.deepEqual(laterRun.warnings, []);
@@ -648,7 +604,8 @@ const timer = setInterval(() => {
     const [tool] = testHarness.tools;
     assert.equal(tool.executionMode, "parallel");
     const controller = new AbortController();
-    const started = await tool.execute(
+    let settled = false;
+    const pending = tool.execute(
       "batch-call",
       {
         tasks: Array.from({ length: 4 }, (_, index) => ({
@@ -659,16 +616,15 @@ const timer = setInterval(() => {
       undefined,
       testHarness.context("tui"),
     );
-    assert.deepEqual(started.details.outcomes.map((outcome: any) => outcome.runId), [
-      "batch-call:0", "batch-call:1", "batch-call:2", "batch-call:3",
-    ]);
+    void pending.then(() => { settled = true; }, () => { settled = true; });
     for (let attempt = 0; attempt < 100; attempt++) {
       try {
         if ((await readFile(marker, "utf8")).trim().split("\n").filter(Boolean).length >= 4) break;
       } catch {}
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
-    controller.abort(new Error("tool call stopped"));
+    assert.equal(settled, false);
+    assert.equal(testHarness.messages.length, 0);
     const activeText = testHarness.uiState.footer.render(120).join("\n");
     for (let index = 0; index < 3; index++) assert.match(activeText, new RegExp(`Child ${index}`));
     assert.doesNotMatch(activeText, /Child 3/);
@@ -677,21 +633,11 @@ const timer = setInterval(() => {
     assert.match(scrolledText, /Child 3/);
     assert.doesNotMatch(scrolledText, /Child 0/);
     await writeFile(release, "release");
-    for (let attempt = 0; attempt < 100 && testHarness.messages.length < 4; attempt++) {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-    assert.equal(testHarness.messages.length, 4);
-    assert.deepEqual(testHarness.messages.map(({ message }) => message.details.runId).sort(), [
-      "batch-call:0", "batch-call:1", "batch-call:2", "batch-call:3",
+    const result = await pending;
+    assert.deepEqual(result.details.outcomes.map((outcome: any) => outcome.status), [
+      "succeeded", "succeeded", "succeeded", "succeeded",
     ]);
-    assert.ok(testHarness.messages.every(({ message, options }) =>
-      message.customType === "subagent-result" && message.display && message.details.run.state === "succeeded" &&
-      options.triggerTurn === true && options.deliverAs === "followUp" &&
-      Buffer.byteLength(message.content, "utf8") <= 50 * 1024,
-    ));
-    const firstCompletion = testHarness.messages.find(({ message }) => message.details.runId === "batch-call:0");
-    assert.ok(firstCompletion);
-    assert.match(firstCompletion.message.content, /^1\. Child 0 — succeeded\nlifecycle child$/);
+    assert.equal(testHarness.messages.length, 0);
     const finishedText = testHarness.uiState.footer.render(120).join("\n");
     assert.match(finishedText, /\(openai-codex\) parent • medium/);
     assert.doesNotMatch(finishedText, /orchestrator|^subagent /m);
@@ -807,7 +753,7 @@ setInterval(() => {}, 1000);
     assert.throws(() => process.kill(pid!, 0));
     assert.doesNotThrow(() => process.kill(grandchildPid!, 0));
     assert.ok(pending);
-    await pending;
+    await assert.rejects(pending);
     await assert.rejects(access(sessionDirectory));
     await assert.rejects(access(promptPath));
     await testHarness.shutdown();
@@ -982,28 +928,6 @@ function renderFixture(state: string): any {
     },
   };
 }
-
-test("renders subagent-result messages with run details and fallback text", async () => {
-  const { renderSubagentMessage } = await loadModule();
-  const fixture = renderFixture("succeeded").details.outcomes[0].run;
-  fixture.attempts[0].messages = [assistantMessage([{ type: "text", text: "Final answer" }])];
-  const rendererHarness = harness();
-  (await loadExtension())(rendererHarness.pi);
-  await rendererHarness.start("tui");
-  try {
-    const renderer = rendererHarness.messageRenderers.get("subagent-result");
-    assert.equal(renderer, renderSubagentMessage);
-    const message = { content: "fallback", details: { runId: "call:0", index: 0, run: fixture } };
-    const collapsed = renderer(message, { expanded: false, outputPad: 0 }, plainTheme).render(120).join("\n");
-    assert.match(collapsed, /scout.*Inspect API.*succeeded/i);
-    const expanded = renderer(message, { expanded: true, outputPad: 0 }, plainTheme).render(120).join("\n");
-    assert.match(expanded, /deliberately long task/i);
-    assert.match(expanded, /Final answer/i);
-    assert.match(renderer({ content: "fallback", details: {} }, { expanded: false, outputPad: 0 }, plainTheme).render(80).join("\n"), /fallback/);
-  } finally {
-    await rendererHarness.shutdown();
-  }
-});
 
 test("renders every state with text and no color dependency", async () => {
   const renderSubagentResult = (await loadModule()).renderSubagentResult;
@@ -1192,22 +1116,6 @@ test("renders every batch outcome in compact and expanded forms", async () => {
     const lines = renderSubagentResult(fixture, { expanded: true, isPartial: false }, plainTheme).render(width);
     assert.ok(lines.every((line: string) => visibleWidth(line) <= width));
   }
-});
-
-test("renders started batch items with their run id", async () => {
-  const renderSubagentResult = (await loadModule()).renderSubagentResult;
-  const fixture = {
-    content: [{ type: "text", text: "started fallback" }],
-    details: { outcomes: [
-      { index: 0, status: "started", runId: "call:0", request: { agent: "scout", title: "Inspect", task: "inspect" } },
-      { index: 1, status: "malformed", reason: "bad task" },
-      { index: 2, status: "over-limit", reason: "too many" },
-    ] },
-  };
-  const collapsed = renderSubagentResult(fixture, { expanded: false, isPartial: false }, plainTheme).render(120).join("\n");
-  assert.match(collapsed, /Subagents \(3\).*1 started/i);
-  const expanded = renderSubagentResult(fixture, { expanded: true, isPartial: false }, plainTheme).render(120).join("\n");
-  assert.match(expanded, /Inspect.*call:0/i);
 });
 
 test("falls back to model content for invalid batch details", async () => {
