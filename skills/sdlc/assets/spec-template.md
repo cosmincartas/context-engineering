@@ -13,6 +13,11 @@ updated: "{{YYYY-MM-DD}}"
 
 # {{Subject}} Specification
 
+## Delivery Scope
+
+- **Unit:** {{chosen delivery unit}}
+- **Includes:** {{one line per included behavior}}
+
 ## 1. User Interface
 
 <!-- Include this section only when the approved scope adds or changes UI. For non-UI work, skip the UI gate and do not create, modify, or delete ui.html. -->
@@ -130,7 +135,7 @@ updated: "{{YYYY-MM-DD}}"
 - **FR-1** → {{UI-* entry when one exists, component responsibility, contract, invariant, or required design element}}
 - **NFR-1** → {{component responsibility, contract, invariant, or required design element}}
 
-<!-- Include section 12 only when a widening option or behavior leaves scope. Omit the heading and contents otherwise. Keep this section number. -->
+<!-- Include section 12 only when a delivery unit or behavior leaves scope. Omit the heading and contents otherwise. Keep this section number. -->
 ## 12. Parked
 
-- {{Declined widening option or behavior that left scope. One line. A candidate subject for a future topic.}}
+- {{Excluded delivery unit or behavior that left scope. One line. A candidate slice of this topic or subject for a future topic.}}

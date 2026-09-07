@@ -6,7 +6,7 @@ Turn the validated intent into a validated specification: requirements and techn
 
 1. Require `docs/agentic-engineering/<subject>/intent.md` with `artifact: intent` and `status: validated`. If it is a draft, return to phase 1.
 2. Preserve Initial Request when present. Accept older validated intent artifacts that omit this section.
-3. Preserve the intent's Problem, Proposed outcome, Affected users, and Constraints. Do not silently reopen settled context. Treat Open Questions as input to the requirements gate.
+3. Preserve the intent's Problem, Proposed outcome, Affected users, and Constraints. Do not silently reopen settled context. Treat scope-shaped Open Questions as input to the scope gate and the rest as input to the requirements gate.
 4. Re-inspect repository facts that requirements and design depend on: implementation language, existing types and interfaces, and naming conventions. Route material drift that contradicts approved content through the shared correction rule before continuing dependent work.
 
 An `explore` artifact is supporting evidence, not approval of scope or a decision to build.
@@ -21,28 +21,37 @@ The spec must cover one deliverable that can ship independently.
 
 ## Workflow
 
-Run the gates in this order: requirements, UI when the slice adds or changes UI, HLD, and final validation.
+Run the gates in this order: scope, requirements, UI when the slice adds or changes UI, HLD, and final validation.
 
-1. Draft scope, Functional Requirements, and Non-Functional Requirements in conversation. Apply the requirements rules, then run the **requirements gate**.
-2. When the approved scope adds or changes UI, draft `UI-*` entries and `ui.html`, then run the **UI gate**. Otherwise skip the UI gate, omit the User Interface section, and do not create, modify, or delete `ui.html`.
-3. Draft key architecture decisions and the explained HLD, then run the **HLD gate**.
-4. After HLD approval, autonomously complete only the applicable remaining sections. Resolve reversible details from repository evidence and approved constraints. Ask only questions that block validation or affect an approved decision.
-5. Route late discoveries through the shared correction rule. Resume dependent drafting after the affected approvals.
-6. Run the self-checks.
-7. Write `spec.md` with `status: draft`. Present a final recap and ask the user to validate.
-8. Apply requested corrections through the shared correction rule, update the complete spec, and rerun self-checks.
-9. Return to final validation after corrections. Set `status: validated` only after approval of the complete spec.
+1. Run the **scope gate** to fix the Delivery Scope.
+2. Draft Functional Requirements and Non-Functional Requirements for the Delivery Scope in conversation. Apply the requirements rules, then run the **requirements gate**.
+3. When the approved scope adds or changes UI, draft `UI-*` entries and `ui.html`, then run the **UI gate**. Otherwise skip the UI gate, omit the User Interface section, and do not create, modify, or delete `ui.html`.
+4. Draft key architecture decisions and the explained HLD, then run the **HLD gate**.
+5. After HLD approval, autonomously complete only the applicable remaining sections. Resolve reversible details from repository evidence and approved constraints. Ask only questions that block validation or affect an approved decision.
+6. Route late discoveries through the shared correction rule. Resume dependent drafting after the affected approvals.
+7. Run the self-checks.
+8. Write `spec.md` with `status: draft`. Present a final recap and ask the user to validate.
+9. Apply requested corrections through the shared correction rule, update the complete spec, and rerun self-checks.
+10. Return to final validation after corrections. Set `status: validated` only after approval of the complete spec.
+
+### Scope gate
+
+1. Infer the full feature surface from the validated intent and repository evidence: actors, triggers, outcomes, and every capability the Proposed outcome implies. Consume scope-shaped Open Questions here.
+2. If the surface is unclear, ask one batch of questions on one subject. Do not ask about behavior the intent or the code already shows.
+3. Partition the surface into candidate delivery units. Each unit ships independently and lists the behaviors it includes, one line each. Do not invent units the intent does not imply.
+4. If exactly one unit exists, do not ask. Record it as the Delivery Scope and open the requirements gate presentation with it.
+5. Otherwise ask one `AskUserQuestion` to choose one unit. Show each unit with its inclusions. Recommend the smallest unit that delivers the first observable value of the Proposed outcome, and list it first.
+6. The chosen unit and its inclusions are the approved Delivery Scope. Record each other unit under Parked as the queue for later slices.
+7. Continue only after the choice or the single-unit skip.
 
 ### Requirements gate
 
-1. Infer the main flow from the intent in at most five lines: actor, trigger, and outcome.
-2. Identify unresolved scope choices from the intent, Open Questions, and repository evidence. Carry explicit scope into the draft without reopening it absent new evidence.
-3. Apply the shared challenge duty to material unresolved choices. Record actual declined widening options under Parked; do not invent optional features to create alternatives.
-4. Draft each distinct functional behavior with its verification and each applicable non-functional requirement with its measurable or binary verification.
-5. Present the scope, FR list, NFR list, Parked list, inferred entries with sources, conflicts, and the independent-deliverable invariant together.
-6. Ask the user to approve the complete requirements gate.
-7. If the user edits or counters, apply the shared correction rule. Present the changed requirements and consequences together until this gate is approved.
-8. Continue only after approval.
+1. Draft each distinct functional behavior in the Delivery Scope with its verification, and each applicable non-functional requirement with its measurable or binary verification.
+2. Apply the shared challenge duty to unresolved acceptance choices. Do not reopen the Delivery Scope absent new evidence; route a scope change through the shared correction rule.
+3. Present the FR list, NFR list, inferred entries with sources, and conflicts together. When the scope gate skipped its question, open with the Delivery Scope.
+4. Ask the user to approve the complete requirements gate.
+5. If the user edits or counters, apply the shared correction rule. Present the changed requirements and consequences together until this gate is approved.
+6. Continue only after approval.
 
 ### UI gate
 
@@ -65,7 +74,7 @@ Define a distinct behavior by its actor, trigger, observable outcome, or indepen
 Give each distinct behavior one FR. Keep one checkable behavior per FR. Never merge distinct behaviors.
 Fold only edge cases, variants, and failure paths of the same behavior into its Verification field. Never hide a separate behavior in Verification.
 When a `UI-*` entry exists, cite it in each FR that renders or reacts to it.
-Record a behavior that leaves scope under Parked before the requirements gate.
+Record a behavior that leaves the Delivery Scope under Parked before the requirements gate.
 
 ### NFR rules
 
@@ -76,7 +85,7 @@ Never drop a legal, security, privacy, accessibility, or data-loss obligation.
 ### Requirements challenge
 
 - Collect every requirement inferred rather than received into one list with sources.
-- Name each kept scope answer that has no FR.
+- Name each Delivery Scope behavior that has no FR.
 - Present strictness alternatives only for unresolved choices with materially different acceptance conditions. Preserve explicit limits unless new evidence challenges them.
 - Name requirement conflicts and overlaps instead of resolving them silently.
 - Collect every inferred NFR and every numeric limit without user or repository provenance into the same list.
@@ -113,6 +122,7 @@ Never drop a legal, security, privacy, accessibility, or data-loss obligation.
 ## Section rules
 
 - Use stable `UI-*`, `FR-*`, and `NFR-*` identifiers. One checkable behavior per entry. Requirements use "must". Sections 1–3 are ID-keyed lists, never tables.
+- **Delivery Scope.** The chosen unit and its included behaviors, one line each. Keep this block unnumbered before section 1.
 - **User Interface.** One entry per screen, widget, or dialog: a link to its anchor in `ui.html`, its states, and its input map. Include the section only when the approved scope adds or changes UI. For non-UI work, skip the UI gate and do not create, modify, or delete `ui.html`.
 - Include sections 5 through 12 only when applicable. Keep their fixed section numbers when included; omit empty sections without renumbering later sections.
 - Each NFR has a number, limit, or binary check. Do not disguise a feature as a quality requirement. Consider each category: performance, capacity, security, privacy, availability and recovery, compliance, accessibility, observability. Add an NFR or omit the category; do not write "not applicable" entries.
@@ -127,14 +137,15 @@ Never drop a legal, security, privacy, accessibility, or data-loss obligation.
 - **Behavior.** Important flows and state transitions, naming responsible components, contracts, or existing entry points in order. Name a private function only when an approved constraint depends on it. Write ordering and sudden-stop recovery only where related persistent writes exist.
 - **Failure Model.** Failures relevant to this system, with detector, response, and observable verification. Do not invent optional dependencies, corruption paths, or persistence failures for systems that do not have them.
 - **Traceability.** Every `FR-*` and `NFR-*` maps to a component responsibility, contract, invariant, or other required design element, and to its `UI-*` entry when one exists. Do not invent private functions for traceability. A design element with no requirement or existing repository constraint is scope creep.
-- **Parked.** One line per declined widening option or behavior that left scope. Each is a candidate subject for a future topic.
+- **Parked.** One line per excluded delivery unit or behavior that left scope. Each is a candidate slice of this topic or subject for a future topic.
 - Consider security (authorization, malicious input), privacy (personal data, retention, deletion), and operability (monitoring, configuration, deployment). Add a contract, failure entry, or behavior where one applies; do not write "not applicable" entries.
 
 ## Self-checks
 
 Before validation, make sure that:
 
-- Every kept scope answer has at least one FR, every declined option appears in Parked, and the spec covers one deliverable that can ship independently.
+- The scope gate ran before any FR drafting and received one user choice, or skipped its question because exactly one unit existed.
+- Every Delivery Scope behavior has at least one FR, every excluded unit appears in Parked, and the spec covers one deliverable that can ship independently.
 - Each distinct functional behavior has its own FR, defined by actor, trigger, observable outcome, or independent acceptance decision. No FR hides a separate behavior in Verification.
 - No FR cites a `UI-*` entry that does not exist. Every `UI-*` entry has an anchor in `ui.html`.
 - For each `UI-*` entry, verify every affected FR references it.
@@ -143,7 +154,7 @@ Before validation, make sure that:
 - Every FR and NFR has an observable verification and a source, and every NFR is measurable or binary.
 - Every NFR numeric limit has user or repository provenance.
 - No unresolved unknown remains.
-- Each requirements-gate run receives one combined user response for scope, FRs, and NFRs.
+- Each requirements-gate run receives one combined user response for FRs and NFRs.
 - When UI remains in scope, the UI gate followed the requirements gate and received a user response.
 - When UI remains in scope, the User Interface section exists, and the user reviewed each entry.
 - When UI is not in scope from the start, the UI gate was skipped.

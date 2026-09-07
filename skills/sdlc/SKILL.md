@@ -7,7 +7,7 @@ description: Use when the user wants to formalize delivery work, create or resum
 
 Write artifacts in ASD-STE100 Simplified Technical English: sentences of at most 20 words (instructions) or 25 (descriptions), active voice, imperative for steps, one meaning for each word, requirements use "must" (never "shall" or "should"). Chat stays in natural conversational language.
 
-Take one topic through three phases. Each phase produces one validated artifact in the topic folder. The pipeline ends with a validated implementation plan. Execution belongs to other skills. Phase 1 validates the complete intent. Phase 2 reviews requirements, UI when applicable, and HLD before autonomous design drafting and final validation. Phase 3 validates the complete plan. Use `references/facilitation-rules.md` for approvals and corrections in every phase.
+Take one topic through three phases. Each phase produces one validated artifact in the topic folder. The pipeline ends with a validated implementation plan. Execution belongs to other skills. Phase 1 validates the complete intent. Phase 2 fixes the delivery scope, then reviews requirements, UI when applicable, and HLD before autonomous design drafting and final validation. Phase 3 validates the complete plan. Use `references/facilitation-rules.md` for approvals and corrections in every phase.
 
 | Phase | Name | Artifact | Reference |
 |---|---|---|---|

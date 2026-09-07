@@ -46,7 +46,8 @@ When a correction or discovery changes approved content, identify the earliest a
 | What changes | Where approval resumes |
 |---|---|
 | Problem, intended outcome, affected users, or an intent constraint | Intent validation |
-| Scope, functional behavior, quality requirements, or acceptance conditions | Requirements gate |
+| Delivery scope: chosen unit, inclusions, or exclusions | Scope gate |
+| Functional behavior, quality requirements, or acceptance conditions | Requirements gate |
 | UI presentation or interaction within approved requirements | UI gate |
 | Architecture, ownership, contracts, or consequential technical decisions | HLD gate |
 | Task grouping, order, or verification instructions within the approved spec | Plan validation |
