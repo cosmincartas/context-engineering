@@ -29,6 +29,10 @@ updated: "{{YYYY-MM-DD}}"
 
 - {{Who is affected and how, with the source.}}
 
+## Affected components
+
+- {{Existing component the trigger-to-outcome path crosses, as `file:symbol`, or a new component the outcome implies, marked new. Include the source.}}
+
 ## Constraints
 
 - {{Constraint the user stated or repository evidence shows, with its source.}}

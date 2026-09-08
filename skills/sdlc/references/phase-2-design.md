@@ -6,7 +6,7 @@ Turn the validated intent into a validated specification: requirements and techn
 
 1. Require `docs/agentic-engineering/<subject>/intent.md` with `artifact: intent` and `status: validated`. If it is a draft, return to phase 1.
 2. Preserve Initial Request when present. Accept older validated intent artifacts that omit this section.
-3. Preserve the intent's Problem, Proposed outcome, Affected users, and Constraints. Do not silently reopen settled context. Treat scope-shaped Open Questions as input to the scope gate and the rest as input to the requirements gate.
+3. Preserve the intent's Problem, Proposed outcome, Affected users, Affected components, and Constraints. Do not silently reopen settled context. Treat scope-shaped Open Questions as input to the scope gate and the rest as input to the requirements gate.
 4. Re-inspect repository facts that requirements and design depend on: implementation language, existing types and interfaces, and naming conventions. Route material drift that contradicts approved content through the shared correction rule before continuing dependent work.
 
 An `explore` artifact is supporting evidence, not approval of scope or a decision to build.
@@ -36,20 +36,23 @@ Run the gates in this order: scope, requirements, UI when the slice adds or chan
 
 ### Scope gate
 
-1. Infer the full feature surface from the validated intent and repository evidence: actors, triggers, outcomes, and every capability the Proposed outcome implies. Consume scope-shaped Open Questions here.
+1. Infer the full feature surface from the validated intent and repository evidence: actors, triggers, outcomes, every capability the Proposed outcome implies, and the Affected components each trigger-to-outcome path crosses. Consume scope-shaped Open Questions here.
 2. If the surface is unclear, ask one batch of questions on one subject. Do not ask about behavior the intent or the code already shows.
-3. Partition the surface into candidate delivery units under the delivery unit rules. Each unit lists the behaviors it includes, one line each. Do not invent units the intent does not imply.
-4. If the surface has exactly one primary behavior, do not ask. Record the unit as the Delivery Scope and open the requirements gate presentation with it.
-5. Otherwise ask one `AskUserQuestion` to choose one unit. Show each unit with its inclusions. Recommend the smallest unit that delivers the first observable value of the Proposed outcome, and list it first.
+3. Partition the surface into candidate delivery units under the delivery unit rules. Each unit lists the behaviors it includes and the components it crosses, one line each. Do not invent units the intent does not imply.
+4. If the surface has exactly one primary behavior and no thinner trigger-to-outcome path exists, do not ask. Record the unit as the Delivery Scope and open the requirements gate presentation with it.
+5. Otherwise ask one `AskUserQuestion` to choose one unit. Show each unit with its behaviors and the components it crosses. Recommend the thinnest unit that delivers the first observable value of the Proposed outcome through every component it needs, and list it first.
 6. The chosen unit and its inclusions are the approved Delivery Scope. Record each other unit under Parked as the queue for later slices.
 7. Continue only after the choice or the single-unit skip.
 
 ### Delivery unit rules
 
 A delivery unit contains one primary behavior, one externally observable outcome, one main interface or entry point, and the minimum supporting changes that behavior needs.
+A delivery unit is one complete path from trigger to observable outcome through every Affected component it needs.
 Partition the surface by primary behavior. Each other primary behavior is its own unit.
+When one primary behavior crosses several components or admits input, output, or failure variants, partition it further: one walking skeleton with the simplest variant, then one unit per added variant.
+Never partition by component or layer. A unit without a trigger-to-outcome path is not a unit.
 Do not enlarge a unit because adjacent work is easy, one pass could implement more, the files are already touched, the future architecture is obvious, another endpoint is trivial, or UI would make the feature feel more complete.
-Skip the choice question only when the surface has exactly one primary behavior.
+Skip the choice question only when the surface has exactly one primary behavior and no thinner path exists.
 
 ### Requirements gate
 
