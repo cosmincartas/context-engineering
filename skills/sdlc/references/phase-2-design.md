@@ -24,7 +24,7 @@ The spec must cover one deliverable that can ship independently.
 Run the gates in this order: scope, requirements, UI when the slice adds or changes UI, HLD, and final validation.
 
 1. Run the **scope gate** to fix the Delivery Scope.
-2. Draft Functional Requirements and Non-Functional Requirements for the Delivery Scope in conversation. Apply the requirements rules, then run the **requirements gate**.
+2. Draft Functional Requirements and Non-Functional Requirements for the Delivery Scope in conversation. Apply the FR rules and NFR rules, then run the **requirements gate**.
 3. When the approved scope adds or changes UI, draft `UI-*` entries and `ui.html`, then run the **UI gate**. Otherwise skip the UI gate, omit the User Interface section, and do not create, modify, or delete `ui.html`.
 4. Draft key architecture decisions and the explained HLD, then run the **HLD gate**.
 5. After HLD approval, autonomously complete only the applicable remaining sections. Resolve reversible details from repository evidence and approved constraints. Ask only questions that block validation or affect an approved decision.
@@ -38,20 +38,29 @@ Run the gates in this order: scope, requirements, UI when the slice adds or chan
 
 1. Infer the full feature surface from the validated intent and repository evidence: actors, triggers, outcomes, and every capability the Proposed outcome implies. Consume scope-shaped Open Questions here.
 2. If the surface is unclear, ask one batch of questions on one subject. Do not ask about behavior the intent or the code already shows.
-3. Partition the surface into candidate delivery units. Each unit ships independently and lists the behaviors it includes, one line each. Do not invent units the intent does not imply.
-4. If exactly one unit exists, do not ask. Record it as the Delivery Scope and open the requirements gate presentation with it.
+3. Partition the surface into candidate delivery units under the delivery unit rules. Each unit lists the behaviors it includes, one line each. Do not invent units the intent does not imply.
+4. If the surface has exactly one primary behavior, do not ask. Record the unit as the Delivery Scope and open the requirements gate presentation with it.
 5. Otherwise ask one `AskUserQuestion` to choose one unit. Show each unit with its inclusions. Recommend the smallest unit that delivers the first observable value of the Proposed outcome, and list it first.
 6. The chosen unit and its inclusions are the approved Delivery Scope. Record each other unit under Parked as the queue for later slices.
 7. Continue only after the choice or the single-unit skip.
 
+### Delivery unit rules
+
+A delivery unit contains one primary behavior, one externally observable outcome, one main interface or entry point, and the minimum supporting changes that behavior needs.
+Partition the surface by primary behavior. Each other primary behavior is its own unit.
+Do not enlarge a unit because adjacent work is easy, one pass could implement more, the files are already touched, the future architecture is obvious, another endpoint is trivial, or UI would make the feature feel more complete.
+Skip the choice question only when the surface has exactly one primary behavior.
+
 ### Requirements gate
 
-1. Draft each distinct functional behavior in the Delivery Scope with its verification, and each applicable non-functional requirement with its measurable or binary verification.
-2. Apply the shared challenge duty to unresolved acceptance choices. Do not reopen the Delivery Scope absent new evidence; route a scope change through the shared correction rule.
-3. Present the FR list, NFR list, inferred entries with sources, and conflicts together. When the scope gate skipped its question, open with the Delivery Scope.
-4. Ask the user to approve the complete requirements gate.
-5. If the user edits or counters, apply the shared correction rule. Present the changed requirements and consequences together until this gate is approved.
-6. Continue only after approval.
+1. Draft each distinct functional behavior in the Delivery Scope with its verification and source.
+2. Draft each applicable non-functional requirement with its measurable or binary verification and source.
+3. Write a numeric limit into an NFR only when it has user or repository provenance. Collect every other candidate limit into one limits-to-confirm list with the reason for each candidate.
+4. Apply the shared challenge duty to unresolved acceptance choices. Do not reopen the Delivery Scope absent new evidence; route a scope change through the shared correction rule.
+5. Present the FR list, NFR list, limits-to-confirm list, inferred entries with sources, and conflicts together. When the scope gate skipped its question, open with the Delivery Scope.
+6. Ask the user to approve the complete requirements gate. An approved limit-to-confirm gains user provenance.
+7. If the user edits or counters, apply the shared correction rule. Present the changed requirements and consequences together until this gate is approved.
+8. Continue only after approval.
 
 ### UI gate
 
@@ -88,7 +97,7 @@ Never drop a legal, security, privacy, accessibility, or data-loss obligation.
 - Name each Delivery Scope behavior that has no FR.
 - Present strictness alternatives only for unresolved choices with materially different acceptance conditions. Preserve explicit limits unless new evidence challenges them.
 - Name requirement conflicts and overlaps instead of resolving them silently.
-- Collect every inferred NFR and every numeric limit without user or repository provenance into the same list.
+- Collect every inferred NFR into the same list. A numeric limit without user or repository provenance goes to the requirements gate's limits-to-confirm list.
 
 ### HLD gate
 
@@ -154,7 +163,7 @@ Before validation, make sure that:
 - Every FR and NFR has an observable verification and a source, and every NFR is measurable or binary.
 - Every NFR numeric limit has user or repository provenance.
 - No unresolved unknown remains.
-- Each requirements-gate run receives one combined user response for FRs and NFRs.
+- Each requirements-gate run receives one combined user response for FRs, NFRs, and limits to confirm.
 - When UI remains in scope, the UI gate followed the requirements gate and received a user response.
 - When UI remains in scope, the User Interface section exists, and the user reviewed each entry.
 - When UI is not in scope from the start, the UI gate was skipped.
