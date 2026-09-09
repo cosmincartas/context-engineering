@@ -10,6 +10,11 @@
     "pi:subagent": "mise exec -- pi -ne -e ./extensions/subagent/index.ts",
     "pi:tasks": "mise exec -- pi -ne -e ./extensions/tasks/index.ts"
   },
+  "dependencies": {
+    "pi-gpt-search": "1.1.0",
+    "pi-mcp-adapter": "2.32.1"
+  },
+  "bundledDependencies": ["pi-gpt-search", "pi-mcp-adapter"],
   "peerDependencies": {
     "@earendil-works/pi-agent-core": "*",
     "@earendil-works/pi-ai": "*",
@@ -18,7 +23,14 @@
     "typebox": "*"
   },
   "pi": {
-    "extensions": ["./extensions"],
-    "skills": ["./skills"]
+    "extensions": [
+      "./extensions",
+      "./node_modules/pi-gpt-search/src/index.ts",
+      "./node_modules/pi-mcp-adapter/index.ts"
+    ],
+    "skills": [
+      "./skills",
+      "./node_modules/pi-mcp-adapter/skills"
+    ]
   }
 }
