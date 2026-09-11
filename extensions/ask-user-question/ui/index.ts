@@ -1,4 +1,5 @@
 import {
+  decodeKittyPrintable,
   Editor,
   Key,
   matchesKey,
@@ -12,7 +13,6 @@ import {
   visibleWidth,
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
-import { decodePrintableKey } from "@earendil-works/pi-tui/dist/keys.js";
 import {
   createQuestionnaireState,
   reduceQuestionnaireState,
@@ -383,6 +383,36 @@ export function createQuestionnaireComponent(
 
 const BRACKETED_PASTE_START = "\x1b[200~";
 const BRACKETED_PASTE_END = "\x1b[201~";
+const MODIFY_OTHER_KEYS = /^\x1b\[27;(\d+);(\d+)~$/;
+const SHIFT_MODIFIER = 1;
+const LOCK_MODIFIERS = 64 + 128; // Caps Lock + Num Lock
+
+// xterm modifyOtherKeys (CSI 27 ; modifiers ; keycode ~), emitted when the Kitty
+// protocol is off. pi-tui keeps this fallback module-private and re-exports only
+// decodeKittyPrintable from its package root, and the extension loader aliases
+// that root specifier alone — a deep "@earendil-works/pi-tui/dist/keys.js" import
+// cannot resolve once the extension is installed, so it is reproduced here.
+function decodeModifyOtherKeysPrintable(data: string): string | undefined {
+  const match = data.match(MODIFY_OTHER_KEYS);
+  if (!match) return undefined;
+
+  const modifier = (Number.parseInt(match[1] ?? "", 10) - 1) & ~LOCK_MODIFIERS;
+  if ((modifier & ~SHIFT_MODIFIER) !== 0) return undefined;
+
+  const codepoint = Number.parseInt(match[2] ?? "", 10);
+  if (!Number.isFinite(codepoint) || codepoint < 32) return undefined;
+
+  try {
+    return String.fromCodePoint(codepoint);
+  } catch {
+    return undefined;
+  }
+}
+
+function decodePrintableKey(data: string): string | undefined {
+  return decodeKittyPrintable(data) ?? decodeModifyOtherKeysPrintable(data);
+}
+
 function isEditorControlKey(data: string, keybindings: KeybindingsManager): boolean {
   return Object.keys(keybindings.getResolvedBindings())
     .filter(
