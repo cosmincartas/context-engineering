@@ -18,6 +18,16 @@ updated: "{{YYYY-MM-DD}}"
 
 {{The evidence-backed explanation. Distinguish confirmed facts, inferences, and unknowns when it matters.}}
 
+## Research Validation
+
+<!-- Keep for recommendations based on current external information. -->
+
+- **Research date:** {{YYYY-MM-DD}}
+- **Option-discovery scope:** {{How the newest relevant viable options were identified.}}
+- **Primary sources:** {{Specifications, versions, pricing, and documented limitations.}}
+- **Independent evidence:** {{Benchmark or real-world evaluation, or state that none was available.}}
+- **Comparability:** {{Versions, configurations, workloads, pricing units, and material mismatches.}}
+
 ## Repository Impact
 
 <!-- Keep only for repository-specific impact analysis. Cite files and symbols. -->
@@ -32,9 +42,9 @@ updated: "{{YYYY-MM-DD}}"
 
 <!-- Keep only when comparison was requested or materially useful. -->
 
-| Option | Advantages | Disadvantages | Best fit |
-|---|---|---|---|
-| {{option}} | {{specific}} | {{specific}} | {{conditions}} |
+| Option and version | Price | Performance or latency | Limitations | Evidence | Best fit |
+|---|---:|---|---|---|---|
+| {{option}} | {{comparable unit or unavailable}} | {{measurement and conditions}} | {{specific}} | {{vendor, independent, inferred, or unknown}} | {{conditions}} |
 
 ## Example
 
@@ -43,6 +53,12 @@ updated: "{{YYYY-MM-DD}}"
 ## Unknowns
 
 - {{Unknown and why it matters.}}
+
+## Sources
+
+<!-- Cite each externally verifiable factual claim using numbered references. Prefer primary sources and identify independent sources. -->
+
+1. {{Source title and URL}}
 
 ## Suggested Next Step
 

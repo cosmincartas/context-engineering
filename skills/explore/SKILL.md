@@ -27,6 +27,13 @@ A request can combine modes. Ask one clarifying question only when the requested
    - For repository-impact questions, inspect the relevant implementation, callers, tests, public contracts, and recent changes.
    - For external technologies, prefer current authoritative documentation and distinguish documented behavior from inference.
    - Label important claims as confirmed, inferred, or unknown when the distinction matters.
+   - When making a recommendation that depends on current external information:
+     - Record the research date and identify the newest relevant viable options. Do not stop at the first plausible option.
+     - Prefer primary sources for specifications, versions, pricing, and documented limitations.
+     - Cite each externally verifiable factual claim. Clearly distinguish measured evidence, vendor claims, inference, and unknowns.
+     - Compare equivalent versions, configurations, workloads, pricing units, and measurement conditions. Explain material mismatches.
+     - Compare benchmarks, pricing, latency, and limitations when they are relevant and available. State when comparable data is unavailable.
+     - Cross-check material performance or reliability claims against at least one independent benchmark or real-world evaluation. State explicitly when independent evidence is unavailable.
 3. **Answer the requested modes.**
    - Concept: explain the mechanism, useful applications, limitations, and common failure modes.
    - Impact: name affected entry points, contracts, data, dependencies, tests, operations, security, and migration concerns when applicable.
@@ -56,5 +63,10 @@ Before finishing, make sure that:
 - The response answers the user's actual question.
 - Repository claims cite concrete files or symbols when applicable.
 - External claims use current authoritative evidence when recency matters.
+- Current recommendations state the research date and cover the newest relevant viable options.
+- Externally verifiable factual claims have citations.
+- Vendor claims, independent measurements, inference, and unknowns are clearly distinguished.
+- Material comparisons use equivalent conditions or explain why they are not directly comparable.
+- Material performance or reliability claims are independently cross-checked, or the lack of independent evidence is stated.
 - Examples state whether they were run.
 - The next step is optional rather than an assumed commitment to build.
