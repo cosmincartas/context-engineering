@@ -46,6 +46,43 @@ updated: "{{YYYY-MM-DD}}"
 |---|---:|---|---|---|---|
 | {{option}} | {{comparable unit or unavailable}} | {{measurement and conditions}} | {{specific}} | {{vendor, independent, inferred, or unknown}} | {{conditions}} |
 
+## Candidate Designs
+
+<!-- Keep only for Design mode. One candidate block per candidate. Any two candidates differ in one consequential decision. Diagrams also render side by side in <subject>-designs.html. -->
+
+**Framing source:** {{The stated request, and the intent artifact path when the user supplied one.}}
+
+### Candidate A: {{name}}
+
+- **Key decision:** {{The consequential decision that sets this candidate apart.}}
+
+```mermaid
+{{Component diagram. Existing components as file:symbol; missing components marked new.}}
+```
+
+- **Responsibilities:** {{One line per component.}}
+- **Flow:** {{Trigger to outcome across the components.}}
+- **Constraint fit:** {{Stated constraints satisfied; constraints strained.}}
+- **Strongest advantage:** {{specific}}
+- **Strongest disadvantage:** {{specific}}
+
+### Candidate B: {{name}}
+
+<!-- Repeat one block per further candidate, or remove this block when one candidate is enough. -->
+
+{{Same structure.}}
+
+### Comparison
+
+<!-- Keep only with more than one candidate. -->
+
+| Candidate | Key decision | Constraint fit | New components | Strongest advantage | Strongest disadvantage |
+|---|---|---|---|---|---|
+| A | {{decision}} | {{fit}} | {{count or names}} | {{advantage}} | {{disadvantage}} |
+| B | {{decision}} | {{fit}} | {{count or names}} | {{advantage}} | {{disadvantage}} |
+
+**Recommendation:** {{Candidate and reasons. This is a recommendation; the user decides and can ask for further candidates.}}
+
 ## Example
 
 <!-- Keep only when requested or when it materially reduces uncertainty. State whether the example was executed. -->

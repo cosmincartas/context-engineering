@@ -1,18 +1,18 @@
 ---
 name: intent
-description: Use only when the user explicitly asks for it. Turns one development request into a validated intent artifact that states what the request means, not how to implement it. Produces docs/context-engineering/<subject>/intent.md, which sdlc accepts as its validated phase 1 artifact.
+description: Use only when the user explicitly asks for it. Turns one development request into a validated intent artifact that states what the request means, not how to implement it.
 disable-model-invocation: true
 ---
 
 # Intent
 
-Write the artifact in ASD-STE100 Simplified Technical English: sentences of at most 20 words (instructions) or 25 (descriptions), active voice, imperative for steps, one meaning for each word. Chat stays in natural conversational language.
+Use ASD-STE100 Simplified Technical English for every output: chat messages, questions, question options, and the artifact. Sentences have at most 20 words (instructions) or 25 (descriptions). Use active voice, imperative for steps, and one meaning for each word. Keep chat messages short. Say only what the user needs for the next step.
 
 Turn an initial development prompt into a shared, user-validated understanding of what the request means, not how to implement it. This skill stops at the validated intent. Design, planning, and execution belong to other skills.
 
 ## Artifact
 
-`docs/context-engineering/<subject>/intent.md` from `assets/intent-template.md`. Use a short kebab-case subject. Write the file once at the end of the skill, at the first validation presentation. The artifact matches the `sdlc` phase 1 artifact, so `sdlc` can resume the topic at its design phase.
+`docs/context-engineering/<subject>/intent.md` from `assets/intent-template.md`. Use a short kebab-case subject. Write the file once at the end of the skill, at the first validation presentation.
 
 ## Invariants
 
@@ -45,7 +45,7 @@ Turn an initial development prompt into a shared, user-validated understanding o
 4. Ask questions that close material gaps in the understanding. Investigate unhappy paths, affected users, and edge conditions; ask only when an unresolved answer affects the outcome. Do not ask the user to confirm a synthesis you have not yet presented.
 5. Synthesize Problem, Proposed outcome, Affected users, Affected components, Constraints, and Open Questions. Distinguish user statements, repository evidence, and proposed interpretations. Put unresolved unknowns and questions deferred to design under Open Questions, each with its consequence. Do not request section approvals.
 6. Write `intent.md` with `status: draft`. Present the complete intent concisely in about 30 lines, including proposed interpretations and open questions, and ask the user to validate it once. Offer to expand any named part on request.
-7. Apply requested corrections to the complete draft, rerun the completion check, and ask for validation again. After approval, record accepted interpretations as confirmed, set `status: validated`, and report the artifact path as the input for `sdlc`.
+7. Apply requested corrections to the complete draft, rerun the completion check, and ask for validation again. After approval, record accepted interpretations as confirmed, set `status: validated`.
 
 ## Completion check
 
