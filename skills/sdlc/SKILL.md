@@ -27,13 +27,13 @@ These hold in every phase:
 - Validated artifacts are the state. Work each phase in conversation. Create the draft file once at first validation presentation. Apply requested corrections in place. Set `status: validated` only after approval. A session interrupted before the write restarts its phase from the validated upstream artifacts; do not reconstruct partial phase work from chat history.
 - Facilitate; do not transcribe. Before each phase, read shared `references/facilitation-rules.md` and that phase's active reference.
 - Load no other phase reference.
-- Never inspect, edit, or ask about `.gitignore`. After you save an artifact, you can say exactly: `Consider adding docs/agentic-engineering/ to .gitignore manually.`
+- Never inspect, edit, or ask about `.gitignore`. After you save an artifact, you can say exactly: `Consider adding docs/context-engineering/ to .gitignore manually.`
 
 ## Topic resolution
 
-A topic is one folder: `docs/agentic-engineering/<subject>/`. Use a short kebab-case subject.
+A topic is one folder: `docs/context-engineering/<subject>/`. Use a short kebab-case subject.
 
-1. If the user names no topic, scan `docs/agentic-engineering/*/` and read the frontmatter of the three artifact files. Present a table with subject, active phase, and status. Ask the user to resume a topic or start a new one.
+1. If the user names no topic, scan `docs/context-engineering/*/` and read the frontmatter of the three artifact files. Present a table with subject, active phase, and status. Ask the user to resume a topic or start a new one.
 2. If the user names a topic, match it to an existing folder and offer to resume. If no folder matches, create a new topic.
 
 ## Phase detection

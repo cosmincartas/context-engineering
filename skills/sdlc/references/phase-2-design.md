@@ -4,7 +4,7 @@ Turn the validated intent into a validated specification: requirements and techn
 
 ## Input contract
 
-1. Require `docs/agentic-engineering/<subject>/intent.md` with `artifact: intent` and `status: validated`. If it is a draft, return to phase 1.
+1. Require `docs/context-engineering/<subject>/intent.md` with `artifact: intent` and `status: validated`. If it is a draft, return to phase 1.
 2. Preserve Initial Request when present. Accept older validated intent artifacts that omit this section.
 3. Preserve the intent's Problem, Proposed outcome, Affected users, Affected components, and Constraints. Do not silently reopen settled context. Treat scope-shaped Open Questions as input to the scope gate and the rest as input to the requirements gate.
 4. Re-inspect repository facts that requirements and design depend on: implementation language, existing types and interfaces, and naming conventions. Route material drift that contradicts approved content through the shared correction rule before continuing dependent work.
@@ -13,7 +13,7 @@ An `explore` artifact is supporting evidence, not approval of scope or a decisio
 
 ## Artifact
 
-Create the draft `docs/agentic-engineering/<subject>/spec.md` from `assets/spec-template.md` once at first final-validation presentation. Apply requested corrections in place. Set `status: validated` only after approval.
+Create the draft `docs/context-engineering/<subject>/spec.md` from `assets/spec-template.md` once at first final-validation presentation. Apply requested corrections in place. Set `status: validated` only after approval.
 
 ## Spec invariant
 
@@ -70,7 +70,7 @@ Skip the choice question only when the surface has exactly one primary behavior 
 1. Draft one `UI-*` entry for each screen, widget, or dialog in scope. Each entry has an HTML mock, one-line states, and an input map.
 2. Capture the exact `ui.html` contents and existence state exactly once before the first UI write. Retain the original snapshot across every UI-gate rerun.
 3. After requirements approval, synchronize each affected FR's UI references with each created or changed `UI-*` entry.
-4. Write every mock into `docs/agentic-engineering/<subject>/ui.html`. Give each entry one section anchored by its identifier and one block per state. Use inline CSS only: no scripts or external resources. `ui.html` is a supporting file of the spec, not a status-bearing artifact; edit it in place during this gate.
+4. Write every mock into `docs/context-engineering/<subject>/ui.html`. Give each entry one section anchored by its identifier and one block per state. Use inline CSS only: no scripts or external resources. `ui.html` is a supporting file of the spec, not a status-bearing artifact; edit it in place during this gate.
 5. Probe empty, loading, error, and narrow states the mock does not show.
 6. Present the file path, entries, states, input maps, and affected FR UI references. Ask the user to accept, edit, or counter the complete UI gate.
 7. After acceptance, continue with the next unapproved or affected gate in the normal order.

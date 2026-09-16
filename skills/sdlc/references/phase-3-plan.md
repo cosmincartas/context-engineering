@@ -4,14 +4,14 @@ Turn the validated design into an implementation plan that any agent can execute
 
 ## Input contract
 
-1. Require `docs/agentic-engineering/<subject>/spec.md` with `artifact: spec` and `status: validated`. If it is a draft, return to phase 2.
+1. Require `docs/context-engineering/<subject>/spec.md` with `artifact: spec` and `status: validated`. If it is a draft, return to phase 2.
 2. Collect the complete `FR-*`/`NFR-*` set from the spec.
 3. Re-inspect the current repository from scratch: relevant implementation and callers, tests and observable contracts, public interfaces, and working-tree changes. Record the current commit as `repository_baseline`, or `unavailable` when Git metadata is absent.
 4. Compare repository evidence with spec assumptions. Prefer current evidence for implementation facts, but never silently change validated product intent. Route material drift through the shared correction rule; name the stale assumption and the current evidence.
 
 ## Artifact
 
-`docs/agentic-engineering/<subject>/plan.md` from `assets/plan-template.md`, written once at the end of the phase.
+`docs/context-engineering/<subject>/plan.md` from `assets/plan-template.md`, written once at the end of the phase.
 
 ## Drafting rules
 

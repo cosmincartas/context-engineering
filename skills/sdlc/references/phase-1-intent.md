@@ -14,7 +14,7 @@ Goal: build a common and complete understanding of the subject.
 
 ## Artifact
 
-`docs/agentic-engineering/<subject>/intent.md` from `assets/intent-template.md`, written once at the end of the phase.
+`docs/context-engineering/<subject>/intent.md` from `assets/intent-template.md`, written once at the end of the phase.
 
 ## Workflow
 
