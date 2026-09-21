@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { formatSkillsForPrompt, initTheme } from "@earendil-works/pi-coding-agent";
+import { initTheme } from "@earendil-works/pi-coding-agent";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import extension, { filterSkillCatalog } from "./index.ts";
+import extension from "./index.ts";
 
 function skill(name: string, disableModelInvocation = false) {
 	return { name, description: `${name} description`, filePath: `/skills/${name}/SKILL.md`, baseDir: `/skills/${name}`, sourceInfo: {}, disableModelInvocation };
@@ -42,35 +42,27 @@ function captureExtension() {
 	return { handlers, commands };
 }
 
-test("replaces only Pi's canonical catalog and leaves skill metadata untouched", () => {
-	const source = formatSkillsForPrompt(options.skills);
-	const prefix = "before";
-	const suffix = "after";
-	const prompt = `${prefix}${source}\nCurrent working directory: /tmp/project${suffix}`;
-	const result = filterSkillCatalog(prompt, options, {
-		isSelected: (name: string) => name === "enabled",
-	} as never);
+test("filters structured skill options without parsing Pi's rendered prompt", async () => {
+	await withAgentDir(async (agentDir) => {
+		await writeFile(
+			join(agentDir, stateFileName),
+			JSON.stringify({ version: 1, skills: { enabled: true, disabled: false, "manual-only": true } }),
+		);
+		const { handlers } = captureExtension();
+		await handlers.get("session_start")!({ type: "session_start", reason: "startup" }, { mode: "tui" });
+		const skills = [...options.skills, skill("manual-only", true)];
+		const event = {
+			systemPrompt: "Pi's rendered prompt format is opaque to extensions",
+			systemPromptOptions: { ...options, skills },
+		};
 
-	assert.match(result, /<name>enabled<\/name>/);
-	assert.doesNotMatch(result, /<name>disabled<\/name>/);
-	assert.match(result, /^before/);
-	assert.match(result, /after$/);
-	assert.equal(options.skills[1].disableModelInvocation, false);
-});
+		const result = await handlers.get("before_agent_start")!(event, { mode: "tui" });
 
-test("inserts a selected catalog when Pi's source catalog is empty", () => {
-	const manualOnly = [skill("manual-only", true)];
-	const result = filterSkillCatalog("prefix\nCurrent working directory: /tmp/project", { ...options, skills: manualOnly }, {
-		isSelected: () => true,
-	} as never);
-	assert.match(result, /<name>manual-only<\/name>/);
-});
-
-test("rejects a prompt without Pi's canonical marker", () => {
-	assert.throws(
-		() => filterSkillCatalog("not a Pi prompt", options, { isSelected: () => true } as never),
-		/canonical|working-directory/i,
-	);
+		assert.equal(result, undefined);
+		assert.deepEqual(event.systemPromptOptions.skills.map((entry) => entry.name), ["enabled", "manual-only"]);
+		assert.equal(event.systemPromptOptions.skills[1].disableModelInvocation, false);
+		assert.equal(skills[2].disableModelInvocation, true);
+	});
 });
 
 test("registers the command only after a TUI session starts", async () => {
@@ -140,32 +132,39 @@ test("reloads selection for startup, reload, new, resume, and fork session start
 			const sessionStart = handlers.get("session_start")!;
 			const beforeAgentStart = handlers.get("before_agent_start")!;
 			const sessionEvent = { type: "session_start", reason, previousSessionFile: "previous-session.json" };
-			const beforeEvent = {
-				systemPrompt: `${formatSkillsForPrompt(discovered)}\nCurrent working directory: /tmp/project`,
+			const beforeEvent = () => ({
+				systemPrompt: "opaque",
 				systemPromptOptions: { ...options, skills: discovered },
-			};
+			});
 
 			await sessionStart(sessionEvent, { mode: "tui" });
-			const disabled = await beforeAgentStart(beforeEvent, { mode: "tui" });
-			assert.doesNotMatch(disabled?.systemPrompt ?? "", /<name>reloadable<\/name>/, reason);
+			const disabled = beforeEvent();
+			await beforeAgentStart(disabled, { mode: "tui" });
+			assert.deepEqual(disabled.systemPromptOptions.skills, [], reason);
 
 			await writeFile(statePath, JSON.stringify({ version: 1, skills: { reloadable: true } }));
 			await sessionStart(sessionEvent, { mode: "tui" });
-			const enabled = await beforeAgentStart(beforeEvent, { mode: "tui" });
-			assert.match(enabled?.systemPrompt ?? "", /<name>reloadable<\/name>/, reason);
+			const enabled = beforeEvent();
+			await beforeAgentStart(enabled, { mode: "tui" });
+			assert.deepEqual(enabled.systemPromptOptions.skills.map((entry) => entry.name), ["reloadable"], reason);
 		});
 	}
 });
 
-test("does not filter prompts when read is inactive", async () => {
-	const handlers = new Map<string, Function>();
-	extension({
-		on(event: string, handler: Function) { handlers.set(event, handler); },
-	} as never);
-	const prompt = "unchanged";
-	const result = await handlers.get("before_agent_start")!({
-		systemPrompt: prompt,
-		systemPromptOptions: { ...options, selectedTools: ["bash"] },
-	}, { mode: "tui" });
-	assert.equal(result, undefined);
+test("leaves skill rendering to Pi when read is inactive", async () => {
+	await withAgentDir(async (agentDir) => {
+		await writeFile(
+			join(agentDir, stateFileName),
+			JSON.stringify({ version: 1, skills: { enabled: true, disabled: false } }),
+		);
+		const { handlers } = captureExtension();
+		await handlers.get("session_start")!({ type: "session_start", reason: "startup" }, { mode: "tui" });
+		const event = {
+			systemPrompt: "unchanged",
+			systemPromptOptions: { ...options, selectedTools: ["bash"] },
+		};
+		const result = await handlers.get("before_agent_start")!(event, { mode: "tui" });
+		assert.equal(result, undefined);
+		assert.deepEqual(event.systemPromptOptions.skills.map((entry) => entry.name), ["enabled"]);
+	});
 });

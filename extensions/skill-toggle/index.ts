@@ -1,8 +1,4 @@
-import {
-	formatSkillsForPrompt,
-	type ExtensionAPI,
-	type Skill,
-} from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { loadSkillSelection, type SkillSelection } from "./state/index.ts";
 import { showSkillToggle } from "./ui/index.ts";
 
@@ -32,39 +28,8 @@ export default function skillToggleExtension(pi: ExtensionAPI): void {
 		if (!selection) selection = await loadSkillSelection();
 		const skills = event.systemPromptOptions.skills ?? [];
 		selection.sync(skills);
-		if (!isReadActive(event.systemPromptOptions.selectedTools)) return;
-		return { systemPrompt: filterSkillCatalog(event.systemPrompt, event.systemPromptOptions, selection) };
+		event.systemPromptOptions.skills = skills
+			.filter((skill) => selection.isSelected(skill.name))
+			.map((skill) => ({ ...skill, disableModelInvocation: false }));
 	});
 }
-
-function isReadActive(selectedTools: readonly string[] | undefined): boolean {
-	return selectedTools === undefined || selectedTools.includes("read");
-}
-
-function filterSkillCatalog(
-	systemPrompt: string,
-	options: { cwd: string; skills?: Skill[] },
-	selection: SkillSelection,
-): string {
-	const skills = options.skills ?? [];
-	const sourceCatalog = formatSkillsForPrompt(skills);
-	const selectedSkills = skills
-		.filter((skill) => selection.isSelected(skill.name))
-		.map((skill) => ({ ...skill, disableModelInvocation: false }));
-	const selectedCatalog = formatSkillsForPrompt(selectedSkills);
-	const marker = `\nCurrent working directory: ${options.cwd.replace(/\\/g, "/")}`;
-	const markerIndex = systemPrompt.lastIndexOf(marker);
-	if (markerIndex < 0) throw new Error("Skill Toggle could not find Pi's working-directory marker");
-
-	if (sourceCatalog.length > 0) {
-		const catalogStart = markerIndex - sourceCatalog.length;
-		if (catalogStart < 0 || systemPrompt.slice(catalogStart, markerIndex) !== sourceCatalog) {
-			throw new Error("Skill Toggle could not find Pi's canonical skill catalog");
-		}
-		return `${systemPrompt.slice(0, catalogStart)}${selectedCatalog}${systemPrompt.slice(markerIndex)}`;
-	}
-
-	return `${systemPrompt.slice(0, markerIndex)}${selectedCatalog}${systemPrompt.slice(markerIndex)}`;
-}
-
-export { filterSkillCatalog };
