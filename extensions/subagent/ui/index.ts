@@ -833,6 +833,8 @@ export class ChildSessionView extends VStack {
     const viewportHeight = this.getViewportHeight(safeWidth, contentLines.length, headerLines.length);
     this.scroll.updateLayout(contentLines.length, viewportHeight, () => this.tui.requestRender());
     const frame = [...headerLines, ...contentLines.slice(this.scroll.scrollTop, this.scroll.scrollTop + viewportHeight)];
+    const availableHeight = (this.tui.terminal?.rows ?? frame.length) - this.footer.render(safeWidth).length;
+    while (frame.length < availableHeight) frame.push(" ".repeat(safeWidth));
     if (this.readError && !this.hasSessionTranscriptContent && this.lastFrameHasSessionTranscriptContent && this.lastFrame) {
       return this.lastFrame.map((line) => truncateToWidth(line, safeWidth, ""));
     }
@@ -957,7 +959,7 @@ export class ChildSessionView extends VStack {
         pendingTools.set(part.id, component);
         this.transcript.addChild(component);
       }
-    } else {
+    } else if (message.role === "toolResult") {
       let component = pendingTools.get(message.toolCallId);
       if (!component) {
         component = new ToolExecutionComponent(

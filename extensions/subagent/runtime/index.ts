@@ -997,6 +997,7 @@ async function runAttempt(
         }
 
         if (event.type !== "message_end" || !event.message) return;
+        if (event.message.role !== "user" && event.message.role !== "assistant" && event.message.role !== "toolResult") return;
         stream.flush();
         const message = event.message as Message;
         attempt.messages = Object.freeze([

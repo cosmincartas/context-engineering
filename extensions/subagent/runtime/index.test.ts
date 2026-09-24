@@ -1820,6 +1820,7 @@ if (scenario === "late-session") {
   emit({ type: "tool_execution_end", toolCallId: "scout-1", toolName: "Scout", args: { tasks: [task] }, result: { details: { outcomes: [{ index: 0, status: "succeeded", run: scoutRun("final", 7, 3) }] } }, isError: false });
   emit({ type: "message_end", message: assistant("nested parent output") });
 } else if (scenario === "stream") {
+  emit({ type: "message_end", message: { role: "system", content: "", timestamp: Date.now() } });
   emit({ type: "message_update", usage, assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: "partial text" } });
   emit({ type: "tool_execution_start", toolCallId: "tool-1", toolName: "read", args: { path: "src/index.ts" } });
   emit({ type: "tool_execution_end", toolCallId: "tool-1", toolName: "read", result: { content: [] }, isError: false });

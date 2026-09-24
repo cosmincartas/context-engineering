@@ -803,6 +803,23 @@ test("renders pending tool arguments and updates the same call with its result",
   footer.dispose();
 });
 
+test("does not render system messages as tool results", () => {
+  const run = child("system-message");
+  run.run.attempts[0].messages = [{ role: "system", content: "", timestamp: 1 }, assistantMessage("answer")];
+  const registry = new SubagentRegistry();
+  registry.add(run);
+  const footer = new AgentFooter(footerTui(), plainTheme, footerData(), registry, footerContext());
+  try {
+    const view = new ChildSessionView(footerTui(), plainTheme, footer, registry, run, () => {});
+    const text = view.render(120).join("\n");
+    assert.match(text, /answer/);
+    assert.doesNotMatch(text, /undefined|Invalid tool result content/);
+    view.dispose();
+  } finally {
+    footer.dispose();
+  }
+});
+
 test("shows malformed child tool results without crashing the parent UI", () => {
   const run = child("malformed-tool-result");
   run.run.attempts[0].messages = [
@@ -1135,6 +1152,27 @@ test("scrolls a long child transcript with legacy overlay wheel input", () => {
 
   view.dispose();
   footer.dispose();
+});
+
+test("fills the available screen above the footer with a short transcript", () => {
+  const registry = new SubagentRegistry();
+  const run = child("short-preview");
+  registry.add(run);
+  const tui: any = { requestRender() {}, terminal: { rows: 24, columns: 80 } };
+  const footer = new AgentFooter(tui, plainTheme, footerData(), registry, footerContext());
+  const view = new ChildSessionView(tui, plainTheme, footer, registry, run, () => {});
+  try {
+    for (const rows of [24, 14]) {
+      tui.terminal.rows = rows;
+      const frame = view.render(80);
+      assert.equal(frame.length + footer.render(80).length, rows);
+      assert.ok(frame.at(-1)?.trim() === "");
+      assert.ok(frame.every((line) => visibleWidth(line) <= 80));
+    }
+  } finally {
+    view.dispose();
+    footer.dispose();
+  }
 });
 
 test("reserves the rendered footer and header before scrolling narrow child transcripts", () => {
