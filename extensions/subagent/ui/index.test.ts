@@ -803,6 +803,24 @@ test("renders pending tool arguments and updates the same call with its result",
   footer.dispose();
 });
 
+test("shows malformed child tool results without crashing the parent UI", () => {
+  const run = child("malformed-tool-result");
+  run.run.attempts[0].messages = [
+    toolCallMessage("call-1", {}),
+    { ...toolResultMessage("call-1", "ignored", 5), content: { type: "text", text: "invalid" } },
+  ];
+  const registry = new SubagentRegistry();
+  registry.add(run);
+  const footer = new AgentFooter(footerTui(), plainTheme, footerData(), registry, footerContext());
+  try {
+    const view = new ChildSessionView(footerTui(), plainTheme, footer, registry, run, () => {});
+    assert.match(view.render(120).join("\n"), /Invalid tool result content/);
+    view.dispose();
+  } finally {
+    footer.dispose();
+  }
+});
+
 test("finalizes unmatched tool calls on failed attempts with their diagnostic", () => {
   const registry = new SubagentRegistry();
   const run = child("failed-tool", "failed");

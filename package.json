@@ -18,7 +18,6 @@
     "typebox": "*"
   },
   "pi": {
-    "extensions": ["./extensions"],
-    "skills": ["./skills"]
+    "extensions": ["./extensions"]
   }
 }

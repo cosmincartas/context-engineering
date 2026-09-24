@@ -68,7 +68,7 @@ With Superpowers, use `superpowers:subagent-driven-development` when subagents a
 
 ## Install
 
-The same `skills/` directory is packaged for Codex, Claude Code, GitHub Copilot, and Pi:
+The `skills/` directory is packaged for Codex, Claude Code, and GitHub Copilot. The Pi package installs only extensions:
 
 ```bash
 # Codex
@@ -86,7 +86,7 @@ copilot plugin install cosmincartas/context-engineering
 pi install git:github.com/cosmincartas/context-engineering
 ```
 
-Explicit invocation syntax is host-specific: `$agentic-workflow:sdlc` in Codex, `/agentic-workflow:sdlc` in Claude Code, `/agentic-workflow/sdlc` in Copilot, and `/skill:sdlc` in Pi.
+Explicit invocation syntax is host-specific: `$agentic-workflow:sdlc` in Codex, `/agentic-workflow:sdlc` in Claude Code, and `/agentic-workflow/sdlc` in Copilot. To use the skills in Pi, install them separately.
 
 ## Subagent configuration
 

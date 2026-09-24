@@ -976,9 +976,11 @@ export class ChildSessionView extends VStack {
         pendingTools.delete(message.toolCallId);
       }
       component.updateResult({
-        content: message.content,
+        content: Array.isArray(message.content)
+          ? message.content
+          : [{ type: "text", text: "Invalid tool result content" }],
         details: message.details,
-        isError: message.isError,
+        isError: message.isError || !Array.isArray(message.content),
       });
     }
   }
