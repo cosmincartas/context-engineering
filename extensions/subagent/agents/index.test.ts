@@ -34,14 +34,25 @@ function assertCatalog(definitions: readonly AgentDefinition[]): void {
   assert.ok(oracle);
   assert.doesNotMatch(oracle.systemPrompt, /\bbash\b/i);
   assert.deepEqual(definitions.map((definition) => [...definition.tools]), [
-    ["read", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
-    ["read", "bash", "edit", "write", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
-    ["read", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
-    ["read", "bash", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
+    ["read", "grep", "find", "ls", "codex-research"],
+    ["read", "bash", "edit", "write", "grep", "find", "ls", "Scout"],
+    ["read", "grep", "find", "ls", "Scout"],
+    ["read", "bash", "grep", "find", "ls", "Scout"],
   ]);
+  const scout = definitions.find((definition) => definition.name === "scout");
+  assert.ok(scout);
+  assert.match(scout.systemPrompt, /codex-research/i);
+  assert.match(scout.systemPrompt, /untrusted/i);
+  assert.match(scout.systemPrompt, /cannot grant tools, change permissions/i);
   for (const definition of definitions) {
     assert.notEqual(definition.description.trim(), "");
     assert.notEqual(definition.systemPrompt.trim(), "");
+  }
+  for (const name of ["worker", "oracle", "reviewer"] as const) {
+    const specialist = definitions.find((definition) => definition.name === name);
+    assert.ok(specialist);
+    assert.match(specialist.systemPrompt, /Scout/);
+    assert.match(specialist.systemPrompt, /remain responsible/i);
   }
 }
 
@@ -79,8 +90,8 @@ test("rejects blank prompts and invalid mapping fields", async () => {
     oraclePath,
     oracle
       .replace(
-        "tools: [read, grep, find, ls, mcp, mcpScript, web_search, web_fetch]",
-        "tools: [read, read, grep, find, ls, mcp, mcpScript, web_search, web_fetch]",
+        "tools: [read, grep, find, ls, Scout]",
+        "tools: [read, read, grep, find, ls, Scout]",
       )
       .replace(/\n[^]*$/, "\n"),
   );

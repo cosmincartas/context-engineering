@@ -15,6 +15,7 @@ import { Type, type Static } from "typebox";
 import { loadBundledAgents, type AgentDefinition } from "./agents/index.ts";
 import {
   executeSubagentBatch,
+  formatSubagentBatch,
   normalizeTitle,
   type ProcessAttempt,
   type SubagentBatchDetails,
@@ -31,8 +32,19 @@ const SubagentParameters = Type.Object(
   },
   { additionalProperties: false },
 );
+const ScoutParameters = Type.Object(
+  {
+    tasks: Type.Array(Type.Unknown(), { minItems: 1 }),
+  },
+  { additionalProperties: false },
+);
 
+const MAX_SCOUTS_PER_SESSION = 4;
+const DELEGATION_ROLE_ENVIRONMENT_VARIABLE = "PI_SUBAGENT_DELEGATION_ROLE";
+const DELEGATION_SESSION_DIRECTORY_ENVIRONMENT_VARIABLE = "PI_SUBAGENT_DELEGATION_SESSION_DIRECTORY";
+const DELEGATION_ROLES = new Set(["worker", "oracle", "reviewer"]);
 type ToolSubagentRequest = Static<typeof SubagentParameters>;
+type ToolScoutRequest = Static<typeof ScoutParameters>;
 
 function contentText(result: AgentToolResult<unknown>): string {
   return result.content
@@ -131,6 +143,7 @@ function addRunDetails(container: Container, run: SubagentRun, theme: Theme): vo
   container.addChild(new Spacer(1));
   container.addChild(new Text(theme.fg("muted", "Task"), 0, 0));
   container.addChild(new Text(run.task, 0, 0));
+  container.addChild(new Text(theme.fg("muted", formatRunUsage(run)), 0, 0));
 
   for (const warning of run.warnings ?? []) {
     container.addChild(new Spacer(1));
@@ -175,6 +188,20 @@ function addRunDetails(container: Container, run: SubagentRun, theme: Theme): vo
     container.addChild(new Spacer(1));
     container.addChild(new Text(`Error: ${run.error}`, 0, 0));
   }
+}
+
+function formatRunUsage(run: SubagentRun): string {
+  const total = (attempts: readonly ProcessAttempt[]) => attempts.reduce((usage, attempt) => ({
+    inputTokens: usage.inputTokens + (attempt.usage?.inputTokens ?? 0),
+    outputTokens: usage.outputTokens + (attempt.usage?.outputTokens ?? 0),
+    contextTokens: usage.contextTokens + (attempt.usage?.contextTokens ?? 0),
+  }), { inputTokens: 0, outputTokens: 0, contextTokens: 0 });
+  const own = total(run.attempts);
+  const scouts = run.attempts.flatMap((attempt) => attempt.scouts ?? []);
+  const delegated = total(scouts.flatMap((scout) => scout.outcomes.flatMap((outcome) =>
+    "run" in outcome ? outcome.run.attempts : [],
+  )));
+  return `Usage: own ↑${own.inputTokens} ↓${own.outputTokens} ctx ${own.contextTokens} | Scouts${scouts.some((scout) => scout.partial) ? " (partial)" : ""} ↑${delegated.inputTokens} ↓${delegated.outputTokens} ctx ${delegated.contextTokens}`;
 }
 
 function isBatchDetails(value: unknown): value is SubagentBatchDetails {
@@ -249,6 +276,28 @@ function isAttemptState(value: unknown): value is ProcessAttempt["state"] {
   return value === "running" || value === "succeeded" || value === "failed" || value === "cancelled";
 }
 
+function scoutResult(outcomes: readonly SubagentBatchOutcome[]): AgentToolResult<SubagentBatchDetails> {
+  const details = { outcomes };
+  return {
+    content: [{ type: "text", text: formatSubagentBatch(details) }],
+    details,
+  };
+}
+
+function isScoutTask(value: unknown): value is { title: string; task: string } {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const keys = Reflect.ownKeys(value);
+  if (keys.length !== 2 || keys.some((key) => key !== "title" && key !== "task")) return false;
+  try {
+    return typeof (value as any).title === "string" &&
+      normalizeTitle((value as any).title) !== "" &&
+      typeof (value as any).task === "string" &&
+      (value as any).task.trim() !== "";
+  } catch {
+    return false;
+  }
+}
+
 function isMessage(value: unknown): boolean {
   if (!value || typeof value !== "object") return false;
   const message = value as any;
@@ -261,7 +310,7 @@ function isMessage(value: unknown): boolean {
 
 type ActiveSubagentSession = {
   readonly root: string;
-  readonly ui: SubagentUIHandle;
+  readonly ui?: SubagentUIHandle;
   readonly abortController: AbortController;
   readonly executions: Set<Promise<unknown>>;
   shutdown?: Promise<void>;
@@ -285,7 +334,7 @@ export default function subagentExtension(pi: ExtensionAPI): void {
         await Promise.allSettled([...session.executions]);
       }
       try {
-        session.ui.dispose();
+        session.ui?.dispose();
       } catch (error) {
         cleanupError = error;
       }
@@ -304,6 +353,88 @@ export default function subagentExtension(pi: ExtensionAPI): void {
   });
 
   pi.on("session_start", async (_event, ctx) => {
+    const delegationRole = process.env[DELEGATION_ROLE_ENVIRONMENT_VARIABLE];
+    const delegationSessionDirectory = process.env[DELEGATION_SESSION_DIRECTORY_ENVIRONMENT_VARIABLE];
+    // Windows cannot retain nested process ownership after a specialist exits.
+    const isDelegationSession = process.platform !== "win32" && ctx.mode === "json" &&
+      DELEGATION_ROLES.has(delegationRole ?? "") &&
+      typeof delegationSessionDirectory === "string" &&
+      delegationSessionDirectory !== "" &&
+      ctx.sessionManager.getSessionDir() === delegationSessionDirectory;
+    if (isDelegationSession) {
+      let root: string | undefined;
+      try {
+        const catalog = await loadBundledAgents(new URL("./agents/", import.meta.url));
+        const scout = catalog.find((agent) => agent.name === "scout");
+        if (!scout) throw new Error("Bundled Scout agent is unavailable");
+        root = await fs.mkdtemp(path.join(os.tmpdir(), "pi-subagent-scout-"));
+        const session: ActiveSubagentSession = {
+          root,
+          abortController: new AbortController(),
+          executions: new Set(),
+        };
+        activeSession = session;
+        let accepted = 0;
+        pi.registerTool({
+          name: "Scout",
+          label: "Scout",
+          description: "Request up to four bounded Scout research tasks. Each task has only title and task fields; Scout returns evidence, not implementation or review decisions.",
+          parameters: ScoutParameters,
+          executionMode: "parallel",
+          execute(toolCallId, params: ToolScoutRequest, signal, onUpdate, toolContext) {
+            const outcomes: SubagentBatchOutcome[] = [];
+            const acceptedTasks: Array<{ index: number; request: { agent: string; title: string; task: string } }> = [];
+            for (const [index, value] of params.tasks.entries()) {
+              if (!isScoutTask(value)) {
+                outcomes.push({ index, status: "malformed", reason: "Scout task must contain only non-blank title and task fields." });
+              } else if (accepted >= MAX_SCOUTS_PER_SESSION) {
+                outcomes.push({ index, status: "over-limit", reason: "Scout session limit is four accepted tasks." });
+              } else {
+                accepted++;
+                const request = { agent: "scout", title: value.title, task: value.task };
+                outcomes.push({ index, status: "queued", request });
+                acceptedTasks.push({ index, request });
+              }
+            }
+            const publish = () => onUpdate?.(scoutResult(outcomes));
+            if (acceptedTasks.length === 0) return Promise.resolve(scoutResult(outcomes));
+            const combinedSignal = signal
+              ? AbortSignal.any([session.abortController.signal, signal])
+              : session.abortController.signal;
+            const execution = loadProfileSettings().then(async (store) => {
+              const batch = await executeSubagentBatch(
+                toolCallId,
+                { tasks: acceptedTasks.map(({ request }) => request) },
+                [scout],
+                toolContext,
+                session.root,
+                combinedSignal,
+                { onToolUpdate: (update) => {
+                  for (const [batchIndex, outcome] of update.details.outcomes.entries()) {
+                    outcomes[acceptedTasks[batchIndex].index] = { ...outcome, index: acceptedTasks[batchIndex].index } as SubagentBatchOutcome;
+                  }
+                  publish();
+                }, onMonitorEvent: () => {} },
+                store.snapshot(),
+              );
+              for (const [batchIndex, outcome] of batch.details.outcomes.entries()) {
+                outcomes[acceptedTasks[batchIndex].index] = { ...outcome, index: acceptedTasks[batchIndex].index } as SubagentBatchOutcome;
+              }
+              return scoutResult(outcomes);
+            });
+            session.executions.add(execution);
+            void execution.then(() => session.executions.delete(execution), () => session.executions.delete(execution));
+            return execution;
+          },
+          renderResult: renderSubagentResult,
+        });
+        return;
+      } catch (error) {
+        if (root) await fs.rm(root, { recursive: true, force: true }).catch(() => {});
+        if (activeSession?.root === root) activeSession = undefined;
+        throw error;
+      }
+    }
     if (ctx.mode !== "tui") return;
 
     let root: string | undefined;
@@ -376,7 +507,7 @@ export default function subagentExtension(pi: ExtensionAPI): void {
             combinedSignal,
             {
               onToolUpdate: onUpdate,
-              onMonitorEvent: session.ui.onMonitorEvent,
+              onMonitorEvent: session.ui!.onMonitorEvent,
             },
             store.snapshot(),
           ));

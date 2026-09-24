@@ -7,7 +7,7 @@ description: Create a validated implementation plan from an approved specificati
 
 Turn an approved specification into a plan that an implementer can use in a fresh session.
 The user controls scope and approves the complete plan. Draft implementation details autonomously within the approved specification.
-This skill works independently. It does not require an SDLC session.
+This skill works independently of the workflow that created the specification.
 
 ## Language
 
@@ -18,7 +18,7 @@ Preserve quoted input, identifiers, required signatures, and commands exactly.
 ## Inputs and output
 
 - Require a specification file with `artifact: spec` and `status: validated`.
-- Accept specifications from `design-specs` or `sdlc`. Do not require identical section numbering.
+- Accept any validated specification with the required artifact fields. Do not require fixed section numbering.
 - If no specification is supplied, ask for its path or topic folder.
 - If the specification is missing, unapproved, or inconsistent, explain the blocker and stop.
 - Do not start another skill or approve the specification on the user's behalf.
@@ -49,7 +49,7 @@ Preserve quoted input, identifiers, required signatures, and commands exactly.
 2. Check that no unresolved issue blocks implementation. Check approval records when the specification provides them.
 3. Collect included functional and non-functional requirements with their identifiers, acceptance conditions, and design references.
 4. Exclude proposed, excluded, deferred, and parked requirements from implementation coverage.
-5. For SDLC specifications without selection fields, use the approved FR and NFR sections as the included set.
+5. When selection fields are absent, use the approved FR and NFR sections as the included set.
 6. Resolve ambiguous selection or missing acceptance conditions before drafting dependent tasks. Do not silently interpret them as approval.
 7. Compute the SHA-256 hash of the exact specification bytes for `spec_sha256`.
 8. Record paths and SHA-256 hashes for local supporting files that define approved design, including referenced UI mocks.
@@ -86,6 +86,8 @@ Keep the plan sufficient for a fresh session without copying the complete specif
 - Route consequential new technology choices to specification review. Do not hide new design decisions inside tasks.
 - Do not include production-code listings. Include exact contract references when correctness requires them.
 - Plan migration, rollback, security, accessibility, and operational verification when the approved specification requires them.
+
+Plan tests through a supported entry point, such as an exported function, registered tool, HTTP endpoint, or CLI command. Assert an observable return value, error, or side effect. Derive expected results from the requirement, not from the implementation. Do not plan tests of private helpers or mocks of internal collaborators solely to make a test easier to write.
 
 For every production-behavior task, specify:
 

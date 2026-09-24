@@ -14,10 +14,8 @@ export type AgentToolName =
   | "grep"
   | "find"
   | "ls"
-  | "mcp"
-  | "mcpScript"
-  | "web_search"
-  | "web_fetch";
+  | "codex-research"
+  | "Scout";
 export type AgentModel = `${string}/${string}`;
 
 export type AgentDefinition = {
@@ -41,25 +39,25 @@ type AgentFrontmatter = Record<string, unknown>;
 
 const AGENT_CONTRACTS: Readonly<Record<AgentName, AgentContract>> = {
   scout: {
-    tools: ["read", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
+    tools: ["read", "grep", "find", "ls", "codex-research"],
     model: "openai-codex/gpt-5.6-luna",
     thinkingLevel: "medium",
     maxTurns: 40,
   },
   worker: {
-    tools: ["read", "bash", "edit", "write", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
+    tools: ["read", "bash", "edit", "write", "grep", "find", "ls", "Scout"],
     model: "openai-codex/gpt-5.6-terra",
     thinkingLevel: "medium",
     maxTurns: 60,
   },
   oracle: {
-    tools: ["read", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
+    tools: ["read", "grep", "find", "ls", "Scout"],
     model: "openai-codex/gpt-6-astra",
     thinkingLevel: "high",
     maxTurns: 50,
   },
   reviewer: {
-    tools: ["read", "bash", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
+    tools: ["read", "bash", "grep", "find", "ls", "Scout"],
     model: "openai-codex/gpt-5.6-sol",
     thinkingLevel: "medium",
     maxTurns: 40,
@@ -144,10 +142,8 @@ function parseAgent(name: AgentName, content: string): AgentDefinition {
         "grep",
         "find",
         "ls",
-        "mcp",
-        "mcpScript",
-        "web_search",
-        "web_fetch",
+        "codex-research",
+        "Scout",
       ].includes(tool),
     )
   ) {

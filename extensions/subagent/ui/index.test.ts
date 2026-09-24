@@ -3,7 +3,7 @@ import test, { mock } from "node:test";
 import { access, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import fsPromises from "node:fs/promises";
 
-import { initTheme } from "@earendil-works/pi-coding-agent";
+import { CustomEditor, initTheme } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
 
 import {
@@ -146,6 +146,27 @@ function child(runId: string, state = "running"): any {
     exitCode: state === "running" ? null : 0,
   }];
   return value;
+}
+
+function scoutRun(title: string, state: string, input = 0, output = 0): any {
+  return {
+    agent: "scout",
+    title,
+    task: "research",
+    state,
+    startedAt: 1,
+    warnings: [],
+    attempts: [{
+      number: 1,
+      state,
+      activity: [],
+      messages: [],
+      usage: { inputTokens: input, outputTokens: output, contextTokens: input },
+      scouts: [],
+      stderr: "",
+      exitCode: state === "running" ? null : 0,
+    }],
+  };
 }
 
 test("renders standard footer rows before at most three subagents with title and usage", () => {
@@ -506,6 +527,22 @@ test("forwards editor submission state and action handlers through the decorator
   footer.dispose();
 });
 
+test("forwards embedded working status to a compatible editor", () => {
+  const registry = new SubagentRegistry();
+  const footer = new AgentFooter(footerTui(), plainTheme, footerData(), registry, footerContext());
+  const base: any = baseEditor();
+  base.embedWorkingStatus = true;
+  base.setWorkingStatusIndicator = (indicator: unknown) => { base.indicator = indicator; };
+  const wrapped: any = createAgentNavigationEditor(base, footer, registry, () => {});
+  assert.equal(wrapped.embedWorkingStatus, true);
+  const indicator = { kind: "working" };
+  wrapped.setWorkingStatusIndicator(indicator);
+  assert.equal(base.indicator, indicator);
+  wrapped.setWorkingStatusIndicator(undefined);
+  assert.equal(base.indicator, undefined);
+  footer.dispose();
+});
+
 test("retains focus state for an editor that is not itself Focusable", () => {
   const registry = new SubagentRegistry();
   const footer = new AgentFooter(footerTui(), plainTheme, footerData(), registry, footerContext());
@@ -593,6 +630,102 @@ function toolCallMessage(toolCallId: string, args: Record<string, unknown>): any
     timestamp: 3,
   };
 }
+
+test("shows zero Scout usage before delegation", () => {
+  const registry = new SubagentRegistry();
+  const run = child("no-scouts");
+  registry.add(run);
+  const footer = new AgentFooter(footerTui(), plainTheme, footerData(), registry, footerContext());
+  const view = new ChildSessionView(footerTui(), plainTheme, footer, registry, run, () => {});
+
+  assert.match(view.render(120).join("\n"), /own ↑12 ↓7 ctx 40 \| Scouts ↑0 ↓0 ctx 0/);
+  view.dispose();
+  footer.dispose();
+});
+
+test("renders Scout request, running, failed, and partial snapshots with separate usage", () => {
+  const registry = new SubagentRegistry();
+  const run = child("nested");
+  run.run.title = "A deliberately long specialist title that must not crowd out its state";
+  run.run.attempts[0].scouts = [{
+    toolCallId: "scout-call",
+    partial: false,
+    outcomes: [
+      { index: 0, status: "queued", request: { agent: "scout", title: "request evidence", task: "research" } },
+      { index: 1, status: "running", run: scoutRun("inspect callers", "running", 2, 1) },
+      { index: 2, status: "failed", run: { ...scoutRun("check web access", "failed", 3, 2), error: "web access unavailable" } },
+      { index: 3, status: "running", run: scoutRun("collect partial evidence", "running", 4, 3) },
+    ],
+  }, {
+    toolCallId: "partial-call",
+    partial: true,
+    outcomes: [{ index: 0, status: "running", run: scoutRun("interrupted research", "running", 5, 4) }],
+  }];
+  registry.add(run);
+  const footer = new AgentFooter(footerTui(), plainTheme, footerData(), registry, footerContext());
+  const view = new ChildSessionView(footerTui(), plainTheme, footer, registry, run, () => {});
+
+  const text = view.render(120).join("\n");
+  assert.match(text, /own ↑12 ↓7 ctx 40 \| Scouts \(partial\) ↑14 ↓10 ctx 14/);
+  assert.match(text, /Scout: request evidence\s+queued/);
+  assert.match(text, /Scout: inspect callers\s+running \| ↑2 ↓1/);
+  assert.match(text, /Scout: check web access\s+failed \| web access unavailable/);
+  assert.match(text, /Scout: interrupted research\s+partial \| ↑5 ↓4/);
+
+  const narrow = view.render(32).join("\n");
+  assert.doesNotMatch(narrow, /A deliberately long specialist title/);
+  assert.match(narrow, /Scouts/);
+
+  const finished = { ...run, run: { ...run.run, state: "succeeded", endedAt: 2 } };
+  view.setRun(finished);
+  const finalUsage = view.render(32).join("\n");
+  assert.match(finalUsage, /Usage:\s*\n\s*own ↑12 ↓7 ctx 40/);
+  assert.match(finalUsage, /Scouts \(partial\)[\s\S]*ctx\s*14/);
+  view.dispose();
+  footer.dispose();
+});
+
+test("keeps session errors visible with Scout rows and narrow final usage", async () => {
+  const registry = new SubagentRegistry();
+  const run = child("unavailable-scout", "succeeded");
+  run.run.attempts[0].scouts = [{
+    toolCallId: "scout-call",
+    partial: false,
+    outcomes: [{ index: 0, status: "failed", run: { ...scoutRun("check access", "failed", 2, 1), error: "web access unavailable" } }],
+  }];
+  run.sessions = [{ attempt: 1, directory: "/tmp", file: "/tmp/does-not-exist-session.jsonl", partialText: "", partialThinking: "" }];
+  registry.add(run);
+  const footer = new AgentFooter(footerTui(), plainTheme, footerData(), registry, footerContext());
+  const view = new ChildSessionView(footerTui(), plainTheme, footer, registry, run, () => {});
+
+  await view.refresh();
+  const text = view.render(32).join("\n");
+  assert.match(text, /Scout:.*failed/);
+  assert.match(text, /Usage:/);
+  assert.match(text, /Session unavailable:/);
+
+  view.dispose();
+  footer.dispose();
+});
+
+test("keeps live Scout progress visible at transcript follow-end", () => {
+  const registry = new SubagentRegistry();
+  const run = child("follow-scout");
+  run.run.attempts[0].messages = Array.from({ length: 8 }, (_, index) => assistantMessage(`message-${index}`));
+  run.run.attempts[0].scouts = [{
+    toolCallId: "scout-call",
+    partial: false,
+    outcomes: [{ index: 0, status: "running", run: scoutRun("live progress", "running", 2, 1) }],
+  }];
+  registry.add(run);
+  const tui: any = { requestRender() {}, setFocus() {}, terminal: { rows: 6, columns: 80 } };
+  const footer = new AgentFooter(tui, plainTheme, footerData(), registry, footerContext());
+  const view = new ChildSessionView(tui, plainTheme, footer, registry, run, () => {});
+
+  assert.match(view.render(80).join("\n"), /Scout: live progress\s+running/);
+  view.dispose();
+  footer.dispose();
+});
 
 test("renders completed messages, current deltas, and retry attempts read-only", async () => {
   const messages = [userMessage("inspect"), assistantMessage("completed answer")];
@@ -800,9 +933,14 @@ test("clears logical footer focus when a child view is disposed", () => {
   footer.dispose();
 });
 
-test("retains the last rendered child frame when a later session read fails", async () => {
+test("preserves a partial transcript while rendering a newer Scout failure and session error", async () => {
   const registry = new SubagentRegistry();
   const running = child("frame");
+  running.run.attempts[0].scouts = [{
+    toolCallId: "scout-call",
+    partial: false,
+    outcomes: [{ index: 0, status: "queued", request: { agent: "scout", title: "check access", task: "research" } }],
+  }];
   running.sessions = [{ attempt: 1, directory: "/tmp/frame", file: "/tmp/frame/missing.jsonl", partialText: "live frame", partialThinking: "" }];
   registry.add(running);
   const footer = new AgentFooter(footerTui(), plainTheme, footerData(), registry, footerContext());
@@ -815,14 +953,82 @@ test("retains the last rendered child frame when a later session read fails", as
     run: {
       ...running.run,
       state: "succeeded",
-      attempts: [{ ...running.run.attempts[0], state: "succeeded" }],
+      attempts: [{
+        ...running.run.attempts[0],
+        state: "succeeded",
+        scouts: [{
+          ...running.run.attempts[0].scouts[0],
+          outcomes: [{ index: 0, status: "failed", run: { ...scoutRun("check access", "failed"), error: "web access unavailable" } }],
+        }],
+      }],
       endedAt: 2,
     },
     sessions: [{ ...running.sessions[0], partialText: "", partialThinking: "" }],
   };
   view.setRun(finished);
   await view.refresh();
-  assert.match(view.render(80).join("\n"), /live frame/);
+  const text = view.render(80).join("\n");
+  assert.match(text, /live frame/);
+  assert.match(text, /Scout: check access\s+failed \| web access unavailable/);
+  assert.match(text, /Session unavailable:/);
+  assert.doesNotMatch(text, /Scout: check access\s+queued/);
+  view.dispose();
+  footer.dispose();
+});
+
+test("renders updated Scout failure and session error instead of a stale no-message frame", async () => {
+  const registry = new SubagentRegistry();
+  const queued = child("scout-after-error");
+  queued.run.attempts[0].scouts = [{
+    toolCallId: "scout-call",
+    partial: false,
+    outcomes: [{ index: 0, status: "queued", request: { agent: "scout", title: "check access", task: "research" } }],
+  }];
+  queued.sessions = [{ attempt: 1, directory: "/tmp/scout-after-error", file: "/tmp/scout-after-error/missing.jsonl", partialText: "", partialThinking: "" }];
+  registry.add(queued);
+  const footer = new AgentFooter(footerTui(), plainTheme, footerData(), registry, footerContext());
+  const tui: any = { requestRender() {}, setFocus() {}, terminal: { rows: 24, columns: 80 } };
+  const view = new ChildSessionView(tui, plainTheme, footer, registry, queued, () => {});
+  assert.match(view.render(80).join("\n"), /Scout: check access\s+queued/);
+
+  const failed = {
+    ...queued,
+    run: {
+      ...queued.run,
+      attempts: [{
+        ...queued.run.attempts[0],
+        scouts: [{
+          ...queued.run.attempts[0].scouts[0],
+          outcomes: [{ index: 0, status: "failed", run: { ...scoutRun("check access", "failed"), error: "web access unavailable" } }],
+        }],
+      }],
+    },
+  };
+  view.setRun(failed);
+  await view.refresh();
+  const text = view.render(80).join("\n");
+  assert.match(text, /Scout: check access\s+failed \| web access unavailable/);
+  assert.match(text, /Session unavailable:/);
+  assert.doesNotMatch(text, /Scout: check access\s+queued/);
+  view.dispose();
+  footer.dispose();
+});
+
+test("strips terminal control sequences from Scout failures", () => {
+  const registry = new SubagentRegistry();
+  const run = child("ansi-scout");
+  run.run.attempts[0].scouts = [{
+    toolCallId: "scout-call",
+    partial: false,
+    outcomes: [{ index: 0, status: "failed", run: { ...scoutRun("check access", "failed"), error: "\x1b[2Jweb access unavailable\x1b[0m" } }],
+  }];
+  registry.add(run);
+  const footer = new AgentFooter(footerTui(), plainTheme, footerData(), registry, footerContext());
+  const view = new ChildSessionView(footerTui(), plainTheme, footer, registry, run, () => {});
+
+  const text = view.render(80).join("\n");
+  assert.match(text, /failed \| web access unavailable/);
+  assert.doesNotMatch(text, /\x1b/);
   view.dispose();
   footer.dispose();
 });
@@ -1032,6 +1238,20 @@ test("installs one footer and wraps the configured editor, then restores both", 
   handle.dispose();
   assert.equal(state.editorFactory, state.previousFactory);
   assert.equal(state.footerFactory, undefined);
+});
+
+test("embeds the working status when no previous editor is configured", () => {
+  const state = integrationContext();
+  state.previousFactory = undefined;
+  const handle = installSubagentUI(state.ctx);
+  const supported = "setWorkingStatusIndicator" in CustomEditor.prototype;
+  assert.equal(state.editor.embedWorkingStatus, supported);
+  if (supported) {
+    const indicator = { kind: "working" };
+    state.editor.setWorkingStatusIndicator(indicator);
+    assert.equal(state.editor.base.workingStatusIndicator, indicator);
+  }
+  handle.dispose();
 });
 
 test("opens a child view and closes it through the orchestrator action", async () => {

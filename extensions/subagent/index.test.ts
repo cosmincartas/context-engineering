@@ -26,7 +26,11 @@ async function loadExtension(url = new URL("./index.ts", import.meta.url)): Prom
 
 const defaultParentTools = ["read", "bash", "edit", "write", "grep", "find", "ls"];
 
-function harness(parentToolNames: readonly string[] = defaultParentTools) {
+function harness(
+  parentToolNames: readonly string[] = defaultParentTools,
+  activeToolNames = parentToolNames,
+  sessionDirectory = process.env.PI_SUBAGENT_DELEGATION_SESSION_DIRECTORY,
+) {
   let sessionStart: ((event: unknown, ctx: any) => Promise<void>) | undefined;
   let sessionShutdown: ((event: unknown, ctx: any) => Promise<void>) | undefined;
   const tools: any[] = [];
@@ -97,6 +101,9 @@ function harness(parentToolNames: readonly string[] = defaultParentTools) {
     getAllTools() {
       return parentToolNames.map((name) => ({ name }));
     },
+    getActiveTools() {
+      return [...activeToolNames];
+    },
     getThinkingLevel() {
       thinkingCalls++;
       return thinkingLevel;
@@ -109,7 +116,7 @@ function harness(parentToolNames: readonly string[] = defaultParentTools) {
     model: { provider: "openai-codex", id: "parent" },
     thinkingLevel: "medium",
     modelRegistry: { getAvailable: () => [] },
-    sessionManager: { getEntries: () => [], getLeafId: () => null, getCwd: () => process.cwd(), getSessionName: () => undefined },
+    sessionManager: { getEntries: () => [], getLeafId: () => null, getCwd: () => process.cwd(), getSessionDir: () => sessionDirectory, getSessionName: () => undefined },
     getContextUsage: () => undefined,
     ui,
   });
@@ -142,9 +149,9 @@ function harness(parentToolNames: readonly string[] = defaultParentTools) {
  * Background dispatch reads the profile settings from disk before it starts the
  * batch, so a fixed one-tick wait races that read. Poll for the condition.
  */
-async function waitFor(condition: () => boolean, description: string): Promise<void> {
+async function waitFor(condition: () => boolean | Promise<boolean>, description: string): Promise<void> {
   for (let attempt = 0; attempt < 500; attempt++) {
-    if (condition()) return;
+    if (await condition()) return;
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   throw new Error(`Timed out waiting for ${description}`);
@@ -170,6 +177,272 @@ test("registers the tool only after a TUI session starts", async () => {
     assert.ok(tuiHarness.commands.has("subagent-config"));
   } finally {
     await tuiHarness.shutdown();
+  }
+});
+
+test("registers Scout only for provenance-verified specialist JSON children", async () => {
+  const previousRole = process.env.PI_SUBAGENT_DELEGATION_ROLE;
+  const previousDirectory = process.env.PI_SUBAGENT_DELEGATION_SESSION_DIRECTORY;
+  process.env.PI_SUBAGENT_DELEGATION_SESSION_DIRECTORY = "/tmp/pi-subagent-specialist";
+  try {
+    for (const role of ["worker", "oracle", "reviewer"]) {
+      process.env.PI_SUBAGENT_DELEGATION_ROLE = role;
+      const testHarness = harness(["read"], ["read"]);
+      (await loadExtension())(testHarness.pi);
+      try {
+        await testHarness.start("json");
+        assert.equal(testHarness.tools.length, 1, role);
+        const [tool] = testHarness.tools;
+        assert.equal(tool.name, "Scout");
+        assert.equal(tool.executionMode, "parallel");
+        assert.deepEqual(tool.parameters.required, ["tasks"]);
+        assert.throws(() => validateToolArguments(tool, {
+          type: "toolCall", id: "extra", name: "Scout", arguments: { tasks: [], role: "scout" },
+        }));
+      } finally {
+        await testHarness.shutdown();
+      }
+    }
+
+    for (const [role, directory] of [["scout", "/tmp/pi-subagent-specialist"], ["worker", "/tmp/other-session"]]) {
+      process.env.PI_SUBAGENT_DELEGATION_ROLE = role;
+      const testHarness = harness(["read", "Scout"], ["read", "Scout"], directory);
+      (await loadExtension())(testHarness.pi);
+      await testHarness.start("json");
+      assert.equal(testHarness.tools.length, 0, `${role} must not gain Scout from active tools`);
+    }
+  } finally {
+    if (previousRole === undefined) delete process.env.PI_SUBAGENT_DELEGATION_ROLE;
+    else process.env.PI_SUBAGENT_DELEGATION_ROLE = previousRole;
+    if (previousDirectory === undefined) delete process.env.PI_SUBAGENT_DELEGATION_SESSION_DIRECTORY;
+    else process.env.PI_SUBAGENT_DELEGATION_SESSION_DIRECTORY = previousDirectory;
+  }
+});
+
+test("does not register nested Scout on Windows but retains root Agent", async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+  const previousRole = process.env.PI_SUBAGENT_DELEGATION_ROLE;
+  const previousDirectory = process.env.PI_SUBAGENT_DELEGATION_SESSION_DIRECTORY;
+  process.env.PI_SUBAGENT_DELEGATION_ROLE = "worker";
+  process.env.PI_SUBAGENT_DELEGATION_SESSION_DIRECTORY = "/tmp/pi-subagent-specialist";
+  try {
+    const nested = harness(["read"], ["read"]);
+    (await loadExtension())(nested.pi);
+    await nested.start("json");
+    assert.equal(nested.tools.length, 0, "Windows fails closed for nested Scout registration");
+
+    const root = harness();
+    (await loadExtension())(root.pi);
+    await root.start("tui");
+    assert.equal(root.tools[0]?.name, "Agent");
+    await root.shutdown();
+  } finally {
+    if (descriptor) Object.defineProperty(process, "platform", descriptor);
+    if (previousRole === undefined) delete process.env.PI_SUBAGENT_DELEGATION_ROLE;
+    else process.env.PI_SUBAGENT_DELEGATION_ROLE = previousRole;
+    if (previousDirectory === undefined) delete process.env.PI_SUBAGENT_DELEGATION_SESSION_DIRECTORY;
+    else process.env.PI_SUBAGENT_DELEGATION_SESSION_DIRECTORY = previousDirectory;
+  }
+});
+
+test("Scout validates ordered requests and reserves four slots across overlapping calls", { timeout: 10_000 }, async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-scout-tool-"));
+  const marker = path.join(directory, "started");
+  const release = path.join(directory, "release");
+  const profileDirectory = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-scout-profile-"));
+  const previousPath = process.env.PATH;
+  const previousProfileDirectory = process.env.PI_CODING_AGENT_DIR;
+  await writeFile(path.join(directory, "pi"), `#!/usr/bin/env node
+const fs = require("node:fs");
+const dir = process.argv[process.argv.indexOf("--session-dir") + 1];
+fs.mkdirSync(dir, { recursive: true });
+fs.writeFileSync(dir + "/child.jsonl", "");
+fs.appendFileSync(${JSON.stringify(marker)}, "started\\n");
+const timer = setInterval(() => {
+  if (!fs.existsSync(${JSON.stringify(release)})) return;
+  clearInterval(timer);
+  process.stdout.write(JSON.stringify({ type: "session", id: "child" }) + "\\n");
+  process.stdout.write(JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "local evidence" }], stopReason: "stop" } }) + "\\n");
+}, 5);
+`);
+  await chmod(path.join(directory, "pi"), 0o755);
+  process.env.PATH = `${directory}${path.delimiter}${previousPath ?? ""}`;
+  process.env.PI_CODING_AGENT_DIR = profileDirectory;
+  const previousRole = process.env.PI_SUBAGENT_DELEGATION_ROLE;
+  const previousSessionDirectory = process.env.PI_SUBAGENT_DELEGATION_SESSION_DIRECTORY;
+  process.env.PI_SUBAGENT_DELEGATION_ROLE = "worker";
+  process.env.PI_SUBAGENT_DELEGATION_SESSION_DIRECTORY = "/tmp/pi-subagent-scout-tool";
+  const testHarness = harness(["read", "Scout"], ["read", "Scout"]);
+  (await loadExtension())(testHarness.pi);
+  try {
+    await testHarness.start("json");
+    const [tool] = testHarness.tools;
+    const scoutContext = testHarness.context("json");
+    scoutContext.modelRegistry = { getAvailable: () => [{ provider: "openai-codex", id: "gpt-5.6-luna", reasoning: true }] } as any;
+    const first = tool.execute("first", { tasks: [
+      { title: "one", task: "read local one" },
+      { title: "two", task: "read local two" },
+    ] }, undefined, undefined, scoutContext);
+    const second = tool.execute("second", { tasks: [
+      { title: "three", task: "read local three" },
+      { title: "four", task: "read local four" },
+      { title: "five", task: "read local five" },
+    ] }, undefined, undefined, scoutContext);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await writeFile(release, "release");
+    const [firstResult, completedSecond] = await Promise.all([first, second]);
+    assert.deepEqual(firstResult.details.outcomes.map((outcome: any) => outcome.status), ["succeeded", "succeeded"]);
+    assert.match(firstResult.content[0].text, /one.*succeeded[\s\S]*local evidence/i);
+    assert.deepEqual(completedSecond.details.outcomes.map((outcome: any) => outcome.status), ["succeeded", "succeeded", "over-limit"]);
+    const web = await tool.execute("web", { tasks: [
+      null,
+      { title: "bad", task: "" },
+      { title: "role", task: "local", role: "scout" },
+      { title: "web docs", task: "search the web for the API" },
+    ] }, undefined, undefined, scoutContext);
+    assert.deepEqual(web.details.outcomes.map((outcome: any) => outcome.status), ["malformed", "malformed", "malformed", "over-limit"]);
+  } finally {
+    await writeFile(release, "release").catch(() => {});
+    await testHarness.shutdown().catch(() => {});
+    process.env.PATH = previousPath;
+    if (previousRole === undefined) delete process.env.PI_SUBAGENT_DELEGATION_ROLE;
+    else process.env.PI_SUBAGENT_DELEGATION_ROLE = previousRole;
+    if (previousSessionDirectory === undefined) delete process.env.PI_SUBAGENT_DELEGATION_SESSION_DIRECTORY;
+    else process.env.PI_SUBAGENT_DELEGATION_SESSION_DIRECTORY = previousSessionDirectory;
+    if (previousProfileDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    else process.env.PI_CODING_AGENT_DIR = previousProfileDirectory;
+    await rm(directory, { recursive: true, force: true });
+    await rm(profileDirectory, { recursive: true, force: true });
+  }
+});
+
+test("runs root Agent through a specialist Scout and cleans its cancelled Scout process", { timeout: 15_000 }, async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-e2e-scout-"));
+  const executable = path.join(directory, "pi");
+  const records = path.join(directory, "records.jsonl");
+  const scoutPidPath = path.join(directory, "scout.pid");
+  const previousPath = process.env.PATH;
+  const previousRecords = process.env.PI_SUBAGENT_E2E_RECORDS;
+  const previousScoutPid = process.env.PI_SUBAGENT_E2E_SCOUT_PID;
+  const previousExtension = process.env.PI_SUBAGENT_E2E_EXTENSION;
+  await writeFile(executable, `#!/usr/bin/env node
+const fs = require("node:fs");
+const path = require("node:path");
+const { spawn } = require("node:child_process");
+const record = (value) => fs.appendFileSync(process.env.PI_SUBAGENT_E2E_RECORDS, JSON.stringify(value) + "\\n");
+const emit = (value) => process.stdout.write(JSON.stringify(value) + "\\n");
+const argv = process.argv.slice(2);
+record({ role: process.env.PI_SUBAGENT_DELEGATION_ROLE, argv, pid: process.pid });
+if (process.env.PI_SUBAGENT_DELEGATION_ROLE === "scout") {
+  fs.writeFileSync(process.env.PI_SUBAGENT_E2E_SCOUT_PID, String(process.pid));
+  if (argv.includes("cancel")) setInterval(() => {}, 1_000);
+  else setTimeout(() => {
+    emit({ type: "session", id: "scout-" + process.pid });
+    if (argv.includes("search unavailable web")) {
+      process.stderr.write("web access unavailable\\n");
+      process.exitCode = 1;
+    } else emit({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: argv.includes("search web") ? "Web research unavailable: codex-research is unavailable." : "local source: docs/local.md:1" }], usage: { input: 3, output: 2, totalTokens: 5 }, stopReason: "stop" } });
+  }, 20);
+} else {
+const sessionDirectory = argv[argv.indexOf("--session-dir") + 1];
+fs.mkdirSync(sessionDirectory, { recursive: true });
+fs.writeFileSync(path.join(sessionDirectory, "specialist-" + process.pid + ".jsonl"), "");
+emit({ type: "session", id: "specialist-" + process.pid });
+const cancelled = argv.at(-1).includes("cancel");
+const tasks = cancelled ? [{ title: "cancelled evidence", task: "cancel" }] : [
+  { title: "local evidence", task: "read docs/local.md" },
+  { title: "web evidence", task: "search web documentation" },
+  null,
+  { title: "failed web", task: "search unavailable web" },
+  { title: "fourth", task: "fourth request" },
+  { title: "extra", task: "fifth request" },
+];
+(async () => {
+  let onStart, onShutdown, scoutTool;
+  const context = {
+    mode: "json", hasUI: false, cwd: process.cwd(), model: { provider: "openai-codex", id: "parent" }, thinkingLevel: "medium",
+    modelRegistry: { getAvailable: () => [] },
+    sessionManager: { getSessionDir: () => sessionDirectory }, ui: { notify() {} },
+  };
+  const extension = await import(process.env.PI_SUBAGENT_E2E_EXTENSION);
+  extension.default({
+    on(event, handler) { if (event === "session_start") onStart = handler; else if (event === "session_shutdown") onShutdown = handler; },
+    registerTool(tool) { scoutTool = tool; }, getAllTools() { return []; }, getActiveTools() { return []; }, getThinkingLevel() { return "medium"; },
+  });
+  await onStart({}, context);
+  if (!scoutTool) throw new Error("specialist did not register Scout");
+  emit({ type: "tool_execution_start", toolName: "Scout", toolCallId: "nested", args: { tasks } });
+  const result = await scoutTool.execute("nested", { tasks }, undefined, (partialResult) =>
+    emit({ type: "tool_execution_update", toolName: "Scout", toolCallId: "nested", partialResult }), context);
+  emit({ type: "tool_execution_end", toolName: "Scout", toolCallId: "nested", result });
+  await onShutdown({}, context);
+  emit({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "specialist conclusion" }], usage: { input: 11, output: 7, totalTokens: 18 }, stopReason: "stop" } });
+})().catch((error) => { process.stderr.write(String(error.stack || error)); process.exitCode = 1; });
+}
+`);
+  await chmod(executable, 0o755);
+  await writeFile(records, "");
+  process.env.PATH = `${directory}${path.delimiter}${previousPath ?? ""}`;
+  process.env.PI_SUBAGENT_E2E_RECORDS = records;
+  process.env.PI_SUBAGENT_E2E_SCOUT_PID = scoutPidPath;
+  process.env.PI_SUBAGENT_E2E_EXTENSION = new URL("./index.ts", import.meta.url).href;
+
+  const testHarness = harness();
+  (await loadExtension())(testHarness.pi);
+  try {
+    await testHarness.start("tui");
+    const [agent] = testHarness.tools;
+    const updates: any[] = [];
+    const pending = agent.execute(
+      "root",
+      { tasks: [{ agent: "worker", title: "specialist", task: "research and decide" }] },
+      undefined,
+      (update: any) => updates.push(update),
+      testHarness.context("tui"),
+    );
+    const result = await pending;
+    assert.deepEqual(result.details.outcomes.map((outcome: any) => outcome.status), ["succeeded"]);
+    assert.match(result.content[0].text, /^1\. specialist — succeeded\n[\s\S]*Usage: own ↑11 ↓7 ctx 18 \| Scouts ↑9 ↓6 ctx 15\nspecialist conclusion$/);
+    const scouts = result.details.outcomes[0].run.attempts[0].scouts[0];
+    assert.deepEqual(scouts.outcomes.map((outcome: any) => outcome.status), ["succeeded", "succeeded", "malformed", "failed", "succeeded", "over-limit"]);
+    assert.match(JSON.stringify(scouts.outcomes), /docs\/local\.md:1/);
+    assert.match(JSON.stringify(scouts.outcomes), /Web research unavailable|web access unavailable/);
+    assert.ok(updates.some((update) => update.details.outcomes[0]?.run.attempts[0]?.scouts[0]?.outcomes[0]?.status === "running"));
+    assert.deepEqual(result.details.outcomes[0].run.attempts[0].usage, { inputTokens: 11, outputTokens: 7, contextTokens: 18 });
+    assert.deepEqual(scouts.outcomes[0].run.attempts[0].usage, { inputTokens: 3, outputTokens: 2, contextTokens: 5 });
+
+    const controller = new AbortController();
+    const cancelled = agent.execute(
+      "root-cancel",
+      { tasks: [{ agent: "worker", title: "cancel specialist", task: "cancel nested Scout" }] },
+      controller.signal,
+      undefined,
+      testHarness.context("tui"),
+    );
+    await rm(scoutPidPath, { force: true });
+    await waitFor(async () => Number(await readFile(scoutPidPath, "utf8").catch(() => "0")) > 0, "nested Scout to start");
+    const scoutPid = Number(await readFile(scoutPidPath, "utf8"));
+    controller.abort(new Error("cancel specialist"));
+    await assert.rejects(cancelled);
+    assert.throws(() => process.kill(scoutPid, 0), "Scout descendant stopped before session cleanup");
+
+    const spawned = (await readFile(records, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+    const specialist = spawned.find((entry: any) => entry.role === "worker");
+    const scout = spawned.find((entry: any) => entry.role === "scout" && entry.argv.some((argument: string) => argument.includes("codex-research")));
+    assert.ok(specialist?.argv[specialist.argv.indexOf("--tools") + 1]?.split(",").includes("Scout"), "specialist received its approved Scout delegation tool");
+    assert.equal(scout?.argv[scout.argv.indexOf("--tools") + 1], "read,grep,find,ls,codex-research");
+    assert.equal(testHarness.messages.length, 0);
+  } finally {
+    await testHarness.shutdown().catch(() => {});
+    process.env.PATH = previousPath;
+    if (previousRecords === undefined) delete process.env.PI_SUBAGENT_E2E_RECORDS;
+    else process.env.PI_SUBAGENT_E2E_RECORDS = previousRecords;
+    if (previousScoutPid === undefined) delete process.env.PI_SUBAGENT_E2E_SCOUT_PID;
+    else process.env.PI_SUBAGENT_E2E_SCOUT_PID = previousScoutPid;
+    if (previousExtension === undefined) delete process.env.PI_SUBAGENT_E2E_EXTENSION;
+    else process.env.PI_SUBAGENT_E2E_EXTENSION = previousExtension;
+    await rm(directory, { recursive: true, force: true });
   }
 });
 
@@ -295,10 +568,10 @@ process.stdout.write(JSON.stringify({ type: "message_end", message: { role: "ass
   process.env.PI_SUBAGENT_TOOL_RECORD = recordPath;
 
   const baseTools: Record<string, string[]> = {
-    scout: ["read", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
-    worker: ["read", "bash", "edit", "write", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
-    oracle: ["read", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
-    reviewer: ["read", "bash", "grep", "find", "ls", "mcp", "mcpScript", "web_search", "web_fetch"],
+    scout: ["read", "grep", "find", "ls", "codex-research"],
+    worker: ["read", "bash", "edit", "write", "grep", "find", "ls", "Scout"],
+    oracle: ["read", "grep", "find", "ls", "Scout"],
+    reviewer: ["read", "bash", "grep", "find", "ls", "Scout"],
   };
   const cases = [
     { parent: ["fffind", "ffgrep", "parent-only"], find: "fffind", grep: "ffgrep" },
@@ -972,6 +1245,23 @@ test("renderer keeps an unsafe batch title on one safe line", async () => {
 
   assert.match(text, /Inspect API/);
   assert.doesNotMatch(text, /\u001b/);
+});
+
+test("expanded runs retain own and Scout usage totals", async () => {
+  const renderSubagentResult = (await loadModule()).renderSubagentResult;
+  const fixture = renderFixture("succeeded");
+  fixture.details.outcomes[0].run.attempts[0].usage = { inputTokens: 11, outputTokens: 7, contextTokens: 18 };
+  fixture.details.outcomes[0].run.attempts[0].scouts = [{
+    toolCallId: "scout-1",
+    partial: true,
+    outcomes: [{ index: 0, status: "succeeded", run: {
+      agent: "scout", title: "evidence", task: "inspect", state: "succeeded", startedAt: 1, endedAt: 2, warnings: [],
+      attempts: [{ number: 1, state: "succeeded", activity: [], messages: [], usage: { inputTokens: 3, outputTokens: 2, contextTokens: 5 }, scouts: [], stderr: "", exitCode: 0 }],
+    } }],
+  }];
+
+  const text = renderSubagentResult(fixture, { expanded: true, isPartial: false }, plainTheme).render(120).join("\n");
+  assert.match(text, /Usage: own ↑11 ↓7 ctx 18 \| Scouts \(partial\) ↑3 ↓2 ctx 5/);
 });
 
 test("expands task, attempts, warnings, tool calls, Markdown output, and diagnostics", async () => {

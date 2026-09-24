@@ -38,6 +38,7 @@ import type {
   ChildSessionState,
   MonitoredRun,
   ProcessAttempt,
+  SubagentBatchOutcome,
   SubagentRun,
 } from "../runtime/index.ts";
 
@@ -74,6 +75,11 @@ type CursorAwareEditor = EditorComponent & {
   getCursor(): { line: number; col: number };
   getPaddingX(): number;
   isShowingAutocomplete?(): boolean;
+};
+
+type WorkingStatusEditor = {
+  embedWorkingStatus?: boolean;
+  setWorkingStatusIndicator?(indicator: unknown): void;
 };
 
 export class SubagentRegistry {
@@ -480,6 +486,16 @@ class AgentNavigationEditor implements EditorComponent, Focusable {
     this.base.onChange = value;
   }
 
+  get embedWorkingStatus(): boolean {
+    const editor = this.base as WorkingStatusEditor;
+    return editor.embedWorkingStatus === true && typeof editor.setWorkingStatusIndicator === "function";
+  }
+
+  setWorkingStatusIndicator(indicator: unknown): void {
+    const editor = this.base as WorkingStatusEditor;
+    if (this.embedWorkingStatus) editor.setWorkingStatusIndicator?.(indicator);
+  }
+
   get borderColor(): ((str: string) => string) | undefined {
     return this.base.borderColor;
   }
@@ -673,9 +689,11 @@ export class ChildSessionView extends VStack {
   private run: MonitoredRun;
   private loadedRunId: string;
   private messagesByAttempt = new Map<number, readonly Message[]>();
+  private partialMessagesByAttempt = new Map<number, Message>();
   private refreshGeneration = 0;
   private lastFrame?: readonly string[];
-  private hasTranscriptContent = false;
+  private lastFrameHasSessionTranscriptContent = false;
+  private hasSessionTranscriptContent = false;
   private lastWidth = 80;
   private readError?: unknown;
   private disposed = false;
@@ -726,8 +744,10 @@ export class ChildSessionView extends VStack {
     if (run.runId !== this.loadedRunId) {
       this.loadedRunId = run.runId;
       this.messagesByAttempt = new Map();
+      this.partialMessagesByAttempt = new Map();
       this.readError = undefined;
       this.lastFrame = undefined;
+      this.lastFrameHasSessionTranscriptContent = false;
       this.scroll.scrollToEnd();
     }
     this.run = run;
@@ -756,6 +776,7 @@ export class ChildSessionView extends VStack {
       this.messagesByAttempt = next;
     }
     this.readError = readError;
+    if (!readError) this.partialMessagesByAttempt.clear();
     this.rebuild();
     this.tui.requestRender();
   }
@@ -803,16 +824,20 @@ export class ChildSessionView extends VStack {
 
   render(width: number): string[] {
     const safeWidth = Math.max(1, Math.floor(width));
-    this.lastWidth = safeWidth;
+    if (safeWidth !== this.lastWidth) {
+      this.lastWidth = safeWidth;
+      this.rebuild();
+    }
     const headerLines = this.header.render(safeWidth);
     const contentLines = this.transcript.render(safeWidth);
     const viewportHeight = this.getViewportHeight(safeWidth, contentLines.length, headerLines.length);
     this.scroll.updateLayout(contentLines.length, viewportHeight, () => this.tui.requestRender());
     const frame = [...headerLines, ...contentLines.slice(this.scroll.scrollTop, this.scroll.scrollTop + viewportHeight)];
-    if (this.readError && !this.hasTranscriptContent && this.lastFrame) {
+    if (this.readError && !this.hasSessionTranscriptContent && this.lastFrameHasSessionTranscriptContent && this.lastFrame) {
       return this.lastFrame.map((line) => truncateToWidth(line, safeWidth, ""));
     }
     this.lastFrame = frame;
+    this.lastFrameHasSessionTranscriptContent = this.hasSessionTranscriptContent;
     return frame;
   }
 
@@ -844,11 +869,11 @@ export class ChildSessionView extends VStack {
 
   private rebuild(): void {
     const usage = totalUsage(this.run.run);
-    this.header.setText(
-      `${displayTitle(this.run.run.title)} (${this.run.run.agent}) ${stateText(this.run.run.state)} ${formatDuration(this.run.run)} ↑${formatTokens(usage.inputTokens)} ↓${formatTokens(usage.outputTokens)} ctx ${formatTokens(usage.contextTokens)}`,
-    );
+    const scoutsUsage = totalScoutUsage(this.run.run);
+    this.header.setText(childHeader(this.run.run, usage, scoutsUsage, hasPartialScoutUsage(this.run.run), this.lastWidth));
     this.transcript.clear();
-    let hasTranscriptContent = false;
+    let hasSessionTranscriptContent = false;
+    let showingRetainedPartial = false;
     const attempts = this.run.run.attempts;
     for (let index = 0; index < attempts.length; index++) {
       const attempt = attempts[index];
@@ -857,7 +882,8 @@ export class ChildSessionView extends VStack {
       }
       const loaded = this.messagesByAttempt.get(attempt.number);
       const messages = loaded ? mergeMessages(loaded, attempt.messages) : attempt.messages;
-      if (messages.length > 0) hasTranscriptContent = true;
+      const hasMessages = messages.length > 0;
+      if (hasMessages) hasSessionTranscriptContent = true;
       const pendingTools = new Map<string, ToolExecutionComponent>();
       for (const message of messages) this.addMessage(message, pendingTools);
 
@@ -865,8 +891,17 @@ export class ChildSessionView extends VStack {
       const currentAttempt = attempts.at(-1)?.number === attempt.number;
       const live = attempt.state === "running" && currentAttempt;
       if (live && session && (session.partialText || session.partialThinking)) {
-        hasTranscriptContent = true;
-        this.addMessage(partialAssistant(session), pendingTools);
+        const partial = partialAssistant(session);
+        this.partialMessagesByAttempt.set(attempt.number, partial);
+        hasSessionTranscriptContent = true;
+        this.addMessage(partial, pendingTools);
+      } else if (this.readError && !hasMessages) {
+        const partial = this.partialMessagesByAttempt.get(attempt.number);
+        if (partial) {
+          hasSessionTranscriptContent = true;
+          showingRetainedPartial = true;
+          this.addMessage(partial, pendingTools);
+        }
       }
       if (attempt.state === "failed" || attempt.state === "cancelled") {
         const diagnostic = attempt.error || attempt.stderr || `Attempt ${attempt.number} ${attempt.state}`;
@@ -878,11 +913,23 @@ export class ChildSessionView extends VStack {
         }
         pendingTools.clear();
       }
+      this.addScouts(attempt);
     }
-    this.hasTranscriptContent = hasTranscriptContent;
-    if (!hasTranscriptContent && this.readError) {
+    if (this.lastWidth < 50 && (this.run.run.state === "succeeded" || this.run.run.state === "failed" || this.run.run.state === "cancelled")) {
+      this.transcript.addChild(new Text(finalUsageText(usage, scoutsUsage, hasPartialScoutUsage(this.run.run)), 0, 0));
+    }
+    this.hasSessionTranscriptContent = hasSessionTranscriptContent;
+    if (this.readError && (!hasSessionTranscriptContent || showingRetainedPartial)) {
       const message = this.readError instanceof Error ? this.readError.message : String(this.readError);
       this.transcript.addChild(new Text(this.theme.fg("warning", `Session unavailable: ${message}`), 0, 0));
+    }
+  }
+
+  private addScouts(attempt: ProcessAttempt): void {
+    for (const scout of attempt.scouts ?? []) {
+      for (const outcome of scout.outcomes) {
+        this.transcript.addChild(new Text(scoutLine(outcome, scout.partial, this.lastWidth), 0, 0));
+      }
     }
   }
 
@@ -956,9 +1003,11 @@ export function installSubagentUI(ctx: ExtensionContext): SubagentUIHandle {
 
     ctx.ui.setEditorComponent((tui, theme, keybindings) => {
       navigationTui = tui;
+      const defaultEditorOptions: NonNullable<ConstructorParameters<typeof CustomEditor>[3]>
+        & { embedWorkingStatus: true } = { embedWorkingStatus: true };
       const base = previousEditorFactory
         ? previousEditorFactory(tui, theme, keybindings)
-        : new CustomEditor(tui, theme, keybindings);
+        : new CustomEditor(tui, theme, keybindings, defaultEditorOptions);
       if (!footer) throw new Error("Subagent footer was not created");
       const editor = createAgentNavigationEditor(
         base,
@@ -1132,6 +1181,52 @@ function stateText(state: SubagentRun["state"]): string {
   }
 }
 
+function childHeader(
+  run: SubagentRun,
+  usage: SubagentUsageDisplay,
+  scoutsUsage: SubagentUsageDisplay,
+  scoutsPartial: boolean,
+  width: number,
+): string {
+  const roleAndState = `${run.agent} ${stateText(run.state)}`;
+  const titleWidth = Math.max(0, width - visibleWidth(roleAndState) - 3);
+  const title = titleWidth > 0 ? `${truncateToWidth(displayTitle(run.title), titleWidth, "…")} — ` : "";
+  return `${title}${roleAndState}\n${usageText(usage, scoutsUsage, scoutsPartial, width)}`;
+}
+
+type SubagentUsageDisplay = { inputTokens: number; outputTokens: number; contextTokens: number };
+
+function usageText(own: SubagentUsageDisplay, scouts: SubagentUsageDisplay, scoutsPartial: boolean, width: number): string {
+  const label = scoutsPartial ? "Scouts (partial)" : "Scouts";
+  const full = `own ↑${formatTokens(own.inputTokens)} ↓${formatTokens(own.outputTokens)} ctx ${formatTokens(own.contextTokens)} | ${label} ↑${formatTokens(scouts.inputTokens)} ↓${formatTokens(scouts.outputTokens)} ctx ${formatTokens(scouts.contextTokens)}`;
+  if (visibleWidth(full) <= width) return full;
+  return `own ↑${formatTokens(own.inputTokens)} ↓${formatTokens(own.outputTokens)} | ${label} ↑${formatTokens(scouts.inputTokens)} ↓${formatTokens(scouts.outputTokens)}`;
+}
+
+function finalUsageText(own: SubagentUsageDisplay, scouts: SubagentUsageDisplay, scoutsPartial: boolean): string {
+  const label = scoutsPartial ? "Scouts (partial)" : "Scouts";
+  return `Usage:\n  own ↑${formatTokens(own.inputTokens)} ↓${formatTokens(own.outputTokens)} ctx ${formatTokens(own.contextTokens)}\n  ${label} ↑${formatTokens(scouts.inputTokens)} ↓${formatTokens(scouts.outputTokens)} ctx ${formatTokens(scouts.contextTokens)}`;
+}
+
+function scoutLine(outcome: SubagentBatchOutcome, partial: boolean, width: number): string {
+  const title = outcome.status === "queued"
+    ? outcome.request.title
+    : "run" in outcome ? displayTitle(outcome.run.title) : `Scout ${outcome.index + 1}`;
+  const state = partial && (outcome.status === "queued" || outcome.status === "running" || outcome.status === "retrying")
+    ? "partial"
+    : outcome.status;
+  const reason = outcome.status === "malformed" || outcome.status === "over-limit"
+    ? outcome.reason
+    : "run" in outcome && state === "failed"
+      ? outcome.run.error ?? outcome.run.attempts.at(-1)?.error ?? outcome.run.attempts.at(-1)?.stderr
+      : undefined;
+  const safeReason = reason ? sanitizeStatusText(reason) : undefined;
+  const usage = "run" in outcome ? totalUsage(outcome.run) : undefined;
+  const detail = safeReason ? `${state} | ${safeReason}` : usage ? `${state} | ↑${formatTokens(usage.inputTokens)} ↓${formatTokens(usage.outputTokens)}` : state;
+  const availableTitle = Math.max(0, width - visibleWidth("Scout: ") - visibleWidth(detail) - 1);
+  return `Scout: ${truncateToWidth(title, availableTitle, "…")} ${detail}`;
+}
+
 function subagentLine(run: SubagentRun, number: number, selected: boolean, width: number): string {
   const left = `${selected ? "◉ " : "○ "}[${number}] ${run.agent}`;
   const usage = totalUsage(run);
@@ -1185,7 +1280,7 @@ function finiteNumber(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-function totalUsage(run: SubagentRun): { inputTokens: number; outputTokens: number; contextTokens: number } {
+function totalUsage(run: SubagentRun): SubagentUsageDisplay {
   let inputTokens = 0;
   let outputTokens = 0;
   let contextTokens = 0;
@@ -1194,6 +1289,28 @@ function totalUsage(run: SubagentRun): { inputTokens: number; outputTokens: numb
     inputTokens += usage.inputTokens;
     outputTokens += usage.outputTokens;
     contextTokens = usage.contextTokens;
+  }
+  return { inputTokens, outputTokens, contextTokens };
+}
+
+function hasPartialScoutUsage(run: SubagentRun): boolean {
+  return run.attempts.some((attempt) => attempt.scouts?.some((scout) => scout.partial));
+}
+
+function totalScoutUsage(run: SubagentRun): SubagentUsageDisplay {
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let contextTokens = 0;
+  for (const attempt of run.attempts) {
+    for (const scout of attempt.scouts ?? []) {
+      for (const outcome of scout.outcomes) {
+        if (!("run" in outcome)) continue;
+        const usage = totalUsage(outcome.run);
+        inputTokens += usage.inputTokens;
+        outputTokens += usage.outputTokens;
+        contextTokens += usage.contextTokens;
+      }
+    }
   }
   return { inputTokens, outputTokens, contextTokens };
 }

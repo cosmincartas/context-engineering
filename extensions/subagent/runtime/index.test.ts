@@ -7,7 +7,7 @@ import test, { mock } from "node:test";
 
 import { loadBundledAgents } from "../agents/index.ts";
 import { loadProfileSettings } from "../state/index.ts";
-import { classifyBatch, executeSubagent as executeRuntime, executeSubagentBatch, MAX_RESULT_BYTES } from "./index.ts";
+import { classifyBatch, executeSubagent as executeRuntime, executeSubagentBatch, formatSubagentBatch, formatSubagentOutcome, MAX_RESULT_BYTES } from "./index.ts";
 
 const bundledAgents = await loadBundledAgents(new URL("../agents/", import.meta.url));
 
@@ -18,6 +18,64 @@ function outputText(result: { content: readonly { type: string; text?: string }[
   }
   return part.text;
 }
+
+test("reserves each batch status and failure reason before report output", () => {
+  const details: any = { outcomes: [
+    { index: 0, status: "succeeded", run: {
+      agent: "scout", title: "giant report", task: "inspect", state: "succeeded", startedAt: 1, endedAt: 2, warnings: [],
+      attempts: [{ number: 1, state: "succeeded", activity: [], messages: [{ role: "assistant", content: [{ type: "text", text: "x".repeat(MAX_RESULT_BYTES) }] }], usage: { inputTokens: 0, outputTokens: 0, contextTokens: 0 }, scouts: [], stderr: "", exitCode: 0 }],
+    } },
+    { index: 1, status: "failed", run: {
+      agent: "scout", title: "unavailable", task: "inspect", state: "failed", startedAt: 1, endedAt: 2, warnings: [], error: "web research unavailable",
+      attempts: [],
+    } },
+  ] };
+
+  const text = formatSubagentBatch(details);
+  assert.match(text, /1\. succeeded/);
+  assert.match(text, /2\. failed: web research unavailable/);
+  assert.ok(Buffer.byteLength(text, "utf8") <= MAX_RESULT_BYTES);
+});
+
+test("formats specialist and partial Scout usage separately", () => {
+  const outcome: any = {
+    index: 0,
+    status: "succeeded",
+    run: {
+      agent: "worker", title: "research", task: "research", state: "succeeded", startedAt: 1, endedAt: 2, warnings: [],
+      attempts: [{
+        number: 1, state: "succeeded", activity: [], messages: [{ role: "assistant", content: [{ type: "text", text: "conclusion" }] }],
+        usage: { inputTokens: 11, outputTokens: 7, contextTokens: 18 }, scouts: [{
+          toolCallId: "scout-1", partial: true, outcomes: [{
+            index: 0, status: "succeeded", run: {
+              agent: "scout", title: "evidence", task: "inspect", state: "succeeded", startedAt: 1, endedAt: 2, warnings: [],
+              attempts: [{ number: 1, state: "succeeded", activity: [], messages: [], usage: { inputTokens: 3, outputTokens: 2, contextTokens: 5 }, scouts: [], stderr: "", exitCode: 0 }],
+            },
+          }],
+        }], stderr: "", exitCode: 0,
+      }],
+    },
+  };
+  assert.match(formatSubagentOutcome(outcome), /Usage: own ↑11 ↓7 ctx 18 \| Scouts \(partial\) ↑3 ↓2 ctx 5/);
+});
+
+test("places delegated usage before oversized specialist output", () => {
+  const outcome: any = {
+    index: 0,
+    status: "succeeded",
+    run: {
+      agent: "worker", title: "research", task: "research", state: "succeeded", startedAt: 1, endedAt: 2, warnings: [],
+      attempts: [{
+        number: 1, state: "succeeded", activity: [], messages: [{ role: "assistant", content: [{ type: "text", text: "x".repeat(MAX_RESULT_BYTES) }] }],
+        usage: { inputTokens: 11, outputTokens: 7, contextTokens: 18 }, scouts: [{ toolCallId: "scout-1", partial: false, outcomes: [] }], stderr: "", exitCode: 0,
+      }],
+    },
+  };
+  const text = formatSubagentOutcome(outcome);
+  assert.match(text, /Usage: own ↑11 ↓7 ctx 18 \| Scouts ↑0 ↓0 ctx 0/);
+  assert.ok(text.indexOf("Usage:") < text.indexOf("[Output truncated:"));
+  assert.ok(Buffer.byteLength(text, "utf8") <= MAX_RESULT_BYTES);
+});
 
 test("normalizes titles to one safe non-blank line", async () => {
   const { normalizeTitle } = await import("./index.ts");
@@ -546,6 +604,147 @@ test("carries the latest context usage into a retry before its first usage event
   }
 });
 
+test("marks Scout telemetry with nonnumeric usage failed", async () => {
+  const sessionRoot = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-nested-invalid-usage-"));
+  try {
+    const result = await withScenario("nested-invalid-usage", () => executeRuntime(
+      "run-nested-invalid-usage", { agent: "oracle", title: "nested invalid usage", task: "delegate evidence" }, bundledAgents, makeContext(), sessionRoot, undefined, { onMonitorEvent: () => {} },
+    ));
+    const scout = result.details.attempts[0].scouts[0];
+    assert.equal(scout.partial, true);
+    assert.equal(scout.outcomes[0].status, "failed");
+    assert.match((scout.outcomes[0] as any).run.error, /valid result/i);
+  } finally {
+    await rm(sessionRoot, { recursive: true, force: true });
+  }
+});
+
+test("rejects Scout telemetry with negative usage", async () => {
+  const sessionRoot = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-nested-negative-usage-"));
+  try {
+    const result = await withScenario("nested-negative-usage", () => executeRuntime(
+      "run-nested-negative-usage", { agent: "oracle", title: "nested negative usage", task: "delegate evidence" }, bundledAgents, makeContext(), sessionRoot, undefined, { onMonitorEvent: () => {} },
+    ));
+    assert.equal(result.details.attempts[0].scouts[0].outcomes[0].status, "failed");
+  } finally {
+    await rm(sessionRoot, { recursive: true, force: true });
+  }
+});
+
+test("keeps Scout JSON progress scoped to its call and final result", async () => {
+  const sessionRoot = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-nested-"));
+  const events: any[] = [];
+  try {
+    const result = await withScenario("nested", () => executeRuntime(
+      "run-nested",
+      { agent: "worker", title: "nested telemetry", task: "delegate evidence" },
+      bundledAgents,
+      makeContext(),
+      sessionRoot,
+      undefined,
+      { onMonitorEvent: (event) => events.push(event) },
+    ));
+    const attempt = result.details.attempts[0];
+    assert.deepEqual(attempt.usage, { inputTokens: 0, outputTokens: 1, contextTokens: 1 });
+    assert.equal(attempt.scouts.length, 1);
+    assert.equal(attempt.scouts[0].toolCallId, "scout-1");
+    assert.equal(attempt.scouts[0].partial, false);
+    assert.equal(attempt.scouts[0].outcomes[0].status, "succeeded");
+    const scoutAttempt = (attempt.scouts[0].outcomes[0] as any).run.attempts[0];
+    assert.deepEqual(scoutAttempt.usage, { inputTokens: 7, outputTokens: 3, contextTokens: 7 });
+    assert.ok(events.some((event) => event.run.run.attempts[0]?.scouts[0]?.outcomes[0]?.status === "running"));
+  } finally {
+    await rm(sessionRoot, { recursive: true, force: true });
+  }
+});
+
+test("keeps valid Scout telemetry from a mixed invalid request", async () => {
+  const sessionRoot = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-nested-mixed-"));
+  try {
+    const result = await withScenario("nested-mixed", () => executeRuntime(
+      "run-nested-mixed", { agent: "oracle", title: "nested mixed", task: "delegate evidence" }, bundledAgents, makeContext(), sessionRoot, undefined, { onMonitorEvent: () => {} },
+    ));
+    const outcomes = result.details.attempts[0].scouts[0].outcomes;
+    assert.deepEqual(outcomes.map((outcome) => outcome.status), ["malformed", "succeeded"]);
+  } finally {
+    await rm(sessionRoot, { recursive: true, force: true });
+  }
+});
+
+test("accepts normalized Scout titles and fails unresolved malformed final results", async () => {
+  const sessionRoot = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-nested-validation-"));
+  try {
+    const normalized = await withScenario("nested-normalized-title", () => executeRuntime(
+      "run-nested-normalized", { agent: "oracle", title: "nested normalized", task: "delegate evidence" }, bundledAgents, makeContext(), sessionRoot, undefined, { onMonitorEvent: () => {} },
+    ));
+    assert.equal(normalized.details.attempts[0].scouts[0].outcomes[0].status, "succeeded");
+
+    const malformed = await withScenario("nested-malformed-final", () => executeRuntime(
+      "run-nested-malformed", { agent: "oracle", title: "nested malformed", task: "delegate evidence" }, bundledAgents, makeContext(), sessionRoot, undefined, { onMonitorEvent: () => {} },
+    ));
+    const scout = malformed.details.attempts[0].scouts[0];
+    assert.equal(scout.partial, true);
+    assert.deepEqual(scout.outcomes.map((outcome) => outcome.status), ["succeeded", "failed"]);
+    assert.deepEqual((scout.outcomes[0] as any).run.attempts[0].usage, { inputTokens: 7, outputTokens: 3, contextTokens: 10 });
+    assert.match((scout.outcomes[1] as any).run.error, /valid result/i);
+  } finally {
+    await rm(sessionRoot, { recursive: true, force: true });
+  }
+});
+
+test("marks Scouts failed when their final error omits batch details", async () => {
+  const sessionRoot = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-nested-error-"));
+  try {
+    const result = await withScenario("nested-error-final", () => executeRuntime(
+      "run-nested-error", { agent: "oracle", title: "nested error", task: "delegate evidence" }, bundledAgents, makeContext(), sessionRoot, undefined, { onMonitorEvent: () => {} },
+    ));
+    const scout = result.details.attempts[0].scouts[0];
+    assert.equal(scout.partial, true);
+    assert.equal(scout.outcomes[0].status, "failed");
+    assert.match((scout.outcomes[0] as any).run.error, /Scout tool failed/i);
+  } finally {
+    await rm(sessionRoot, { recursive: true, force: true });
+  }
+});
+
+test("preserves completed Scout usage when a sibling's final error omits details", async () => {
+  const sessionRoot = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-nested-error-partial-"));
+  try {
+    const result = await withScenario("nested-error-partial", () => executeRuntime(
+      "run-nested-error-partial", { agent: "oracle", title: "nested partial error", task: "delegate evidence" }, bundledAgents, makeContext(), sessionRoot, undefined, { onMonitorEvent: () => {} },
+    ));
+    const scout = result.details.attempts[0].scouts[0];
+    assert.equal(scout.partial, true);
+    assert.deepEqual(scout.outcomes.map((outcome) => outcome.status), ["succeeded", "failed"]);
+    assert.deepEqual((scout.outcomes[0] as any).run.attempts[0].usage, { inputTokens: 7, outputTokens: 3, contextTokens: 10 });
+    assert.equal((scout.outcomes[1] as any).run.state, "failed");
+    assert.deepEqual((scout.outcomes[1] as any).run.attempts[0].usage, { inputTokens: 1, outputTokens: 0, contextTokens: 1 });
+  } finally {
+    await rm(sessionRoot, { recursive: true, force: true });
+  }
+});
+
+test("keeps nested Scout usage separate across specialist retries", async () => {
+  const sessionRoot = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-nested-retry-"));
+  try {
+    const result = await withScenario("nested-retry", () => executeRuntime(
+      "run-nested-retry",
+      { agent: "oracle", title: "nested retry", task: "retry delegated evidence" },
+      bundledAgents,
+      makeContext(),
+      sessionRoot,
+      undefined,
+      { onMonitorEvent: () => {} },
+    ));
+    assert.equal(result.details.attempts.length, 2);
+    assert.deepEqual(result.details.attempts.map((attempt) => attempt.scouts[0].outcomes[0] as any).map((outcome) =>
+      outcome.run.attempts[0].usage.inputTokens,
+    ), [1, 2]);
+  } finally {
+    await rm(sessionRoot, { recursive: true, force: true });
+  }
+});
+
 test("publishes a session path when the child creates its file after startup", async () => {
   const sessionRoot = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-late-session-"));
   const events: any[] = [];
@@ -637,7 +836,7 @@ test("passes the mapped model, thinking level, tools, cwd, prompt, and literal t
     "medium",
   ]);
   assert.equal(record.argv[8], "--tools");
-  assert.equal(record.argv[9], "read,bash,edit,write,grep,find,ls,mcp,mcpScript,web_search,web_fetch");
+  assert.equal(record.argv[9], "read,bash,edit,write,grep,find,ls,Scout");
   assert.equal(record.argv[10], "--append-system-prompt");
   assert.match(promptPath(record), /pi-subagent-/);
   assert.equal(record.argv[12], "--session-dir");
@@ -650,6 +849,55 @@ test("passes the mapped model, thinking level, tools, cwd, prompt, and literal t
   assert.equal(result.details.attempts[0].messages.at(-1).role, "assistant");
 
   await rm(cwd, { recursive: true, force: true });
+});
+
+test("spawns role provenance for every child attempt", async () => {
+  const previousRole = process.env.PI_SUBAGENT_DELEGATION_ROLE;
+  const previousDirectory = process.env.PI_SUBAGENT_DELEGATION_SESSION_DIRECTORY;
+  process.env.PI_SUBAGENT_DELEGATION_ROLE = "forged";
+  process.env.PI_SUBAGENT_DELEGATION_SESSION_DIRECTORY = "/tmp/forged";
+  const before = (await records()).length;
+  try {
+    await withScenario("provenance-retry-startup", () =>
+      executeSubagent("worker", "retry with child provenance", bundledAgents, makeContext(), undefined),
+    );
+    const attempts = (await records()).slice(before);
+    assert.equal(attempts.length, 2);
+    assert.ok(attempts.every((record) =>
+      record.delegationRole === "worker" &&
+      record.delegationSessionDirectory === record.argv[record.argv.indexOf("--session-dir") + 1],
+    ));
+    assert.notEqual(attempts[0].delegationSessionDirectory, attempts[1].delegationSessionDirectory);
+    const scout = await executeSubagent("scout", "check unavailable web guidance", bundledAgents, makeContext(), undefined);
+    assert.match((await records()).at(-1)!.prompt, /codex-research is unavailable.*web research is unavailable/i);
+    assert.equal(scout.details.state, "succeeded");
+  } finally {
+    if (previousRole === undefined) delete process.env.PI_SUBAGENT_DELEGATION_ROLE;
+    else process.env.PI_SUBAGENT_DELEGATION_ROLE = previousRole;
+    if (previousDirectory === undefined) delete process.env.PI_SUBAGENT_DELEGATION_SESSION_DIRECTORY;
+    else process.env.PI_SUBAGENT_DELEGATION_SESSION_DIRECTORY = previousDirectory;
+  }
+});
+
+test("spawns each role with its approved tool allowlist", async () => {
+  const expectedTools = {
+    scout: "read,grep,find,ls,codex-research",
+    worker: "read,bash,edit,write,grep,find,ls,Scout",
+    oracle: "read,grep,find,ls,Scout",
+    reviewer: "read,bash,grep,find,ls,Scout",
+  } as const;
+  const before = (await records()).length;
+
+  for (const agent of Object.keys(expectedTools) as (keyof typeof expectedTools)[]) {
+    await executeSubagent(agent, `verify ${agent} tools`, bundledAgents, makeContext(), undefined);
+  }
+
+  const spawned = (await records()).slice(before);
+  assert.equal(spawned.length, 4);
+  for (const [index, agent] of (Object.keys(expectedTools) as (keyof typeof expectedTools)[]).entries()) {
+    const record = spawned[index];
+    assert.equal(record.argv[record.argv.indexOf("--tools") + 1], expectedTools[agent]);
+  }
 });
 
 test("falls back to the parent model and thinking level when the mapped model is unavailable", async () => {
@@ -1127,19 +1375,109 @@ test("rethrows the original cancellation reason and cleans up a responsive child
   assert.ok(finalRecord.signals?.includes("SIGTERM"));
 });
 
-test("force-terminates an unresponsive child after the cancellation grace period", { timeout: 8_000 }, async () => {
+test("keeps an actual nested Scout runAttempt in its specialist process group", async () => {
+  const controller = new AbortController();
+  const before = (await records()).length;
+  const previousRole = process.env.PI_SUBAGENT_DELEGATION_ROLE;
+  process.env.PI_SUBAGENT_DELEGATION_ROLE = "worker";
+  try {
+    const pending = withScenario("cancel", () =>
+      executeRuntime("nested-run-attempt", { agent: "scout", title: "nested Scout", task: "wait" }, bundledAgents, makeContext(), testSessionRoot, controller.signal, { onMonitorEvent: () => {} }),
+    );
+    const record = await waitForScenarioRecord("cancel", before);
+    assert.throws(() => process.kill(-record.pid, 0), "nested Scout must not create an unreachable process group");
+    controller.abort(new Error("cancel nested Scout"));
+    await assert.rejects(pending, /cancel nested Scout/);
+  } finally {
+    if (previousRole === undefined) delete process.env.PI_SUBAGENT_DELEGATION_ROLE;
+    else process.env.PI_SUBAGENT_DELEGATION_ROLE = previousRole;
+  }
+});
+
+test("force-stops a nested Scout helper that ignores SIGTERM", { timeout: 8_000 }, async () => {
+  const controller = new AbortController();
+  const before = (await records()).length;
+  const previousRole = process.env.PI_SUBAGENT_DELEGATION_ROLE;
+  let descendantPid: number | undefined;
+  process.env.PI_SUBAGENT_DELEGATION_ROLE = "worker";
+  try {
+    const pending = withScenario("nested-tree", () =>
+      executeSubagent("scout", "cancel Scout helper", bundledAgents, makeContext(), controller.signal),
+    );
+    let record: any;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      record = (await records()).slice(before).find((candidate) => candidate.scenario === "nested-tree" && candidate.descendantPid);
+      if (record) break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.ok(record?.descendantPid, "expected fake Scout helper");
+    descendantPid = record.descendantPid;
+    controller.abort(new Error("cancel nested helper"));
+    await assert.rejects(pending, /cancel nested helper/);
+    assert.throws(() => process.kill(descendantPid!, 0));
+  } finally {
+    try { if (descendantPid) process.kill(descendantPid, "SIGKILL"); } catch {}
+    if (previousRole === undefined) delete process.env.PI_SUBAGENT_DELEGATION_ROLE;
+    else process.env.PI_SUBAGENT_DELEGATION_ROLE = previousRole;
+  }
+});
+
+test("stops a cancelled specialist process tree before rejecting", { timeout: 8_000 }, async () => {
+  const controller = new AbortController();
+  const before = (await records()).length;
+  const events: any[] = [];
+  const pending = withScenario("cancel-tree", () =>
+    executeSubagent("worker", "cancel specialist and Scout", bundledAgents, makeContext(), controller.signal, undefined, (event) => events.push(event)),
+  );
+  let record: any;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    record = (await records()).slice(before).find((candidate) => candidate.scenario === "cancel-tree" && candidate.descendantPid);
+    if (record) break;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.ok(record?.descendantPid, "expected fake Scout descendant");
+  controller.abort(new Error("cancel tree"));
+  await assert.rejects(pending, /cancel tree/);
+  assert.throws(() => process.kill(record.descendantPid, 0));
+  assert.equal(events.at(-1).run.run.attempts[0].scouts[0].partial, true);
+});
+
+test("stops Scouts after a specialist exits normally", async () => {
+  const before = (await records()).length;
+  const result = await withScenario("exit-tree", () =>
+    executeSubagent("worker", "finish while Scout runs", bundledAgents, makeContext(), undefined),
+  );
+  const record = (await records()).slice(before).find((candidate) => candidate.scenario === "exit-tree");
+  try {
+    assert.equal(result.details.state, "succeeded");
+    assert.equal(result.details.attempts[0].scouts[0].partial, true);
+    assert.throws(() => process.kill(record.descendantPid, 0));
+  } finally {
+    try { process.kill(record?.descendantPid, "SIGKILL"); } catch {}
+  }
+});
+
+test("force-terminates an unresponsive nested Scout runAttempt after the cancellation grace period", { timeout: 8_000 }, async () => {
   const controller = new AbortController();
   const reason = new Error("forced cancellation");
   const before = (await records()).length;
-  const pending = withScenario("hang", () =>
-    executeSubagent("scout", "cancel a hung child", bundledAgents, makeContext(), controller.signal),
-  );
-  const record = await waitForScenarioRecord("hang", before);
-  controller.abort(reason);
+  const previousRole = process.env.PI_SUBAGENT_DELEGATION_ROLE;
+  process.env.PI_SUBAGENT_DELEGATION_ROLE = "worker";
+  try {
+    const pending = withScenario("hang", () =>
+      executeSubagent("scout", "cancel a hung child", bundledAgents, makeContext(), controller.signal),
+    );
+    const record = await waitForScenarioRecord("hang", before);
+    assert.throws(() => process.kill(-record.pid, 0), "nested Scout must remain owned by the specialist group");
+    controller.abort(reason);
 
-  await assert.rejects(pending, (error) => error === reason);
-  assert.equal(await pathExists(promptPath(record)), false);
-  assert.throws(() => process.kill(record.pid, 0));
+    await assert.rejects(pending, (error) => error === reason);
+    assert.equal(await pathExists(promptPath(record)), false);
+    assert.throws(() => process.kill(record.pid, 0));
+  } finally {
+    if (previousRole === undefined) delete process.env.PI_SUBAGENT_DELEGATION_ROLE;
+    else process.env.PI_SUBAGENT_DELEGATION_ROLE = previousRole;
+  }
 });
 
 test("reports temporary prompt cleanup failure instead of success", async () => {
@@ -1292,7 +1630,11 @@ const sessionFile = path.join(sessionDirectory, "2026_" + sessionId + ".jsonl");
 fs.mkdirSync(sessionDirectory, { recursive: true });
 fs.writeFileSync(sessionFile, JSON.stringify({ type: "session", version: 3, id: sessionId, timestamp: new Date().toISOString(), cwd: process.cwd() }) + "\\n");
 const recordFile = path.join(recordDirectory, path.basename(recordPath) + "." + process.pid);
-const record = { scenario, argv, cwd: process.cwd(), pid: process.pid, attemptNumber, createdAt: Date.now(), sessionFile, maxTurns: process.env.PI_SUBAGENT_MAX_TURNS, prompt: fs.readFileSync(argv[promptIndex + 1], "utf8") };
+const record = { scenario, argv, cwd: process.cwd(), pid: process.pid, attemptNumber, createdAt: Date.now(), sessionFile, maxTurns: process.env.PI_SUBAGENT_MAX_TURNS, delegationRole: process.env.PI_SUBAGENT_DELEGATION_ROLE, delegationSessionDirectory: process.env.PI_SUBAGENT_DELEGATION_SESSION_DIRECTORY, prompt: fs.readFileSync(argv[promptIndex + 1], "utf8") };
+// Install this before publishing the record: tests (and real callers) can abort
+// as soon as child startup becomes observable.
+if (scenario === "cancel" || scenario === "cancel-tree") process.on("SIGTERM", () => { recordSignal("SIGTERM"); process.exit(143); });
+if (scenario === "hang") process.on("SIGTERM", () => { recordSignal("SIGTERM"); });
 fs.writeFileSync(recordFile, JSON.stringify(record));
 const usage = scenario === "telemetry"
   ? { input: 12, output: 7, cacheRead: 3, cacheWrite: 1, contextTokens: 40, totalTokens: 23, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }
@@ -1336,8 +1678,26 @@ if (scenario === "late-session") {
     setTimeout(() => emit({ type: "message_end", message: assistant("late output") }), 20);
   }, 20);
 } else if (scenario === "cancel") {
-  process.on("SIGTERM", () => { recordSignal("SIGTERM"); process.exit(143); });
   setInterval(() => {}, 1000);
+} else if (scenario === "cancel-tree") {
+  emit({ type: "tool_execution_start", toolCallId: "scout-1", toolName: "Scout", args: { tasks: [{ title: "pending evidence", task: "wait" }] } });
+  const descendant = require("node:child_process").spawn(process.execPath, ["-e", "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)"], { stdio: "ignore" });
+  record.descendantPid = descendant.pid;
+  setTimeout(() => fs.writeFileSync(recordFile, JSON.stringify(record)), 100);
+  setInterval(() => {}, 1000);
+} else if (scenario === "nested-tree") {
+  const descendant = require("node:child_process").spawn(process.execPath, ["-e", "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)"], { stdio: "ignore" });
+  record.descendantPid = descendant.pid;
+  fs.writeFileSync(recordFile, JSON.stringify(record));
+  setInterval(() => {}, 1000);
+} else if (scenario === "exit-tree") {
+  const task = { title: "unfinished evidence", task: "wait" };
+  emit({ type: "tool_execution_start", toolCallId: "scout-1", toolName: "Scout", args: { tasks: [task] } });
+  const descendant = require("node:child_process").spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
+  descendant.unref();
+  record.descendantPid = descendant.pid;
+  fs.writeFileSync(recordFile, JSON.stringify(record));
+  emit({ type: "message_end", message: assistant("specialist complete") });
 } else if (scenario === "batch-concurrency") {
   const marker = process.env.PI_SUBAGENT_BATCH_MARKER;
   const release = process.env.PI_SUBAGENT_BATCH_RELEASE;
@@ -1358,9 +1718,8 @@ if (scenario === "late-session") {
   });
   setInterval(() => {}, 1000);
 } else if (scenario === "hang") {
-  process.on("SIGTERM", () => { recordSignal("SIGTERM"); });
   setInterval(() => {}, 1000);
-} else if (((scenario === "retry-startup" || scenario === "retry-startup-worker" || scenario === "snapshot-retry") && attemptNumber === 1) || scenario === "fail-twice" || scenario === "batch-fail-twice") {
+} else if (((scenario === "retry-startup" || scenario === "provenance-retry-startup" || scenario === "retry-startup-worker" || scenario === "snapshot-retry") && attemptNumber === 1) || scenario === "fail-twice" || scenario === "batch-fail-twice") {
   process.stderr.write("failure attempt " + attemptNumber + "\\n");
   process.exitCode = 1;
 } else if (scenario === "telemetry-retry-no-usage" && attemptNumber === 1) {
@@ -1395,6 +1754,71 @@ if (scenario === "late-session") {
   emit({ type: "message_update", usage: { ...usage, input: 4, output: 2, contextTokens: 18 }, assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: "first delta" } });
   emit({ type: "message_update", usage, assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: "second delta" } });
   emit({ type: "message_end", message: assistant("child output") });
+} else if (scenario === "nested-invalid-usage") {
+  const task = { title: "invalid usage", task: "inspect" };
+  const run = { agent: "scout", title: task.title, task: task.task, state: "succeeded", startedAt: 1, endedAt: 2, warnings: [], attempts: [{ number: 1, state: "succeeded", activity: [], messages: [], usage: { inputTokens: "7", outputTokens: 3, contextTokens: 7 }, scouts: [], stderr: "", exitCode: 0 }] };
+  emit({ type: "tool_execution_start", toolCallId: "scout-1", toolName: "Scout", args: { tasks: [task] } });
+  emit({ type: "tool_execution_end", toolCallId: "scout-1", toolName: "Scout", result: { details: { outcomes: [{ index: 0, status: "succeeded", run }] } }, isError: false });
+  emit({ type: "message_end", message: assistant("nested invalid usage") });
+} else if (scenario === "nested-negative-usage") {
+  const task = { title: "negative usage", task: "inspect" };
+  const run = { agent: "scout", title: task.title, task: task.task, state: "succeeded", startedAt: 1, endedAt: 2, warnings: [], attempts: [{ number: 1, state: "succeeded", activity: [], messages: [], usage: { inputTokens: -7, outputTokens: -3, contextTokens: -10 }, scouts: [], stderr: "", exitCode: 0 }] };
+  emit({ type: "tool_execution_start", toolCallId: "scout-1", toolName: "Scout", args: { tasks: [task] } });
+  emit({ type: "tool_execution_end", toolCallId: "scout-1", toolName: "Scout", result: { details: { outcomes: [{ index: 0, status: "succeeded", run }] } }, isError: false });
+  emit({ type: "message_end", message: assistant("nested negative usage") });
+} else if (scenario === "nested-mixed") {
+  const task = { title: "valid evidence", task: "inspect" };
+  const run = { agent: "scout", title: task.title, task: task.task, state: "succeeded", startedAt: 1, endedAt: 2, warnings: [], attempts: [] };
+  emit({ type: "tool_execution_start", toolCallId: "scout-1", toolName: "Scout", args: { tasks: [{ title: "", task: "invalid" }, task] } });
+  emit({ type: "tool_execution_end", toolCallId: "scout-1", toolName: "Scout", result: { details: { outcomes: [{ index: 0, status: "malformed", reason: "invalid" }, { index: 1, status: "succeeded", run }] } }, isError: false });
+  emit({ type: "message_end", message: assistant("nested mixed") });
+} else if (scenario === "nested-normalized-title") {
+  const task = { title: "raw   evidence\\n", task: "inspect" };
+  const run = { agent: "scout", title: "raw evidence", task: task.task, state: "succeeded", startedAt: 1, endedAt: 2, warnings: [], attempts: [] };
+  emit({ type: "tool_execution_start", toolCallId: "scout-1", toolName: "Scout", args: { tasks: [task] } });
+  emit({ type: "tool_execution_end", toolCallId: "scout-1", toolName: "Scout", result: { details: { outcomes: [{ index: 0, status: "succeeded", run }] } }, isError: false });
+  emit({ type: "message_end", message: assistant("nested normalized") });
+} else if (scenario === "nested-malformed-final") {
+  const completed = { title: "completed evidence", task: "inspect completed" };
+  const pending = { title: "bad evidence", task: "inspect pending" };
+  const run = (task, state, usage) => ({ agent: "scout", title: task.title, task: task.task, state, startedAt: 1, endedAt: state === "succeeded" ? 2 : undefined, warnings: [], attempts: [{ number: 1, state, activity: [], messages: [], usage, scouts: [], stderr: "", exitCode: state === "succeeded" ? 0 : null }] });
+  emit({ type: "tool_execution_start", toolCallId: "scout-1", toolName: "Scout", args: { tasks: [completed, pending] } });
+  emit({ type: "tool_execution_update", toolCallId: "scout-1", toolName: "Scout", partialResult: { details: { outcomes: [
+    { index: 0, status: "succeeded", run: run(completed, "succeeded", { inputTokens: 7, outputTokens: 3, contextTokens: 10 }) },
+    { index: 1, status: "running", run: run(pending, "running", { inputTokens: 1, outputTokens: 0, contextTokens: 1 }) },
+  ] } } });
+  emit({ type: "tool_execution_end", toolCallId: "scout-1", toolName: "Scout", result: { details: { outcomes: [{ index: 0, status: "succeeded", run: { agent: "scout", title: completed.title, task: completed.task } }] } }, isError: false });
+  emit({ type: "message_end", message: assistant("nested malformed") });
+} else if (scenario === "nested-error-final") {
+  const task = { title: "failed evidence", task: "inspect" };
+  emit({ type: "tool_execution_start", toolCallId: "scout-1", toolName: "Scout", args: { tasks: [task] } });
+  emit({ type: "tool_execution_end", toolCallId: "scout-1", toolName: "Scout", isError: true });
+  emit({ type: "message_end", message: assistant("nested tool failure") });
+} else if (scenario === "nested-error-partial") {
+  const completed = { title: "completed evidence", task: "inspect completed" };
+  const pending = { title: "pending evidence", task: "inspect pending" };
+  const run = (task, state, usage) => ({ agent: "scout", title: task.title, task: task.task, state, startedAt: 1, endedAt: state === "succeeded" ? 2 : undefined, warnings: [], attempts: [{ number: 1, state, activity: [], messages: [], usage, scouts: [], stderr: "", exitCode: state === "succeeded" ? 0 : null }] });
+  emit({ type: "tool_execution_start", toolCallId: "scout-1", toolName: "Scout", args: { tasks: [completed, pending] } });
+  emit({ type: "tool_execution_update", toolCallId: "scout-1", toolName: "Scout", partialResult: { details: { outcomes: [
+    { index: 0, status: "succeeded", run: run(completed, "succeeded", { inputTokens: 7, outputTokens: 3, contextTokens: 10 }) },
+    { index: 1, status: "running", run: run(pending, "running", { inputTokens: 1, outputTokens: 0, contextTokens: 1 }) },
+  ] } } });
+  emit({ type: "tool_execution_end", toolCallId: "scout-1", toolName: "Scout", isError: true });
+  emit({ type: "message_end", message: assistant("nested partial failure") });
+} else if (scenario === "nested-retry") {
+  const task = { title: "retry evidence", task: "inspect retry" };
+  const scoutRun = (input) => ({ agent: "scout", title: task.title, task: task.task, state: "succeeded", startedAt: 1, endedAt: 2, warnings: [], attempts: [{ number: 1, state: "succeeded", activity: [], messages: [], usage: { inputTokens: input, outputTokens: 1, contextTokens: input }, scouts: [], stderr: "", exitCode: 0 }] });
+  emit({ type: "tool_execution_start", toolCallId: "scout-1", toolName: "Scout", args: { tasks: [task] } });
+  emit({ type: "tool_execution_end", toolCallId: "scout-1", toolName: "Scout", args: { tasks: [task] }, result: { details: { outcomes: [{ index: 0, status: "succeeded", run: scoutRun(attemptNumber) }] } }, isError: false });
+  emit({ type: "message_end", message: assistant(attemptNumber === 1 ? "retry parent" : "retry parent final", attemptNumber === 1 ? "error" : "stop", attemptNumber === 1 ? "retry nested" : undefined) });
+} else if (scenario === "nested") {
+  const task = { title: "find evidence", task: "inspect source" };
+  const scoutRun = (text, input, output) => ({ agent: "scout", title: task.title, task: task.task, state: "succeeded", startedAt: 1, endedAt: 2, warnings: [], attempts: [{ number: 1, state: "succeeded", activity: [], messages: [], usage: { inputTokens: input, outputTokens: output, contextTokens: input }, scouts: [], stderr: "", exitCode: 0 }] });
+  emit({ type: "tool_execution_start", toolCallId: "scout-1", toolName: "Scout", args: { tasks: [task] } });
+  emit({ type: "tool_execution_update", toolCallId: "scout-1", toolName: "Scout", args: { tasks: [task] }, partialResult: { details: { outcomes: [{ index: 0, status: "running", run: { ...scoutRun("", 1, 1), state: "running" } }] } } });
+  emit({ type: "tool_execution_update", toolCallId: "scout-1", toolName: "Scout", args: {}, partialResult: { details: { outcomes: [] } } });
+  emit({ type: "tool_execution_end", toolCallId: "scout-1", toolName: "Scout", args: { tasks: [task] }, result: { details: { outcomes: [{ index: 0, status: "succeeded", run: scoutRun("final", 7, 3) }] } }, isError: false });
+  emit({ type: "message_end", message: assistant("nested parent output") });
 } else if (scenario === "stream") {
   emit({ type: "message_update", usage, assistantMessageEvent: { type: "text_delta", contentIndex: 0, delta: "partial text" } });
   emit({ type: "tool_execution_start", toolCallId: "tool-1", toolName: "read", args: { path: "src/index.ts" } });

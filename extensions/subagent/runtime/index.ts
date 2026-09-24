@@ -28,6 +28,8 @@ export const MAX_RESULT_BYTES = 50 * 1024;
 
 /** Bounds each child by turns. See `turn-budget.ts`. */
 const TURN_BUDGET_EXTENSION = fileURLToPath(new URL("./turn-budget.ts", import.meta.url));
+const DELEGATION_ROLE_ENVIRONMENT_VARIABLE = "PI_SUBAGENT_DELEGATION_ROLE";
+const DELEGATION_SESSION_DIRECTORY_ENVIRONMENT_VARIABLE = "PI_SUBAGENT_DELEGATION_SESSION_DIRECTORY";
 
 /**
  * Streaming deltas arrive per token and each published snapshot rebuilds the
@@ -82,12 +84,21 @@ export type SubagentUsage = {
   readonly contextTokens: number;
 };
 
+export type ScoutExecution = {
+  readonly toolCallId: string;
+  readonly outcomes: readonly SubagentBatchOutcome[];
+  /** True when cancellation prevented the tool's final result from arriving. */
+  readonly partial: boolean;
+};
+
 export type ProcessAttempt = {
   readonly number: 1 | 2;
   readonly state: AttemptState;
   readonly activity: readonly string[];
   readonly messages: readonly Message[];
+  /** Usage for this specialist attempt; delegated Scout usage stays in `scouts`. */
   readonly usage: SubagentUsage;
+  readonly scouts: readonly ScoutExecution[];
   readonly stderr: string;
   readonly exitCode: number | null;
   readonly error?: string;
@@ -145,6 +156,7 @@ type MutableAttempt = {
   usage: SubagentUsage;
   committedUsage: SubagentUsage;
   pendingUsage?: SubagentUsage;
+  scouts: MutableScoutExecution[];
   stderr: string;
   exitCode: number | null;
   error?: string;
@@ -163,6 +175,16 @@ type MutableRun = {
   warnings: string[];
   attempts: MutableAttempt[];
   error?: string;
+};
+
+type ScoutTask = { title: string; task: string };
+
+type MutableScoutExecution = {
+  toolCallId: string;
+  tasks: readonly (ScoutTask | undefined)[];
+  outcomes: SubagentBatchOutcome[];
+  final: boolean;
+  partial: boolean;
 };
 
 type MutableChildSessionState = {
@@ -313,6 +335,7 @@ export async function executeSubagent(
           contextTokens: run.attempts.at(-1)?.usage.contextTokens ?? ZERO_USAGE.contextTokens,
         },
         committedUsage: { ...ZERO_USAGE },
+        scouts: [],
         stderr: "",
         exitCode: null,
       };
@@ -613,6 +636,11 @@ function cloneRun(run: SubagentRun): SubagentRun {
       activity: [...attempt.activity],
       messages: attempt.messages,
       usage: { ...attempt.usage },
+      scouts: attempt.scouts.map((scout) => ({
+        toolCallId: scout.toolCallId,
+        outcomes: scout.outcomes.map(cloneOutcome),
+        partial: scout.partial,
+      })),
     })),
   };
 }
@@ -734,7 +762,10 @@ async function runAttempt(
 
     promptDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "pi-subagent-"));
     const promptPath = path.join(promptDirectory, `prompt-${definition.name}.md`);
-    await fs.writeFile(promptPath, definition.systemPrompt, { encoding: "utf8", mode: 0o600 });
+    const prompt = definition.name === "scout"
+      ? `${definition.systemPrompt}\n\nIf codex-research is unavailable, report that web research is unavailable for a task that actually needs it; continue any local research and never claim unavailable web evidence succeeded.`
+      : definition.systemPrompt;
+    await fs.writeFile(promptPath, prompt, { encoding: "utf8", mode: 0o600 });
     signal?.throwIfAborted();
 
     const args = [
@@ -759,11 +790,20 @@ async function runAttempt(
       request.task,
     ];
 
+    // Nested Scouts stay in their specialist's process group. The specialist's
+    // owner can therefore still stop them after the specialist itself exits.
+    const ownsProcessGroup = process.platform !== "win32" && !isNestedScout(definition);
     const child = spawn("pi", args, {
       cwd: ctx.cwd,
       shell: false,
+      detached: ownsProcessGroup,
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env, [BUDGET_ENVIRONMENT_VARIABLE]: String(definition.maxTurns) },
+      env: {
+        ...process.env,
+        [BUDGET_ENVIRONMENT_VARIABLE]: String(definition.maxTurns),
+        [DELEGATION_ROLE_ENVIRONMENT_VARIABLE]: definition.name,
+        [DELEGATION_SESSION_DIRECTORY_ENVIRONMENT_VARIABLE]: directory,
+      },
     });
 
     outcome = await new Promise<AttemptOutcome>((resolve) => {
@@ -776,6 +816,9 @@ async function runAttempt(
       let closed = false;
       let cancellationRequested = false;
       let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
+      let windowsTermination: Promise<void> | undefined;
+      let posixTermination: Promise<void> | undefined;
+      const trackedDescendants = new Set<number>();
 
       function discoverSessionFile(): Promise<void> {
         if (!session?.sessionId || session.file) return Promise.resolve();
@@ -802,7 +845,6 @@ async function runAttempt(
       async function finish(code: number | null, signalName: NodeJS.Signals | null): Promise<void> {
         if (closed) return;
         closed = true;
-        if (forceKillTimer) clearTimeout(forceKillTimer);
         signal?.removeEventListener("abort", cancel);
         buffer += stdoutDecoder.end();
         attempt.stderr += stderrDecoder.end();
@@ -814,7 +856,17 @@ async function runAttempt(
         } catch (error) {
           sessionDiscoveryError = error instanceof Error ? error.message : String(error);
         }
+        // The specialist can exit while its Scouts keep the process group alive.
+        // Stop and reap that group before returning or retrying this attempt.
+        if (process.platform !== "win32") {
+          markScoutUsagePartial(attempt);
+          await stopProcessTree("SIGTERM");
+          scheduleForceKill();
+          await waitForProcessTree(child.pid, ownsProcessGroup, trackedDescendants);
+          if (forceKillTimer) clearTimeout(forceKillTimer);
+        }
         if (cancellationRequested) {
+          markScoutUsagePartial(attempt);
           resolve({ succeeded: false, cancelled: true, retryable: false });
         } else if (childError) {
           resolve({ succeeded: false, error: childError });
@@ -834,25 +886,36 @@ async function runAttempt(
         }
       }
 
-      function cancel(): void {
-        if (closed || cancellationRequested) return;
-        cancellationRequested = true;
-        onCancelled();
-        try {
-          child.kill("SIGTERM");
-        } catch {
-          // The close event still determines when the process is gone.
-        }
+      function scheduleForceKill(): void {
+        if (process.platform === "win32" || forceKillTimer) return;
         forceKillTimer = setTimeout(() => {
-          if (closed) return;
-          try {
-            child.kill("SIGKILL");
-          } catch {
-            // The parent will rethrow the abort reason after cleanup.
+          if (ownsProcessGroup) {
+            void terminateProcessTree(child.pid, "SIGKILL", true);
+          } else {
+            terminateTrackedProcesses(trackedDescendants, "SIGKILL");
           }
           child.stdout?.destroy();
           child.stderr?.destroy();
         }, 5_000);
+      }
+
+      function stopProcessTree(signalName: NodeJS.Signals): Promise<void> {
+        if (process.platform !== "win32") {
+          // Discover descendants before terminating the parent: otherwise a nested
+          // Scout can be reparented before it is retained for forced cleanup.
+          posixTermination ??= terminateProcessTree(child.pid, signalName, ownsProcessGroup, trackedDescendants);
+          return posixTermination;
+        }
+        windowsTermination ??= terminateProcessTree(child.pid, signalName, ownsProcessGroup);
+        return windowsTermination;
+      }
+
+      async function cancel(): Promise<void> {
+        if (closed || cancellationRequested) return;
+        cancellationRequested = true;
+        onCancelled();
+        await stopProcessTree("SIGTERM");
+        scheduleForceKill();
       }
 
       function handleSessionHeader(id: unknown): void {
@@ -871,21 +934,13 @@ async function runAttempt(
         } catch {
           attempt.error = `Malformed JSON event: ${line.slice(0, 120)}`;
           emit();
-          try {
-            child.kill("SIGTERM");
-          } catch {
-            // The close event will report the protocol failure.
-          }
+          void stopProcessTree("SIGTERM");
           return;
         }
         if (event === null || typeof event !== "object" || Array.isArray(event) || typeof event.type !== "string") {
           attempt.error = "Malformed JSON event: expected an event object with a type";
           emit();
-          try {
-            child.kill("SIGTERM");
-          } catch {
-            // The close event will report the protocol failure.
-          }
+          void stopProcessTree("SIGTERM");
           return;
         }
 
@@ -923,13 +978,20 @@ async function runAttempt(
 
         if (event.type === "tool_execution_start") {
           attempt.activity.push(`tool ${event.toolName ?? "unknown"} started`);
+          trackScoutStart(attempt, event);
           emit();
+          return;
+        }
+
+        if (event.type === "tool_execution_update") {
+          if (trackScoutResult(attempt, event, false)) emit();
           return;
         }
 
         if (event.type === "tool_execution_end") {
           const suffix = event.isError ? " failed" : " completed";
           attempt.activity.push(`tool ${event.toolName ?? "unknown"}${suffix}`);
+          trackScoutResult(attempt, event, true);
           emit();
           return;
         }
@@ -1018,6 +1080,211 @@ async function runAttempt(
   return outcome;
 }
 
+function trackScoutStart(attempt: MutableAttempt, event: any): void {
+  if (event.toolName !== "Scout" || typeof event.toolCallId !== "string" || attempt.scouts.some((scout) => scout.toolCallId === event.toolCallId)) return;
+  const tasks = scoutTasks(event.args);
+  if (!tasks) return;
+  attempt.scouts.push({
+    toolCallId: event.toolCallId,
+    tasks,
+    outcomes: tasks.map((task, index) => task
+      ? { index, status: "queued" as const, request: { agent: "scout", ...task } }
+      : { index, status: "malformed" as const, reason: "Scout task must contain only title and task fields." }),
+    final: false,
+    partial: false,
+  });
+}
+
+function trackScoutResult(attempt: MutableAttempt, event: any, final: boolean): boolean {
+  if (event.toolName !== "Scout" || typeof event.toolCallId !== "string") return false;
+  const scout = attempt.scouts.find((candidate) => candidate.toolCallId === event.toolCallId);
+  if (!scout || scout.final) return false;
+  const result = final ? event.result : event.partialResult;
+  const outcomes = scoutOutcomes(result, scout.tasks);
+  if (!outcomes) {
+    if (final) {
+      const error = event.isError
+        ? "Scout tool failed before reporting a result."
+        : "Scout tool completed without reporting a valid result.";
+      scout.final = true;
+      scout.partial = true;
+      scout.outcomes = scout.outcomes.map((outcome) => {
+        if (outcome.status === "queued") {
+          return { index: outcome.index, status: "failed" as const, run: failedRun(outcome.request, error) };
+        }
+        if (outcome.status === "running" || outcome.status === "retrying") {
+          return { index: outcome.index, status: "failed" as const, run: failedScoutRun(outcome.run, error) };
+        }
+        return outcome;
+      });
+    }
+    return false;
+  }
+  scout.outcomes = outcomes;
+  scout.final = final;
+  return true;
+}
+
+function failedScoutRun(run: SubagentRun, error: string): SubagentRun {
+  return {
+    ...run,
+    state: "failed",
+    endedAt: Date.now(),
+    error,
+    attempts: run.attempts.map((attempt) => ({
+      ...attempt,
+      state: attempt.state === "running" ? "failed" : attempt.state,
+    })),
+  };
+}
+
+function scoutTasks(value: unknown): readonly (ScoutTask | undefined)[] | undefined {
+  if (!isRecord(value) || Reflect.ownKeys(value).length !== 1 || !Array.isArray(value.tasks)) return undefined;
+  return value.tasks.map((task): ScoutTask | undefined => {
+    if (!isRecord(task) || Reflect.ownKeys(task).length !== 2 || typeof task.title !== "string" || typeof task.task !== "string") return undefined;
+    try {
+      return { title: normalizeTitle(task.title), task: task.task };
+    } catch {
+      return undefined;
+    }
+  });
+}
+
+function scoutOutcomes(value: unknown, tasks: readonly (ScoutTask | undefined)[]): SubagentBatchOutcome[] | undefined {
+  if (!isRecord(value) || !isRecord(value.details) || !Array.isArray(value.details.outcomes) || value.details.outcomes.length !== tasks.length) return undefined;
+  const outcomes: SubagentBatchOutcome[] = [];
+  for (let index = 0; index < tasks.length; index++) {
+    const outcome = value.details.outcomes[index];
+    if (!isRecord(outcome) || outcome.index !== index || !isScoutOutcome(outcome, tasks[index])) return undefined;
+    outcomes.push(cloneOutcome(outcome as SubagentBatchOutcome));
+  }
+  return outcomes;
+}
+
+function isScoutOutcome(outcome: Record<string, any>, task: ScoutTask | undefined): boolean {
+  if (outcome.status === "malformed") return typeof outcome.reason === "string";
+  if (!task) return false;
+  if (outcome.status === "over-limit") return typeof outcome.reason === "string";
+  if (outcome.status === "queued") return isScoutRequest(outcome.request, task);
+  if (!["running", "retrying", "succeeded", "failed", "cancelled"].includes(outcome.status) || !isRecord(outcome.run)) return false;
+  const run = outcome.run;
+  return run.agent === "scout" && run.title === task.title && run.task === task.task &&
+    Array.isArray(run.warnings) && Array.isArray(run.attempts) && run.attempts.every((attempt: unknown) =>
+      isRecord(attempt) && Array.isArray(attempt.activity) && Array.isArray(attempt.messages) &&
+      isSubagentUsage(attempt.usage) && Array.isArray(attempt.scouts) && attempt.scouts.length === 0,
+    );
+}
+
+function isSubagentUsage(value: unknown): value is SubagentUsage {
+  return isRecord(value) &&
+    typeof value.inputTokens === "number" && Number.isFinite(value.inputTokens) && value.inputTokens >= 0 &&
+    typeof value.outputTokens === "number" && Number.isFinite(value.outputTokens) && value.outputTokens >= 0 &&
+    typeof value.contextTokens === "number" && Number.isFinite(value.contextTokens) && value.contextTokens >= 0;
+}
+
+function isScoutRequest(value: unknown, task: { title: string; task: string }): boolean {
+  return isRecord(value) && value.agent === "scout" && value.title === task.title && value.task === task.task;
+}
+
+function markScoutUsagePartial(attempt: MutableAttempt): void {
+  for (const scout of attempt.scouts) if (!scout.final) scout.partial = true;
+}
+
+function isNestedScout(definition: AgentDefinition): boolean {
+  return definition.name === "scout" && ["worker", "oracle", "reviewer"].includes(process.env[DELEGATION_ROLE_ENVIRONMENT_VARIABLE] ?? "");
+}
+
+async function terminateProcessTree(
+  pid: number | undefined,
+  signal: NodeJS.Signals,
+  ownsProcessGroup: boolean,
+  trackedDescendants?: Set<number>,
+): Promise<void> {
+  if (!pid) return;
+  if (process.platform === "win32") {
+    await new Promise<void>((resolve) => {
+      const taskkill = spawn("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
+      taskkill.once("error", resolve);
+      taskkill.once("close", resolve);
+    });
+    return;
+  }
+  const targets = ownsProcessGroup ? [-pid] : [...(await descendantPids(pid)).reverse(), pid];
+  if (!ownsProcessGroup) for (const target of targets) trackedDescendants?.add(target);
+  for (const target of targets) {
+    try {
+      process.kill(target, signal);
+    } catch {
+      // The close event (and group polling on cancellation) determines completion.
+    }
+  }
+}
+
+function terminateTrackedProcesses(pids: ReadonlySet<number>, signal: NodeJS.Signals): void {
+  for (const pid of pids) {
+    try {
+      process.kill(pid, signal);
+    } catch {
+      // A tracked descendant may already have exited.
+    }
+  }
+}
+
+function descendantPids(pid: number): Promise<number[]> {
+  return new Promise((resolve) => {
+    let output = "";
+    const ps = spawn("ps", ["-eo", "pid=,ppid="], { stdio: ["ignore", "pipe", "ignore"] });
+    ps.stdout?.on("data", (chunk: Buffer | string) => { output += chunk.toString(); });
+    ps.once("error", () => resolve([]));
+    ps.once("close", () => {
+      const children = new Map<number, number[]>();
+      for (const line of output.split("\n")) {
+        const match = /^\s*(\d+)\s+(\d+)\s*$/.exec(line);
+        if (!match) continue;
+        const child = Number(match[1]);
+        const parent = Number(match[2]);
+        const siblings = children.get(parent) ?? [];
+        siblings.push(child);
+        children.set(parent, siblings);
+      }
+      const descendants: number[] = [];
+      const collect = (parent: number): void => {
+        for (const child of children.get(parent) ?? []) {
+          descendants.push(child);
+          collect(child);
+        }
+      };
+      collect(pid);
+      resolve(descendants);
+    });
+  });
+}
+
+async function waitForProcessTree(pid: number | undefined, ownsProcessGroup: boolean, trackedDescendants: ReadonlySet<number>): Promise<void> {
+  if (!pid || process.platform === "win32") return;
+  while (true) {
+    const alive = ownsProcessGroup
+      ? (() => {
+        try {
+          process.kill(-pid, 0);
+          return true;
+        } catch {
+          return false;
+        }
+      })()
+      : [...trackedDescendants].some((descendant) => {
+        try {
+          process.kill(descendant, 0);
+          return true;
+        } catch {
+          return false;
+        }
+      });
+    if (!alive) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
 async function findChildSessionFile(
   directory: string,
   sessionId: string,
@@ -1064,7 +1331,27 @@ function safeTitle(title: unknown): string {
 }
 
 export function formatSubagentBatch(details: SubagentBatchDetails): string {
-  return truncateOutput(details.outcomes.map(formatSubagentOutcome).join("\n\n"));
+  const output = details.outcomes.map(formatSubagentOutcome).join("\n\n");
+  if (Buffer.byteLength(output, "utf8") <= MAX_RESULT_BYTES) return output;
+
+  // Reserve the ordered outcome states before a single oversized report consumes the output budget.
+  const statuses = details.outcomes.map(formatBatchStatus).join("\n");
+  const remaining = MAX_RESULT_BYTES - Buffer.byteLength(`${statuses}\n\n`, "utf8");
+  return remaining > 0 ? `${statuses}\n\n${truncateOutput(output, remaining)}` : truncateOutput(statuses);
+}
+
+function formatBatchStatus(outcome: SubagentBatchOutcome): string {
+  const reason = outcome.status === "malformed" || outcome.status === "over-limit"
+    ? outcome.reason
+    : outcome.status === "failed" || outcome.status === "cancelled"
+      ? failureOutput(outcome.run)
+      : "";
+  const text = `${outcome.index + 1}. ${outcome.status}${reason ? `: ${reason}` : ""}`;
+  const compact = stripTerminalSequences(text).replace(/\s+/g, " ").trim();
+  const maxBytes = 512;
+  return Buffer.byteLength(compact, "utf8") <= maxBytes
+    ? compact
+    : `${takeUtf8Prefix(compact, maxBytes - Buffer.byteLength("…", "utf8"))}…`;
 }
 
 export function formatSubagentOutcome(outcome: SubagentBatchOutcome): string {
@@ -1079,7 +1366,26 @@ export function formatSubagentOutcome(outcome: SubagentBatchOutcome): string {
     ? finalOutput(outcome.run.attempts.at(-1)?.messages ?? [])
     : failureOutput(outcome.run);
   const warnings = outcome.run.warnings.length > 0 ? `${outcome.run.warnings.join("\n")}\n` : "";
-  return truncateOutput(`${outcome.index + 1}. ${safeTitle(outcome.run.title)} — ${outcome.status}\n${warnings}${output}`);
+  // Usage must remain visible when the specialist's report is oversized.
+  return truncateOutput(`${outcome.index + 1}. ${safeTitle(outcome.run.title)} — ${outcome.status}\n${warnings}${formatUsage(outcome.run)}\n${output}`);
+}
+
+function formatUsage(run: SubagentRun): string {
+  const own = totalUsage(run.attempts);
+  const scouts = run.attempts.flatMap((attempt) => attempt.scouts);
+  if (scouts.length === 0) return "";
+  const delegated = totalUsage(scouts.flatMap((scout) => scout.outcomes.flatMap((outcome) =>
+    "run" in outcome ? outcome.run.attempts : [],
+  )));
+  return `\n\nUsage: own ↑${own.inputTokens} ↓${own.outputTokens} ctx ${own.contextTokens} | Scouts${scouts.some((scout) => scout.partial) ? " (partial)" : ""} ↑${delegated.inputTokens} ↓${delegated.outputTokens} ctx ${delegated.contextTokens}`;
+}
+
+function totalUsage(attempts: readonly Pick<ProcessAttempt, "usage">[]): SubagentUsage {
+  return attempts.reduce((total, attempt) => ({
+    inputTokens: total.inputTokens + attempt.usage.inputTokens,
+    outputTokens: total.outputTokens + attempt.usage.outputTokens,
+    contextTokens: total.contextTokens + attempt.usage.contextTokens,
+  }), { ...ZERO_USAGE });
 }
 
 function finalOutput(messages: readonly Message[]): string {
@@ -1121,6 +1427,11 @@ function snapshotRun(run: MutableRun): SubagentRun {
       activity: [...attempt.activity],
       messages: attempt.messages,
       usage: { ...attempt.usage },
+      scouts: attempt.scouts.map((scout) => ({
+        toolCallId: scout.toolCallId,
+        outcomes: scout.outcomes.map(cloneOutcome),
+        partial: scout.partial,
+      })),
       stderr: attempt.stderr,
       exitCode: attempt.exitCode,
       ...(attempt.error ? { error: attempt.error } : {}),
@@ -1148,22 +1459,23 @@ function result(details: SubagentRun, text: string): AgentToolResult<SubagentRun
   };
 }
 
-function truncateOutput(text: string): string {
+function truncateOutput(text: string, maxBytes = MAX_RESULT_BYTES): string {
   const totalBytes = Buffer.byteLength(text, "utf8");
-  if (totalBytes <= MAX_RESULT_BYTES) return text;
+  if (totalBytes <= maxBytes) return text;
+  if (maxBytes <= 0) return "";
 
-  let prefixBudget = MAX_RESULT_BYTES;
+  let prefixBudget = maxBytes;
   for (let attempt = 0; attempt < 8; attempt++) {
     const prefix = takeUtf8Prefix(text, prefixBudget);
     const omittedBytes = totalBytes - Buffer.byteLength(prefix, "utf8");
     const notice = `\n\n[Output truncated: ${omittedBytes} bytes omitted. Full output preserved in tool details.]`;
     const usedBytes = Buffer.byteLength(prefix + notice, "utf8");
-    if (usedBytes <= MAX_RESULT_BYTES) return prefix + notice;
-    prefixBudget = Math.max(0, prefixBudget - (usedBytes - MAX_RESULT_BYTES));
+    if (usedBytes <= maxBytes) return prefix + notice;
+    prefixBudget = Math.max(0, prefixBudget - (usedBytes - maxBytes));
   }
 
   const notice = "[Output truncated. Full output preserved in tool details.]";
-  return takeUtf8Prefix(notice, MAX_RESULT_BYTES);
+  return takeUtf8Prefix(notice, maxBytes);
 }
 
 function takeUtf8Prefix(text: string, maxBytes: number): string {
