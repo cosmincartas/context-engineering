@@ -318,6 +318,11 @@ type ActiveSubagentSession = {
 
 export default function subagentExtension(pi: ExtensionAPI): void {
   let activeSession: ActiveSubagentSession | undefined;
+  let promptOptions: { skills?: { filePath: string }[] } | undefined;
+
+  // Keep the options object: later before_agent_start handlers may filter its skills.
+  pi.on("before_agent_start", (event) => { promptOptions = event.systemPromptOptions; });
+  const sessionSkillPaths = () => (promptOptions?.skills ?? []).map((skill) => skill.filePath);
 
   pi.on("session_shutdown", async (_event, ctx) => {
     const session = activeSession;
@@ -356,12 +361,24 @@ export default function subagentExtension(pi: ExtensionAPI): void {
     const delegationRole = process.env[DELEGATION_ROLE_ENVIRONMENT_VARIABLE];
     const delegationSessionDirectory = process.env[DELEGATION_SESSION_DIRECTORY_ENVIRONMENT_VARIABLE];
     // Windows cannot retain nested process ownership after a specialist exits.
-    const isDelegationSession = process.platform !== "win32" && ctx.mode === "json" &&
-      DELEGATION_ROLES.has(delegationRole ?? "") &&
+    const isDelegationSession = ctx.mode === "json" &&
+      (DELEGATION_ROLES.has(delegationRole ?? "") || delegationRole === "scout") &&
       typeof delegationSessionDirectory === "string" &&
       delegationSessionDirectory !== "" &&
       ctx.sessionManager.getSessionDir() === delegationSessionDirectory;
     if (isDelegationSession) {
+      const allowed = new Set<string>(
+        (await loadBundledAgents(new URL("./agents/", import.meta.url)))
+          .find((agent) => agent.name === delegationRole)?.tools ?? [],
+      );
+      if (allowed.has("find")) allowed.add("fffind");
+      if (allowed.has("grep")) allowed.add("ffgrep");
+      pi.on("tool_call", (event) => {
+        if (!allowed.has(event.toolName)) {
+          return { block: true, reason: `Tool ${event.toolName} is unavailable to ${delegationRole}. Report questions to the parent agent.` };
+        }
+      });
+      if (delegationRole === "scout" || process.platform === "win32") return;
       let root: string | undefined;
       try {
         const catalog = await loadBundledAgents(new URL("./agents/", import.meta.url));
@@ -401,6 +418,7 @@ export default function subagentExtension(pi: ExtensionAPI): void {
             const combinedSignal = signal
               ? AbortSignal.any([session.abortController.signal, signal])
               : session.abortController.signal;
+            const skillPaths = sessionSkillPaths();
             const execution = loadProfileSettings().then(async (store) => {
               const batch = await executeSubagentBatch(
                 toolCallId,
@@ -416,6 +434,7 @@ export default function subagentExtension(pi: ExtensionAPI): void {
                   publish();
                 }, onMonitorEvent: () => {} },
                 store.snapshot(),
+                skillPaths,
               );
               for (const [batchIndex, outcome] of batch.details.outcomes.entries()) {
                 outcomes[acceptedTasks[batchIndex].index] = { ...outcome, index: acceptedTasks[batchIndex].index } as SubagentBatchOutcome;
@@ -498,6 +517,7 @@ export default function subagentExtension(pi: ExtensionAPI): void {
             thinkingLevel: toolContext.thinkingLevel ?? pi.getThinkingLevel(),
             modelRegistry,
           };
+          const skillPaths = sessionSkillPaths();
           const execution = loadProfileSettings().then((store) => executeSubagentBatch(
             toolCallId,
             params,
@@ -510,6 +530,7 @@ export default function subagentExtension(pi: ExtensionAPI): void {
               onMonitorEvent: session.ui!.onMonitorEvent,
             },
             store.snapshot(),
+            skillPaths,
           ));
           session.executions.add(execution);
           void execution.then(

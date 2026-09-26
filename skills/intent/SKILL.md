@@ -30,7 +30,7 @@ Turn an initial development prompt into a shared, user-validated understanding o
 
 ## Boundaries
 
-- Do not write requirements, design, tasks, or `FR-*`/`NFR-*`/`AC-*` identifiers. Capture success signals in ordinary language.
+- Do not write requirements, design, tasks, or `FR-*`/`NFR-*`/`AC-*` identifiers. Define done as the desired outcome and its observable success signals, in ordinary language. Leave precise acceptance criteria to the specification.
 - If the user only wants an explanation or an impact assessment, direct them to `explore`.
 - Capture a proposed solution as intent or an assumption. Defer solution alternatives to design.
 - Do not ask about APIs, schemas, libraries, or architecture unless the user has already stated the answer as a constraint. Infer Affected components from repository evidence; do not ask the user to name them.

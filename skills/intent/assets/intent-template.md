@@ -23,7 +23,7 @@ updated: "{{YYYY-MM-DD}}"
 
 ## Proposed outcome
 
-{{The desired outcome and its success signals in ordinary language, with their sources.}}
+{{State the Definition of Done in ordinary language: the user-visible result and the signals that show it is complete. Give each statement its source. Leave precise acceptance tests and implementation details to the specification.}}
 
 ## Affected users
 

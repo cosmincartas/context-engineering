@@ -33,6 +33,8 @@ function harness(
 ) {
   let sessionStart: ((event: unknown, ctx: any) => Promise<void>) | undefined;
   let sessionShutdown: ((event: unknown, ctx: any) => Promise<void>) | undefined;
+  let beforeAgentStart: ((event: any) => void) | undefined;
+  let toolCall: ((event: any) => any) | undefined;
   const tools: any[] = [];
   const commands = new Map<string, any>();
   let thinkingLevel = "medium";
@@ -83,6 +85,8 @@ function harness(
     on(event: string, handler: any) {
       if (event === "session_start") sessionStart = handler;
       else if (event === "session_shutdown") sessionShutdown = handler;
+      else if (event === "before_agent_start") beforeAgentStart = handler;
+      else if (event === "tool_call") toolCall = handler;
       else assert.fail(`unexpected event ${event}`);
     },
     registerTool(tool: any) {
@@ -127,6 +131,8 @@ function harness(
     notifications,
     messages,
     messageRenderers,
+    setSkills(skills: { filePath: string }[]) { beforeAgentStart?.({ systemPromptOptions: { skills } }); },
+    callTool(name: string) { return toolCall?.({ toolName: name }); },
     failSendMessage(error: Error) { sendMessageError = error; },
     uiState,
     context,
@@ -195,6 +201,9 @@ test("registers Scout only for provenance-verified specialist JSON children", as
         const [tool] = testHarness.tools;
         assert.equal(tool.name, "Scout");
         assert.equal(tool.executionMode, "parallel");
+        assert.equal(testHarness.callTool("AskUserQuestion")?.block, true);
+        assert.equal(testHarness.callTool("read"), undefined);
+        assert.equal(testHarness.callTool("Scout"), undefined);
         assert.deepEqual(tool.parameters.required, ["tasks"]);
         assert.throws(() => validateToolArguments(tool, {
           type: "toolCall", id: "extra", name: "Scout", arguments: { tasks: [], role: "scout" },
@@ -210,6 +219,10 @@ test("registers Scout only for provenance-verified specialist JSON children", as
       (await loadExtension())(testHarness.pi);
       await testHarness.start("json");
       assert.equal(testHarness.tools.length, 0, `${role} must not gain Scout from active tools`);
+      if (role === "scout") {
+        assert.equal(testHarness.callTool("AskUserQuestion")?.block, true);
+        assert.equal(testHarness.callTool("Scout")?.block, true);
+      }
     }
   } finally {
     if (previousRole === undefined) delete process.env.PI_SUBAGENT_DELEGATION_ROLE;
@@ -359,7 +372,7 @@ const tasks = cancelled ? [{ title: "cancelled evidence", task: "cancel" }] : [
   { title: "extra", task: "fifth request" },
 ];
 (async () => {
-  let onStart, onShutdown, scoutTool;
+  let onStart, onShutdown, onBefore, scoutTool;
   const context = {
     mode: "json", hasUI: false, cwd: process.cwd(), model: { provider: "openai-codex", id: "parent" }, thinkingLevel: "medium",
     modelRegistry: { getAvailable: () => [] },
@@ -367,10 +380,11 @@ const tasks = cancelled ? [{ title: "cancelled evidence", task: "cancel" }] : [
   };
   const extension = await import(process.env.PI_SUBAGENT_E2E_EXTENSION);
   extension.default({
-    on(event, handler) { if (event === "session_start") onStart = handler; else if (event === "session_shutdown") onShutdown = handler; },
+    on(event, handler) { if (event === "session_start") onStart = handler; else if (event === "session_shutdown") onShutdown = handler; else if (event === "before_agent_start") onBefore = handler; },
     registerTool(tool) { scoutTool = tool; }, getAllTools() { return []; }, getActiveTools() { return []; }, getThinkingLevel() { return "medium"; },
   });
   await onStart({}, context);
+  onBefore({ systemPromptOptions: { skills: argv.flatMap((arg, index) => arg === "--skill" ? [{ filePath: argv[index + 1] }] : []) } });
   if (!scoutTool) throw new Error("specialist did not register Scout");
   emit({ type: "tool_execution_start", toolName: "Scout", toolCallId: "nested", args: { tasks } });
   const result = await scoutTool.execute("nested", { tasks }, undefined, (partialResult) =>
@@ -392,6 +406,7 @@ const tasks = cancelled ? [{ title: "cancelled evidence", task: "cancel" }] : [
   (await loadExtension())(testHarness.pi);
   try {
     await testHarness.start("tui");
+    testHarness.setSkills([{ filePath: "/tmp/ponytail/SKILL.md" }, { filePath: "/tmp/codebase-design/SKILL.md" }]);
     const [agent] = testHarness.tools;
     const updates: any[] = [];
     const pending = agent.execute(
@@ -431,7 +446,9 @@ const tasks = cancelled ? [{ title: "cancelled evidence", task: "cancel" }] : [
     const specialist = spawned.find((entry: any) => entry.role === "worker");
     const scout = spawned.find((entry: any) => entry.role === "scout" && entry.argv.some((argument: string) => argument.includes("codex-research")));
     assert.ok(specialist?.argv[specialist.argv.indexOf("--tools") + 1]?.split(",").includes("Scout"), "specialist received its approved Scout delegation tool");
+    assert.deepEqual(specialist?.argv.slice(specialist.argv.indexOf("--no-skills") + 1, specialist.argv.indexOf("--model")), ["--skill", "/tmp/ponytail/SKILL.md", "--skill", "/tmp/codebase-design/SKILL.md"]);
     assert.equal(scout?.argv[scout.argv.indexOf("--tools") + 1], "read,grep,find,ls,codex-research");
+    assert.deepEqual(scout?.argv.slice(scout.argv.indexOf("--no-skills") + 1, scout.argv.indexOf("--model")), ["--skill", "/tmp/ponytail/SKILL.md", "--skill", "/tmp/codebase-design/SKILL.md"]);
     assert.equal(testHarness.messages.length, 0);
   } finally {
     await testHarness.shutdown().catch(() => {});

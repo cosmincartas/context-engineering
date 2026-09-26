@@ -242,6 +242,7 @@ export async function executeSubagent(
   signal: AbortSignal | undefined,
   callbacks: SubagentRuntimeCallbacks,
   dispatchSnapshot?: DispatchSnapshot,
+  skillPaths: readonly string[] = [],
 ): Promise<AgentToolResult<SubagentRun>> {
   if (typeof runId !== "string" || runId.trim() === "") {
     throw new TypeError("Invalid subagent request: run id must not be blank");
@@ -361,6 +362,7 @@ export async function executeSubagent(
         emit,
         stream,
         onCancelled,
+        skillPaths,
       );
       if (outcome.cancelled) {
         run.state = "cancelled";
@@ -443,6 +445,7 @@ export async function executeSubagentBatch(
   signal: AbortSignal | undefined,
   callbacks: SubagentBatchRuntimeCallbacks,
   settings: ProfileSettingsSnapshot = { settings: { version: 1, agents: {} } },
+  skillPaths: readonly string[] = [],
 ): Promise<AgentToolResult<SubagentBatchDetails>> {
   if (typeof batchId !== "string" || batchId.trim() === "") {
     throw new TypeError("Invalid subagent batch request: batch id must not be blank");
@@ -482,6 +485,7 @@ export async function executeSubagentBatch(
           },
         },
         dispatchSnapshot,
+        skillPaths,
       );
       finalOutcome = {
         index: outcome.index,
@@ -743,6 +747,7 @@ async function runAttempt(
   emit: () => void,
   stream: StreamEmitter,
   onCancelled: () => void,
+  skillPaths: readonly string[],
 ): Promise<AttemptOutcome> {
   let promptDirectory: string | undefined;
   let session: MutableChildSessionState | undefined;
@@ -773,6 +778,7 @@ async function runAttempt(
       "json",
       "-p",
       "--no-skills",
+      ...skillPaths.flatMap((skill) => ["--skill", skill]),
       "--model",
       model,
       "--thinking",
