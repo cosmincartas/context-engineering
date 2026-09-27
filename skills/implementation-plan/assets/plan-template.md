@@ -2,7 +2,6 @@
 schema_version: 1
 artifact: implementation-plan
 subject: "{{subject}}"
-status: draft
 spec: "{{source specification path, relative to this plan or absolute}}"
 spec_sha256: "{{SHA-256 of the exact specification bytes}}"
 repository_baseline: "{{commit or unavailable}}"
@@ -13,12 +12,12 @@ updated: "{{YYYY-MM-DD}}"
 
 # {{Subject}} Implementation Plan
 
-<!-- Use ASD-STE100 Simplified Technical English. Remove template instructions and unused placeholders before final approval. -->
+<!-- Use ASD-STE100 Simplified Technical English. Remove template instructions and unused placeholders before you present the plan for review. -->
 
 ## Source and Execution Boundaries
 
 This plan implements only the included requirements of the referenced specification.
-Before execution, confirm that the specification remains validated and its exact content matches `spec_sha256`.
+Before execution, confirm that the specification's exact content matches `spec_sha256`.
 Resolve relative specification paths against this plan's folder. Resolve relative intent paths against the specification's folder.
 For file-based intent, verify the specification's `intent_sha256` against its source file. Stop on missing sources or mismatched hashes.
 For conversation-supplied intent, require recorded intent content and `intent_sha256: not applicable` in the specification.
@@ -96,14 +95,3 @@ Do not refresh source hashes without reviewing changes and obtaining approval fo
   - Prerequisites: {{required completed tasks and environment}}
   - Expected result: {{observable acceptance condition}}
   - Coverage: {{included requirement identifiers}}
-
-## Approval Records
-
-<!-- Use Pending before first approval. Add a record only after explicit approval of the complete saved plan. -->
-<!-- Preserve earlier records. Mark affected approvals superseded when revising the plan. -->
-
-- **Revision:** {{sequential approved revision number}}
-  - Approved content: {{task set and scope approved in this revision}}
-  - Evidence: {{user approval statement and date or available message reference}}
-  - Delegation: {{explicit delegation and limits, or none}}
-  - Validity: {{current or superseded, with reason}}

@@ -1,12 +1,12 @@
 ---
 name: implementation-plan
-description: Create a validated implementation plan from an approved specification. Inspect repository evidence, define verifiable tasks, and map included requirements to verification. Do not design new scope or execute the plan.
+description: Create an implementation plan from a reviewed specification. Inspect repository evidence, define verifiable tasks, and map included requirements to verification. Do not design new scope or execute the plan.
 ---
 
 # Implementation Plan
 
 Turn an approved specification into a plan that an implementer can use in a fresh session.
-The user controls scope and approves the complete plan. Draft implementation details autonomously within the approved specification.
+The user controls scope and reviews the complete plan. Draft implementation details autonomously within the approved specification.
 This skill works independently of the workflow that created the specification.
 
 ## Language
@@ -17,13 +17,13 @@ Preserve quoted input, identifiers, required signatures, and commands exactly.
 
 ## Inputs and output
 
-- Require a specification file with `artifact: spec` and `status: validated`.
-- Accept any validated specification with the required artifact fields. Do not require fixed section numbering.
+- Require a specification file with `artifact: spec`. Treat open ledger rows or unresolved blocking issues as a blocker.
+- Accept any specification with the required artifact fields. Do not require fixed section numbering.
 - If no specification is supplied, ask for its path or topic folder.
-- If the specification is missing, unapproved, or inconsistent, explain the blocker and stop.
-- Do not start another skill or approve the specification on the user's behalf.
+- If the specification is missing, blocked, or inconsistent, explain the blocker and stop.
+- Do not start another skill or resolve specification blockers on the user's behalf.
 - Save `plan.md` beside the source specification using [assets/plan-template.md](assets/plan-template.md).
-- Read an existing plan before writing. Ask before replacing it or revising approved content.
+- Read an existing plan before writing. Ask before replacing or revising it.
 - Keep the specification and its intent unchanged.
 
 ## Boundaries and interaction
@@ -105,30 +105,29 @@ Map every included FR and NFR to at least one task and its verification.
 Include integration or end-to-end checks when isolated task checks cannot establish an approved acceptance condition.
 Do not use "code written" or "task completed" as verification.
 
-### 4. Review and approve
+### 4. Review
 
-1. Complete the checks below and save the entire plan with `status: draft` at the first review presentation.
+1. Complete the checks below and save the entire plan at the first review presentation.
 2. Present the saved path, task order, dependencies, requirement coverage, and material concerns.
 3. Keep the recap concise. Offer to expand any task without replacing the saved complete plan.
-4. Ask the user to approve the complete plan. Apply requested corrections in place.
-5. Recheck source freshness and repository evidence before final approval. Explain any changes since drafting.
-6. After explicit approval, record the approved content and approval evidence. Set `status: validated`.
-7. Report the plan path as input for a separate execution skill and stop. Do not start execution.
+4. Invite the user to review the complete plan. Apply requested corrections in place and present what changed.
+5. Recheck source freshness and repository evidence after corrections. Explain any changes since drafting.
+6. Report the plan path as input for a separate execution skill and stop. Do not start execution.
 
 ## Source freshness and continuation
 
 Resolve relative `spec` paths against the plan folder. Resolve relative `intent` paths against the specification folder.
-For file-based intent, require its source file and matching `intent_sha256` before planning and final validation.
+For file-based intent, require its source file and matching `intent_sha256` before planning and after corrections.
 For conversation-supplied intent, accept `intent_sha256: not applicable` only when the specification records the supplied intent.
 If a required source or hash is missing, explain the blocker. Do not fabricate a hash or silently bypass the check.
 
 On resume or a conversation branch change, read the plan, source specification, and relevant supporting files again.
 Compare the saved `spec_sha256` with the current source. Recheck upstream intent freshness.
-Verify recorded supporting-file hashes on resume and before final validation. Treat missing or changed files as source staleness.
+Verify recorded supporting-file hashes on resume and after corrections. Treat missing or changed files as source staleness.
 Inspect relevant repository changes against the recorded baseline, including uncommitted changes. Reassess affected tasks before continuing.
 If Git metadata is unavailable, state the limit and inspect current relevant files directly.
-Use saved approvals rather than absent conversation history. Ask before reopening or replacing an approved plan.
-Before the first draft is saved, interrupted planning restarts from the approved specification and current repository evidence.
+Use the saved plan rather than absent conversation history. Ask before replacing an existing plan.
+Before the plan is saved, interrupted planning restarts from the specification and current repository evidence.
 Report write failures and stop. Never claim unsaved work can be resumed.
 
 ## Corrections
@@ -137,14 +136,14 @@ Report write failures and stop. Never claim unsaved work can be resumed.
 - Never refresh a hash merely to hide staleness. Review the changed source and obtain approval for affected content first.
 - If intent changes, request intent review before dependent specification or plan revisions.
 - If scope, acceptance, UI, contracts, or architecture change, request specification review through `design-specs` or its original workflow.
-- Do not edit upstream artifacts or start another skill automatically. Resume after the corrected specification is validated.
-- If only task order, grouping, or verification changes, revise the plan and request plan approval.
+- Do not edit upstream artifacts or start another skill automatically. Resume after the specification is corrected.
+- If only task order, grouping, or verification changes, revise the plan and present the change for review.
 - Private structural choices within approved constraints do not require specification approval.
-- Before revising a validated plan, explain the impact and set its status to draft. Supersede the affected approval record.
+- Before revising a saved plan, explain the impact.
 
 ## Completion checks
 
-- The source specification is validated, current, and free of implementation-blocking issues.
+- The source specification is current and free of implementation-blocking issues.
 - Only included requirements appear in task coverage. Every included FR and NFR maps to tasks and observable verification.
 - Every task has a stable identifier, one outcome, an entry point, dependencies, and a specification or repository justification.
 - Dependency identifiers exist, have no cycles, and precede dependent tasks.
@@ -153,6 +152,6 @@ Report write failures and stop. Never claim unsaved work can be resumed.
 - Existing changes, known failures, unexecuted checks, and unavailable evidence are clearly distinguished.
 - Tasks preserve the approved scope, contracts, invariants, and architecture without freezing incidental private structure.
 - The plan contains no unresolved consequential design decision disguised as implementation work.
-- The saved plan contains source hashes, repository findings, implementation discretion, correction rules, and approval evidence.
-- The artifact and recap follow the language rules. No unused placeholders remain at final approval.
-- Final validated status follows explicit user approval. No implementation work has started.
+- The saved plan contains source hashes, repository findings, implementation discretion, and correction rules.
+- The artifact and recap follow the language rules. No unused placeholders remain.
+- No implementation work has started.
