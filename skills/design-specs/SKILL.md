@@ -1,6 +1,6 @@
 ---
 name: design-specs
-description: Create system design specifications from intent and requirements or user stories. The user selects scope and approves UI and architecture before autonomous detail drafting. Stop at the approved specification.
+description: Create system design specifications from intent and requirements or user stories. The user selects scope and approves UI and architecture before autonomous detail drafting. Stop at the reviewed specification.
 ---
 
 # Design Specifications
@@ -91,7 +91,7 @@ Review these categories in this order:
 Each ledger row records its status, decision or section reference, and any unresolved issue.
 Use `open`, `drafted`, `approved`, or `not applicable`. Explain each `not applicable` decision.
 Do not mark a category complete merely because it was discussed.
-UI and HLD require approval before dependent work. Other applicable categories remain drafted until final approval.
+UI and HLD require approval before dependent work. Other applicable categories remain drafted; the user's review corrects them in place.
 Do not create classes, models, or contracts merely to fill a category.
 
 ### 3. Review UI
@@ -138,7 +138,7 @@ Use repository-language signatures when exact syntax matters. Replace executable
 Leave private decomposition to implementation unless an approved constraint requires it.
 Do not invent design elements without an included requirement or an established repository constraint.
 
-### 6. Validate the specification
+### 6. Review the specification
 
 1. Check scope, UI, and HLD approvals against the complete draft.
 2. Check every ledger category. Explain omitted categories and resolve blocking unknowns.
@@ -146,14 +146,13 @@ Do not invent design elements without an included requirement or an established 
 4. Check that excluded and deferred requirements did not enter the design.
 5. Check that contracts agree with models, interfaces, behavior, and failure responses. Check all output against the language rules.
 6. Present the saved path, completed ledger, requirements coverage, and details added after HLD approval.
-7. Ask the user to approve the complete specification. Apply corrections and repeat affected checks.
-8. Set `status: validated` only after explicit final approval. Mark applicable ledger categories approved.
-9. Report the artifact path and stop. Do not generate an implementation plan.
+7. Invite the user to review the complete specification. Apply corrections, repeat affected checks, and present what changed.
+8. Report the artifact path and stop. Do not generate an implementation plan.
 
 ## Artifact structure and continuation
 
 Read [assets/spec-template.md](assets/spec-template.md) before creating the draft specification. Use it as the artifact template.
-Fill applicable sections and explain omitted categories in the ledger. Remove template instructions and unused placeholders before final validation.
+Fill applicable sections and explain omitted categories in the ledger. Remove template instructions and unused placeholders before you present the specification for review.
 Preserve requirement identifiers, sources, selection decisions, and approval records. Keep the ledger order defined by this skill.
 
 Record the supplied intent in the artifact when no source file exists. Preserve its meaning and distinguish quotations from synthesis.
@@ -166,12 +165,12 @@ Use saved decisions, not missing conversation history. Resume from the earliest 
 Explain that saved approvals remain authoritative when navigating to older conversation points. Ask before reopening or replacing those decisions.
 Compare the repository baseline and inspect relevant working-tree changes. Recheck dependent facts and reopen gates affected by material changes.
 Record the current baseline after resolving those changes. State when repository comparison is unavailable.
-For file-based intent, compare its current hash with the saved hash before continuing and before final validation.
+For file-based intent, compare its current hash with the saved hash before continuing and after corrections.
 If the source changed, stop and present the impact. Request approval for affected decisions before updating the recorded hash.
 Treat branch summaries as evidence, not approval. Do not overwrite an approved specification with an alternative design without permission.
 
 When a correction changes approved scope, UI, or HLD, reopen the earliest affected gate.
 Explain the change and downstream effects. Retain unaffected approvals and obtain approval again for affected decisions.
 If the correction changes supplied intent, request an explicit intent revision before dependent work.
-When revising a validated specification, warn that dependent plans require review. Set the specification to draft before revision.
+When revising a specification that has a dependent plan, warn that the plan requires review.
 Report write failures and stop. Never claim unsaved work can be resumed.

@@ -2,7 +2,6 @@
 schema_version: 1
 artifact: spec
 subject: "{{subject}}"
-status: draft
 intent: "{{source path or supplied in conversation}}"
 intent_sha256: "{{source file SHA-256 or not applicable}}"
 repository_baseline: "{{commit or unavailable}}"
@@ -62,7 +61,7 @@ updated: "{{YYYY-MM-DD}}"
 ## Framed Ledger
 
 <!-- Use open, drafted, approved, or not applicable. Explain every not applicable decision. -->
-<!-- Mark UI and HLD approved only after their gates. Other applicable rows remain drafted until final approval. -->
+<!-- Mark UI and HLD approved only after their gates. Other applicable rows remain drafted. -->
 
 | Category | Status | Decision or section reference | Open issue or omission reason |
 |---|---|---|---|
@@ -79,7 +78,7 @@ updated: "{{YYYY-MM-DD}}"
 ### Approval Records
 
 <!-- Record actual approval evidence. A heading or completed section is not approval. -->
-<!-- Add records for scope, applicable UI, HLD, and final approval as each occurs. -->
+<!-- Add records for scope, applicable UI, and HLD as each gate occurs. -->
 <!-- Mark affected records superseded when decisions change. Preserve unaffected approvals. -->
 
 - **{{gate}}** — {{approved content and decision summary}}
@@ -210,7 +209,7 @@ updated: "{{YYYY-MM-DD}}"
 
 ## Open Issues
 
-<!-- Write "None" when no issues remain. Resolve blocking issues before final approval. -->
+<!-- Write "None" when no issues remain. Resolve blocking issues before you present the specification for review. -->
 
 - **{{issue}}** — {{source and consequence}}
   - Blocks: {{affected decision or none}}
