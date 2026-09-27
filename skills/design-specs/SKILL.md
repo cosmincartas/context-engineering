@@ -35,6 +35,7 @@ Write requirements with "must", not "shall" or "should". Preserve quoted input, 
 - Verify uncertain external technology claims with current primary sources. Record source URLs and the research date.
 - User approval accepts a choice. It does not verify a technical fact.
 - Ask focused questions with `AskUserQuestion` when available. Otherwise, ask in chat.
+- Exception: request UI and HLD approval in a chat message only. Do not use `AskUserQuestion` or another question tool.
 - Group questions only when they share a subject and their answers are independent.
 - Highlight conflicts, feasibility limits, security risks, data-loss risks, and compatibility concerns before dependent design work.
 - Explain each concern, its evidence, its consequence, and the smallest suitable alternative.
@@ -100,8 +101,10 @@ Do not create classes, models, or contracts merely to fill a category.
 3. Otherwise, present `UI-*` entries with screens or controls, states, input effects, and related `FR-*` identifiers.
 4. Show a suitable mock or wireframe. Cover applicable loading, empty, error, access, and narrow-display states.
 5. Explain accessibility behavior and concerns within the approved requirements.
-6. Ask the user to approve or change the UI. Revise until approved.
-7. Record approval before starting HLD review.
+6. Present the complete UI design in one chat message. End the message with a request to approve or change the UI.
+7. Do not call a question tool for this gate. End the turn and wait for the user's reply.
+8. Revise until approved. Present each revision in the same manner.
+9. Record approval before starting HLD review.
 
 ### 4. Review architecture
 
@@ -112,8 +115,10 @@ Do not create classes, models, or contracts merely to fill a category.
 5. Record consequential choices, evidence, assumptions, and trade-offs. Preserve explicit user choices unless an approved correction changes them.
 6. Reuse existing code, standard libraries, native features, and installed dependencies before proposing new abstractions or dependencies.
 7. Justify each new dependency or abstraction with an included requirement and an unmet present need.
-8. Present the HLD and consequential decisions together. Ask the user to approve or change them.
-9. Record approval before drafting dependent details.
+8. Present the HLD and consequential decisions together in one chat message. End the message with a request to approve or change them.
+9. Do not call a question tool for this gate. End the turn and wait for the user's reply.
+10. Revise until approved. Present each revision in the same manner.
+11. Record approval before drafting dependent details.
 
 ### 5. Draft remaining design autonomously
 
