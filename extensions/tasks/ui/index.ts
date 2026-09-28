@@ -71,6 +71,11 @@ function fallbackText(result: AgentToolResult<unknown>): Component {
   return new Text(text || "(no output)", 0, 0);
 }
 
+export function renderTaskClearResult(result: AgentToolResult<{ cleared: number }>): Component {
+  if (typeof result.details?.cleared !== "number") return fallbackText(result);
+  return new Text(`Cleared ${result.details.cleared} tasks`, 0, 0);
+}
+
 export function renderTaskResult(
   result: AgentToolResult<Task>,
   _options: ToolRenderResultOptions,

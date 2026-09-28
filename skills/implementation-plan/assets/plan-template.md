@@ -1,6 +1,7 @@
 ---
 schema_version: 1
 artifact: implementation-plan
+status: "{{draft or validated; validated only after final direct or delegated approval}}"
 subject: "{{subject}}"
 spec: "{{source specification path, relative to this plan or absolute}}"
 spec_sha256: "{{SHA-256 of the exact specification bytes}}"
@@ -50,6 +51,14 @@ For changed intent, request intent review first. Reassess downstream approvals a
 For task order, grouping, or verification changes within the approved specification, request plan revision through `implementation-plan`.
 Private structural changes within approved constraints require verification, not another design approval.
 Do not refresh source hashes without reviewing changes and obtaining approval for affected content.
+
+## Approval Record
+
+<!-- Record direct approval or quickie delegation, the approved plan, evidence, and limits. Never claim direct review for delegated approval. -->
+
+- **Decision:** {{direct approval, delegated approval, or pending}}
+- **Evidence:** {{user statement and date or quickie invocation and date}}
+- **Limits:** {{delegation boundaries or none}}
 
 ## Repository Findings
 

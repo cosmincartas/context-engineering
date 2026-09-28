@@ -8,13 +8,13 @@ Model-agnostic skills turn an initial development prompt into reusable context, 
 |---|---|---|
 | Understand a concept, compare technologies, inspect implementation impact, see examples, or see candidate high-level designs for a request | `explore` | Chat response or optional technical exploration brief, with a side-by-side designs page for design candidates |
 | Plan delivery work, from scope isolation to an implementation plan, or resume a planning topic | `sdlc` | Validated intent, specification, and implementation plan |
-| Plan one small and clear change in a single session | `quickie` | Validated quick plan: understanding, scope, acceptance criteria, and tasks |
+| Auto-plan a change with input only for disruptive decisions | `quickie` | Validated specification and implementation plan |
 
 The delivery pipeline lives in one skill:
 
 ```text
 explore (optional) → sdlc: intent → requirements → design → plan
-explore (optional) → quickie: align → plan
+explore (optional) → quickie: design-specs (delegated) → implementation-plan (delegated)
 ```
 
 The `sdlc` pipeline is heavily inspired by Anthropic's [AI-native SDLC playbook](https://claude.com/blog/the-ai-native-sdlc-playbook). It adapts the playbook's phased, artifact-driven approach into skills that run inside the coding agent.
@@ -23,9 +23,9 @@ The `sdlc` pipeline is heavily inspired by Anthropic's [AI-native SDLC playbook]
 
 Specifications fix required behavior, contracts, invariants, and consequential technical decisions. Private implementation structure remains discretionary within those constraints. Designs check existing code and capabilities before adding abstractions or dependencies. When the user requests the complete pipeline, artifact approval advances to the next phase without a separate continuation prompt.
 
-`quickie` covers one deliverable that fits five tasks or fewer, changes no public contract, and has no open design decision. When a criterion fails, it stops and hands the confirmed understanding to `sdlc`.
+`quickie` accepts a request or intent file and delegates routine approvals while running `design-specs` and `implementation-plan`. It pauses for disruptive scope, contract, security, compatibility, or architecture decisions. It never implements the plan.
 
-`explore` is standalone. Its findings enter the delivery path only after the user explicitly chooses to formalize the work. Every delivery topic starts with the context phase, including requests that appear clear. Each phase ends with a user-validated artifact, and the topic can stop and resume at any phase.
+`explore` is standalone. Its findings enter the delivery path only after the user explicitly chooses to formalize the work. Every delivery topic starts with the context phase, including requests that appear clear. In `sdlc`, each phase ends with a user-validated artifact. In `quickie`, delegated approval is recorded instead; the topic can resume at any phase.
 
 ## Usage
 
@@ -39,7 +39,7 @@ Use sdlc to resume the payment-retries topic.
 ```
 
 ```text
-Use quickie to plan this small change.
+Use quickie to create a specification and plan for this change. Ask only about disruptive decisions.
 ```
 
 Named-skill invocation syntax varies by runtime.
@@ -52,17 +52,16 @@ One topic is one folder: `docs/agentic-engineering/<subject>/`.
 |---|---|---|
 | Technical exploration, when requested | `docs/agentic-engineering/explorations/` | Optional draft → validated |
 | Design candidates page, when explore runs in Design mode | `explorations/<YYYY-MM-DD>/<subject>-designs.html` | Supporting file of the exploration brief; no status |
-| Quick plan | `quickie/<YYYY-MM-DD>-<subject>.md` | Draft → validated; no upstream hash |
 | Intent | `<subject>/intent.md` | Draft checkpoints → validated |
 | Specification | `<subject>/spec.md` | Draft checkpoints → validated |
 | UI mocks, when the slice has a visual layer | `<subject>/ui.html` | Supporting file of the specification; no status |
 | Implementation plan | `<subject>/plan.md` | Draft → validated; execution state belongs to the implementer |
 
-Each `sdlc` artifact records the SHA-256 hash of its exact upstream file, so a change to a validated artifact marks everything downstream as stale. Artifacts are not committed without explicit user consent. Ignored artifacts resume only in the current working copy; commit them when recovery across machines matters.
+Each file-based downstream artifact records the SHA-256 hash of its upstream file, so upstream changes mark dependent artifacts as stale. Artifacts are not committed without explicit user consent. Ignored artifacts resume only in the current working copy; commit them when recovery across machines matters.
 
 ## Implementation
 
-`sdlc` and `quickie` stop at a validated implementation plan. The bundled `sdd` skill executes and reviews implementation plans generally, whether they come from either workflow or elsewhere.
+`sdlc` and `quickie` stop at an implementation plan. The bundled `sdd` skill executes and reviews plans from either workflow or elsewhere. After successful review, it saves `docs/context-engineering/<subject>/tasks.md` and clears its completed session tasks.
 
 With Superpowers, use `superpowers:subagent-driven-development` when subagents are available, or `superpowers:executing-plans` otherwise as external alternatives. Apply `superpowers:test-driven-development` to each production-behavior task. Superpowers is an external package and is not bundled here.
 

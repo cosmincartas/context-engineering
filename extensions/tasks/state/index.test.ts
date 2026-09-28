@@ -99,6 +99,24 @@ test("durable task creation writes complete private state and reloads in numeric
   });
 });
 
+test("clear rejects unfinished work and empties completed tasks durably", async () => {
+  await withAgentDir(async (agentDir) => {
+    const store = await TaskStore.load(cwd, sessionId);
+    await store.create("First");
+    await store.create("Second");
+    const path = taskPath(agentDir, cwd, sessionId);
+    const before = await readFile(path);
+    await assert.rejects(() => store.clear(), /pending or active/);
+    assert.deepEqual(await readFile(path), before);
+    await store.update("1", { status: "completed" });
+    await assert.rejects(() => store.clear(), /pending or active/);
+    await store.update("2", { status: "completed" });
+    assert.deepEqual(await store.clear(), { cleared: 2 });
+    assertTasks(store.list(), []);
+    assertTasks((await TaskStore.load(cwd, sessionId)).list(), []);
+  });
+});
+
 test("task text preserves newlines and tabs and normalizes carriage returns", async () => {
   await withAgentDir(async () => {
     const store = await TaskStore.load(cwd, sessionId);

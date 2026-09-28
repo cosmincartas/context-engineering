@@ -1,7 +1,7 @@
 interface:
   display_name: "Quickie"
-  short_description: "Plan one small change in a single session"
-  default_prompt: "Use $quickie to plan this small change without the full delivery pipeline."
+  short_description: "Auto-create a specification and plan; ask only for disruptive decisions"
+  default_prompt: "Use $quickie to create a specification and implementation plan. Ask me only about disruptive decisions."
 
 policy:
   allow_implicit_invocation: true

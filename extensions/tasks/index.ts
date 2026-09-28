@@ -11,6 +11,7 @@ import {
 } from "./state/index.ts";
 import {
   handleWriteFailure,
+  renderTaskClearResult,
   renderTaskListResult,
   renderTaskResult,
   showTaskList,
@@ -31,6 +32,7 @@ const TaskUpdateParameters = Type.Object(
   { additionalProperties: false },
 );
 const TaskListParameters = Type.Object({}, { additionalProperties: false });
+const TaskClearParameters = Type.Object({}, { additionalProperties: false });
 const TaskGetParameters = Type.Object(
   { id: Type.String() },
   { additionalProperties: false },
@@ -171,6 +173,31 @@ export default function tasksExtension(pi: ExtensionAPI): void {
       return serialized(currentStore(store).list());
     },
     renderResult: renderTaskListResult,
+  });
+
+  pi.registerTool({
+    name: "TaskClear",
+    label: "TaskClear",
+    description: "Clear the current session's task list only when every task is completed. Archive first.",
+    executionMode: "sequential",
+    parameters: TaskClearParameters,
+    async execute(_toolCallId, _params, _signal, _onUpdate, ctx: ExtensionContext) {
+      const activeStore = currentStore(store);
+      const result = await activeStore.clear();
+      if (result.writeError !== undefined) {
+        const choice = await handleWriteFailure(ctx, result.writeError);
+        if (choice === "cancel") {
+          activeStore.cancelFailedWrite();
+          widget?.refresh();
+          throw new Error(`${result.writeError}; clear was cancelled in memory and stored tasks may return when the session resumes`);
+        }
+        widget?.refresh();
+        throw new Error(`${result.writeError}; clear was retained in memory and remains unsaved`);
+      }
+      widget?.refresh();
+      return serialized({ cleared: result.cleared });
+    },
+    renderResult: renderTaskClearResult,
   });
 
   pi.registerTool({

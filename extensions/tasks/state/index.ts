@@ -27,6 +27,11 @@ export interface TaskMutationResult {
   readonly writeError?: string;
 }
 
+export interface TaskClearResult {
+  readonly cleared: number;
+  readonly writeError?: string;
+}
+
 const CONTROL_CHARACTERS = /[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F-\u009F]/;
 const TASK_STATUSES: readonly TaskStatus[] = ["pending", "active", "completed"];
 
@@ -110,6 +115,24 @@ export class TaskStore {
     this.tasks = this.tasks.map((task, index) => index === taskIndex ? nextTask : task);
     this.notify();
     return this.finishMutation(nextTask);
+  }
+
+  async clear(): Promise<TaskClearResult> {
+    this.assertReady();
+    if (this.tasks.some((task) => task.status !== "completed")) {
+      throw new Error("Cannot clear tasks while work is pending or active");
+    }
+    const cleared = this.tasks.length;
+    this.tasks = [];
+    this.notify();
+    try {
+      await this.save();
+      return { cleared };
+    } catch (error) {
+      this.state = readyState(true);
+      this.notify();
+      return { cleared, writeError: formatError("save", error) };
+    }
   }
 
   cancelFailedWrite(): void {

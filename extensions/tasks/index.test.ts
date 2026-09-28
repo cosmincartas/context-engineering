@@ -120,7 +120,12 @@ test("registers /tasks only for TUI, validates arguments, and opens a current sn
 
 test("model task tools register closed schemas and intended execution modes", () => {
   const { tools } = captureExtension();
-  assert.deepEqual([...tools.keys()].sort(), ["TaskCreate", "TaskGet", "TaskList", "TaskUpdate"]);
+  assert.deepEqual([...tools.keys()].sort(), ["TaskClear", "TaskCreate", "TaskGet", "TaskList", "TaskUpdate"]);
+
+  const clear = tools.get("TaskClear")!;
+  assert.equal(clear.parameters.additionalProperties, false);
+  assert.deepEqual(clear.parameters.required ?? [], []);
+  assert.equal(clear.executionMode, "sequential");
 
   const create = tools.get("TaskCreate")!;
   assert.equal(create.label, "TaskCreate");
@@ -149,6 +154,19 @@ test("model task tools register closed schemas and intended execution modes", ()
   for (const tool of tools.values()) {
     assert.equal(typeof (tool as any).renderResult, "function", `${tool.name} renderResult`);
   }
+});
+
+test("TaskClear rejects unfinished tasks and clears completed tasks in the current session", async () => {
+  await withAgentDir(async () => {
+    const { handlers, tools } = captureExtension();
+    const ctx = await startEphemeralSession(handlers);
+    await tools.get("TaskCreate")!.execute("create", { text: "Work" }, undefined, undefined, ctx);
+    await assert.rejects(() => tools.get("TaskClear")!.execute("clear", {}, undefined, undefined, ctx), /pending or active/);
+    await tools.get("TaskUpdate")!.execute("update", { id: "1", status: "completed" }, undefined, undefined, ctx);
+    const result = await tools.get("TaskClear")!.execute("clear", {}, undefined, undefined, ctx);
+    assert.deepEqual(result.details, { cleared: 1 });
+    assert.deepEqual((await tools.get("TaskList")!.execute("list", {}, undefined, undefined, ctx)).details, []);
+  });
 });
 
 test("session lifecycle restores UUID stores, isolates new and fork sessions, and reports load errors", async () => {

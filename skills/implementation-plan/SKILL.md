@@ -17,13 +17,13 @@ Preserve quoted input, identifiers, required signatures, and commands exactly.
 
 ## Inputs and output
 
-- Require a specification file with `artifact: spec`. Treat open ledger rows or unresolved blocking issues as a blocker.
+- Require a specification file with `artifact: spec`. Treat open ledger rows or unresolved blocking issues as a blocker. In quickie's delegated auto mode, also require `status: validated` and recorded gate approvals.
 - Accept any specification with the required artifact fields. Do not require fixed section numbering.
 - If no specification is supplied, ask for its path or topic folder.
 - If the specification is missing, blocked, or inconsistent, explain the blocker and stop.
-- Do not start another skill or resolve specification blockers on the user's behalf.
+- Do not start another skill or resolve specification blockers on the user's behalf. Quickie alone orchestrates the handoff after design-specs returns a validated specification.
 - Save `plan.md` beside the source specification using [assets/plan-template.md](assets/plan-template.md).
-- Read an existing plan before writing. Ask before replacing or revising it.
+- Read an existing plan before writing. Ask before replacing approved content; resume or revise drafts under quickie's delegation.
 - Keep the specification and its intent unchanged.
 
 ## Boundaries and interaction
@@ -38,6 +38,7 @@ Preserve quoted input, identifiers, required signatures, and commands exactly.
 - Explain concerns with evidence, consequences, and the smallest suitable alternative.
 - Do not manufacture alternatives or reopen approved choices without new evidence.
 - Silence, cancellation, and factual answers are not approval. Record explicit delegation and its limits.
+- In quickie's delegated auto mode, use its invocation as approval evidence for the complete plan only after all checks pass. Ask for disruptive decisions under quickie's rules; never claim direct user review.
 - Use read-only repository investigation. Do not run implementation or verification commands merely because the plan contains them.
 - Distinguish commands proposed for execution from checks actually performed during planning.
 
@@ -107,12 +108,12 @@ Do not use "code written" or "task completed" as verification.
 
 ### 4. Review
 
-1. Complete the checks below and save the entire plan at the first review presentation.
+1. Complete the checks below and save the entire plan at first review or delegated validation.
 2. Present the saved path, task order, dependencies, requirement coverage, and material concerns.
 3. Keep the recap concise. Offer to expand any task without replacing the saved complete plan.
-4. Invite the user to review the complete plan. Apply requested corrections in place and present what changed.
+4. Outside delegated auto mode, invite the user to review the complete plan. Apply requested corrections in place.
 5. Recheck source freshness and repository evidence after corrections. Explain any changes since drafting.
-6. Report the plan path as input for a separate execution skill and stop. Do not start execution.
+6. In delegated auto mode, record the limited approval and set `status: validated` only after all checks pass. Return the path to quickie. Otherwise, report the plan path and stop. Do not start execution.
 
 ## Source freshness and continuation
 
@@ -139,7 +140,7 @@ Report write failures and stop. Never claim unsaved work can be resumed.
 - Do not edit upstream artifacts or start another skill automatically. Resume after the specification is corrected.
 - If only task order, grouping, or verification changes, revise the plan and present the change for review.
 - Private structural choices within approved constraints do not require specification approval.
-- Before revising a saved plan, explain the impact.
+- Before revising a saved plan, explain the impact. In delegated auto mode, ask only if it is disruptive.
 
 ## Completion checks
 
@@ -152,6 +153,6 @@ Report write failures and stop. Never claim unsaved work can be resumed.
 - Existing changes, known failures, unexecuted checks, and unavailable evidence are clearly distinguished.
 - Tasks preserve the approved scope, contracts, invariants, and architecture without freezing incidental private structure.
 - The plan contains no unresolved consequential design decision disguised as implementation work.
-- The saved plan contains source hashes, repository findings, implementation discretion, and correction rules.
+- The saved plan contains source hashes, repository findings, implementation discretion, correction rules, and approval evidence in delegated auto mode.
 - The artifact and recap follow the language rules. No unused placeholders remain.
 - No implementation work has started.

@@ -1,6 +1,7 @@
 ---
 schema_version: 1
 artifact: spec
+status: "{{draft or validated; validated only after final direct or delegated approval}}"
 subject: "{{subject}}"
 intent: "{{source path or supplied in conversation}}"
 intent_sha256: "{{source file SHA-256 or not applicable}}"

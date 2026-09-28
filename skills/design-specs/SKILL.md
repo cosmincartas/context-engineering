@@ -21,8 +21,9 @@ Write requirements with "must", not "shall" or "should". Preserve quoted input, 
 - Accept functional requirements, non-functional requirements, user stories, or any combination.
 - If intent is missing, ask for it and stop. Do not start another skill automatically.
 - If requirements are absent, derive proposals from the intent. Do not require invented user stories.
-- Use an existing topic folder when supplied. Otherwise, confirm a short kebab-case subject.
+- Use an existing topic folder when supplied. Otherwise, confirm a short kebab-case subject. In delegated auto mode, derive it from the request.
 - Save `spec.md` in the supplied topic folder. Otherwise, use `docs/context-engineering/<subject>/spec.md`.
+- When `quickie` invokes this skill, use its limited delegated auto mode. Skip routine approval requests below; keep all evidence and validation checks. All other invocations keep the approval gates.
 - Read an existing specification before writing. Ask before you replace it or change its approved scope, UI, or HLD.
 - Keep supplied intent files unchanged. Record intent conflicts and request an explicit decision.
 
@@ -42,6 +43,7 @@ Write requirements with "must", not "shall" or "should". Preserve quoted input, 
 - Preserve the user's approach when no concern requires a decision. Do not manufacture alternatives.
 - Stop dependent work when an unresolved concern changes scope, acceptance, or feasibility.
 - Silence and factual answers are not approval. Record explicit delegation and stay within its limits.
+- In quickie's delegated auto mode, record the invocation as approval evidence for routine gates only. Ask for disruptive decisions under quickie's rules before dependent work. Never describe delegated approval as direct user review.
 - Treat each answer you gave as complete. Focus on the current question.
 - Do not repeat or revise an earlier answer unless the user asks about it or identifies a problem with it.
 - Never run `git commit`, create branches, push changes, or modify production code, dependencies, or tests.
@@ -57,9 +59,10 @@ Write requirements with "must", not "shall" or "should". Preserve quoted input, 
 5. Group inferred requirements as **Recommended mandatory** and **Optional**. Each group can be empty.
 6. Explain why each recommendation is necessary or useful. State the consequence of excluding it.
 7. Treat "Recommended mandatory" as a recommendation, not permission to add scope.
-8. Ask the user which proposed requirements to include, exclude, or defer. Permit selection by identifier and user amendments.
-9. Confirm the complete resulting scope, including supplied requirements, selected proposals, exclusions, and acceptance conditions.
-10. Continue only after scope approval. Do not interpret unresolved selections as exclusions or inclusions.
+8. Outside delegated auto mode, ask which proposals to include, exclude, or defer. Permit selection by identifier and user amendments.
+9. Confirm the resulting scope, including supplied requirements, selected proposals, exclusions, and acceptance conditions.
+10. Continue after direct or delegated scope approval. In delegated auto mode, include explicit requirements and necessary implied acceptance conditions. Exclude optional proposals with reasons. Ask about disruptive scope choices.
+11. Do not interpret unresolved selections as exclusions or inclusions outside delegated auto mode.
 
 Give each requirement a stable `FR-*` or `NFR-*` identifier. Preserve supplied identifiers when possible.
 Record one observable behavior per FR. Include related edge cases without hiding separate behaviors inside verification.
@@ -92,9 +95,9 @@ Review these categories in this order:
 
 Each ledger row records its status, decision or section reference, and any unresolved issue.
 Use `open`, `drafted`, `approved`, or `not applicable`. Explain each `not applicable` decision.
-Use `approved` only for UI and HLD, and only after the user approves them at their gates.
+Use `approved` for UI and HLD only after direct approval or recorded quickie delegation.
 Do not mark a category drafted or approved merely because it was discussed.
-UI and HLD require approval before dependent work. Other applicable categories remain drafted; the user's review corrects them in place.
+UI and HLD require direct or delegated approval before dependent work. Other applicable categories remain drafted until final review or delegated validation.
 Do not create classes, models, or contracts merely to fill a category.
 
 ### 3. Review UI
@@ -104,10 +107,10 @@ Do not create classes, models, or contracts merely to fill a category.
 3. Otherwise, present `UI-*` entries with screens or controls, states, input effects, and related `FR-*` identifiers.
 4. Show a suitable mock or wireframe. Cover applicable loading, empty, error, access, and narrow-display states.
 5. Explain accessibility behavior and concerns within the approved requirements.
-6. Present the complete UI design in one chat message. End the message with a request to approve or change the UI.
-7. Do not call a question tool for this gate. End the turn and wait for the user's reply.
+6. Outside delegated auto mode, present the UI and request approval in chat. In delegated auto mode, record the UI decision and continue unless disruptive.
+7. Outside delegated auto mode, end the turn and wait for the user's reply. In delegated auto mode, record approval and continue unless a disruptive decision remains.
 8. Revise until approved. Present each revision in the same manner.
-9. Record approval before starting HLD review.
+9. Record direct or delegated approval before starting HLD review.
 
 ### 4. Review architecture
 
@@ -118,8 +121,8 @@ Do not create classes, models, or contracts merely to fill a category.
 5. Record consequential choices, evidence, assumptions, and trade-offs. Preserve explicit user choices unless an approved correction changes them.
 6. Reuse existing code, standard libraries, native features, and installed dependencies before proposing new abstractions or dependencies.
 7. Justify each new dependency or abstraction with an included requirement and an unmet present need.
-8. Present the HLD and consequential decisions together in one chat message. End the message with a request to approve or change them.
-9. Do not call a question tool for this gate. End the turn and wait for the user's reply.
+8. Outside delegated auto mode, present the HLD and request approval in chat. In delegated auto mode, record the HLD decision and continue unless disruptive.
+9. Outside delegated auto mode, end the turn and wait for the user's reply. In delegated auto mode, record approval and continue unless a disruptive decision remains.
 10. Revise until approved. Present each revision in the same manner.
 11. Record approval before drafting dependent details.
 
@@ -152,8 +155,8 @@ Do not invent design elements without an included requirement or an established 
 4. Check that excluded and deferred requirements did not enter the design.
 5. Check that contracts agree with models, interfaces, behavior, and failure responses. Check all output against the language rules.
 6. Present the saved path, current ledger, requirements coverage, and details added after HLD approval.
-7. Invite the user to review the complete specification. Apply corrections, repeat affected checks, and present what changed.
-8. Report the artifact path and stop. Do not generate an implementation plan.
+7. Outside delegated auto mode, invite the user to review the specification. Apply corrections and repeat affected checks.
+8. In delegated auto mode, record final delegated approval only after all checks pass. Set `status: validated` and return the path to quickie for planning. Otherwise, report the path and stop.
 
 ## Artifact structure and continuation
 
@@ -163,7 +166,7 @@ Preserve requirement identifiers, sources, selection decisions, and approval rec
 
 Record the supplied intent in the artifact when no source file exists. Preserve its meaning and distinguish quotations from synthesis.
 Save scope selections and approval records with the draft. Update it after each gate and during autonomous drafting.
-Each approval record names the approved content and any explicit delegation. Do not infer approval from an existing heading.
+Each approval record names the approved content, the invocation or user decision as evidence, and delegation limits. Do not infer approval from an existing heading.
 Before requirements approval, keep proposals in conversation. An interruption before that checkpoint requires renewed scope confirmation.
 
 On resume or a conversation branch change, read the artifact and its intent source again.

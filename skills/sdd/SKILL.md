@@ -15,6 +15,7 @@ This package provides only these orchestration tools:
 - `TaskUpdate` accepts `{ id, text?, status? }`. Its status values are `pending`, `active`, and `completed`.
 - `TaskList` accepts `{}` and returns every task for the current session.
 - `TaskGet` accepts `{ id }` and returns one task for the current session.
+- `TaskClear` accepts `{}` and clears the session list only when every task is `completed`. Archive the list first.
 - `Agent` accepts `{ tasks: [{ agent, title, task }] }`. It waits for every accepted child to settle, then returns the final outcome for each accepted item in request order. A batch contains at most eight items. The bundled `agent` values are lowercase: `scout`, `oracle`, `worker`, and `reviewer`.
 
 Keep task objects to the fields supplied by these tools. Put role, dependency, scope, and evidence information in the task's `text`; do not add task fields or invent a scheduler or structured dependency API.
@@ -31,6 +32,8 @@ Keep task objects to the fields supplied by these tools. Put role, dependency, s
 ## 1. Frame the work
 
 Extract the objective, acceptance criteria, constraints, relevant files, reproduction steps, explicit exclusions, and required verification commands.
+
+Call `TaskList` before creating tasks. Record whether the session list already contains unrelated tasks; do not clear those tasks.
 
 Create the smallest useful set of tasks with `TaskCreate`. Create one task for each independent assignment. Include a simple readable record in each task's text, for example:
 
@@ -86,4 +89,11 @@ Recompute readiness and dispatch correction Workers and only their unblocked, re
 
 Before replying, use `TaskList` so task statuses match reality. Every task must be `pending`, `active`, or `completed`; leave unresolved work `pending` with its evidence.
 
-Report the changed behavior, the final verification commands and observed results, review findings, and any remaining issue. Do not claim a task is complete without evidence.
+When the review gate passes and every task from this run is completed:
+
+1. Use the specification or plan folder when it lies under `docs/context-engineering/<subject>/`. Otherwise, derive a short subject and use that path.
+2. Save `tasks.md` in that folder before clearing anything. Include each task's identifier, role, final status, assignment, outcome, verification result, and review verdict. Keep prior `tasks.md` content when appending another run.
+3. Read the saved file and confirm that it contains the final task record. If the save or check fails, leave the task list intact and report the error.
+4. If the session list contained only this run's tasks, call `TaskClear` and confirm that `TaskList` is empty. Never clear unrelated tasks. If the clear fails, keep the saved file and report that tasks remain.
+
+Do not archive or clear unfinished work as completed. Report the changed behavior, verification results, review findings, remaining issues, and `tasks.md` path when saved. Do not claim completion without evidence.
