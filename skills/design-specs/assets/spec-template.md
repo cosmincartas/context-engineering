@@ -61,7 +61,7 @@ updated: "{{YYYY-MM-DD}}"
 ## Framed Ledger
 
 <!-- Use open, drafted, approved, or not applicable. Explain every not applicable decision. -->
-<!-- Mark UI and HLD approved only after their gates. Other applicable rows remain drafted. -->
+<!-- Mark UI and HLD approved only after their gates. Other applicable rows remain drafted; do not mark them approved. -->
 
 | Category | Status | Decision or section reference | Open issue or omission reason |
 |---|---|---|---|

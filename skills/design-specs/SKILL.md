@@ -23,7 +23,7 @@ Write requirements with "must", not "shall" or "should". Preserve quoted input, 
 - If requirements are absent, derive proposals from the intent. Do not require invented user stories.
 - Use an existing topic folder when supplied. Otherwise, confirm a short kebab-case subject.
 - Save `spec.md` in the supplied topic folder. Otherwise, use `docs/context-engineering/<subject>/spec.md`.
-- Read an existing specification before writing. Ask before replacing it or revising approved content.
+- Read an existing specification before writing. Ask before you replace it or change its approved scope, UI, or HLD.
 - Keep supplied intent files unchanged. Record intent conflicts and request an explicit decision.
 
 ## Evidence and user control
@@ -35,12 +35,15 @@ Write requirements with "must", not "shall" or "should". Preserve quoted input, 
 - Verify uncertain external technology claims with current primary sources. Record source URLs and the research date.
 - User approval accepts a choice. It does not verify a technical fact.
 - Ask focused questions with `AskUserQuestion` when available. Otherwise, ask in chat.
+- Exception: request UI and HLD approval in a chat message only. Do not use `AskUserQuestion` or another question tool.
 - Group questions only when they share a subject and their answers are independent.
 - Highlight conflicts, feasibility limits, security risks, data-loss risks, and compatibility concerns before dependent design work.
 - Explain each concern, its evidence, its consequence, and the smallest suitable alternative.
 - Preserve the user's approach when no concern requires a decision. Do not manufacture alternatives.
 - Stop dependent work when an unresolved concern changes scope, acceptance, or feasibility.
 - Silence and factual answers are not approval. Record explicit delegation and stay within its limits.
+- Treat each answer you gave as complete. Focus on the current question.
+- Do not repeat or revise an earlier answer unless the user asks about it or identifies a problem with it.
 - Never run `git commit`, create branches, push changes, or modify production code, dependencies, or tests.
 
 ## Workflow
@@ -75,21 +78,22 @@ Never silently remove the concern or include the rejected requirement.
 After requirements approval, create the draft specification and its ledger.
 Review these categories in this order:
 
-| Category | Required treatment | Approval |
+| Category | Required treatment | User action |
 |---|---|---|
-| UI | Screens, controls, states, inputs, and linked requirements | User approval when applicable |
-| Architecture (HLD) | Components, ownership, boundaries, decisions, and flow | User approval |
-| Models | Required data structures and invariants | Final specification approval |
-| Contracts | Shared formats, producers, consumers, and compatibility | Final specification approval |
-| Functions | Entry points, effects, and error behavior | Final specification approval |
-| Interfaces or Classes | Required signatures, responsibilities, and boundaries | Final specification approval |
-| Behavior | Important flows and state transitions | Final specification approval |
-| Failure Model | Relevant failures, detection, response, and verification | Final specification approval |
-| Traceability | Included requirements mapped to design and verification | Final specification approval |
+| UI | Screens, controls, states, inputs, and linked requirements | Approval when applicable |
+| Architecture (HLD) | Components, ownership, boundaries, decisions, and flow | Approval |
+| Models | Required data structures and invariants | Review |
+| Contracts | Shared formats, producers, consumers, and compatibility | Review |
+| Functions | Entry points, effects, and error behavior | Review |
+| Interfaces or Classes | Required signatures, responsibilities, and boundaries | Review |
+| Behavior | Important flows and state transitions | Review |
+| Failure Model | Relevant failures, detection, response, and verification | Review |
+| Traceability | Included requirements mapped to design and verification | Review |
 
 Each ledger row records its status, decision or section reference, and any unresolved issue.
 Use `open`, `drafted`, `approved`, or `not applicable`. Explain each `not applicable` decision.
-Do not mark a category complete merely because it was discussed.
+Use `approved` only for UI and HLD, and only after the user approves them at their gates.
+Do not mark a category drafted or approved merely because it was discussed.
 UI and HLD require approval before dependent work. Other applicable categories remain drafted; the user's review corrects them in place.
 Do not create classes, models, or contracts merely to fill a category.
 
@@ -100,8 +104,10 @@ Do not create classes, models, or contracts merely to fill a category.
 3. Otherwise, present `UI-*` entries with screens or controls, states, input effects, and related `FR-*` identifiers.
 4. Show a suitable mock or wireframe. Cover applicable loading, empty, error, access, and narrow-display states.
 5. Explain accessibility behavior and concerns within the approved requirements.
-6. Ask the user to approve or change the UI. Revise until approved.
-7. Record approval before starting HLD review.
+6. Present the complete UI design in one chat message. End the message with a request to approve or change the UI.
+7. Do not call a question tool for this gate. End the turn and wait for the user's reply.
+8. Revise until approved. Present each revision in the same manner.
+9. Record approval before starting HLD review.
 
 ### 4. Review architecture
 
@@ -112,14 +118,19 @@ Do not create classes, models, or contracts merely to fill a category.
 5. Record consequential choices, evidence, assumptions, and trade-offs. Preserve explicit user choices unless an approved correction changes them.
 6. Reuse existing code, standard libraries, native features, and installed dependencies before proposing new abstractions or dependencies.
 7. Justify each new dependency or abstraction with an included requirement and an unmet present need.
-8. Present the HLD and consequential decisions together. Ask the user to approve or change them.
-9. Record approval before drafting dependent details.
+8. Present the HLD and consequential decisions together in one chat message. End the message with a request to approve or change them.
+9. Do not call a question tool for this gate. End the turn and wait for the user's reply.
+10. Revise until approved. Present each revision in the same manner.
+11. Record approval before drafting dependent details.
 
 ### 5. Draft remaining design autonomously
 
 Take responsibility for the remaining ledger categories after UI and HLD approval.
 Do not request routine section approvals. Ask only about blocking unknowns or changes to approved decisions.
-Choose reversible details within approved constraints and identify material assumptions in the final review.
+Choose reversible details within approved constraints and identify material assumptions in the specification review.
+Continue when a step does not require user input. Put status notes in the same message as your next action.
+Stop and ask only when you cannot continue without the user, or before a destructive action.
+Destructive actions include deleting data and changing anything outside this repository.
 
 - **Models:** Specify required fields, types, ownership, and invariants. Omit incidental private representations.
 - **Contracts:** Specify producers, consumers, validation, compatibility, and versioning when applicable. Cite existing definitions instead of duplicating them.
@@ -140,7 +151,7 @@ Do not invent design elements without an included requirement or an established 
 3. Check every included requirement for a source, observable verification, and design coverage.
 4. Check that excluded and deferred requirements did not enter the design.
 5. Check that contracts agree with models, interfaces, behavior, and failure responses. Check all output against the language rules.
-6. Present the saved path, completed ledger, requirements coverage, and details added after HLD approval.
+6. Present the saved path, current ledger, requirements coverage, and details added after HLD approval.
 7. Invite the user to review the complete specification. Apply corrections, repeat affected checks, and present what changed.
 8. Report the artifact path and stop. Do not generate an implementation plan.
 
@@ -162,7 +173,7 @@ Compare the repository baseline and inspect relevant working-tree changes. Reche
 Record the current baseline after resolving those changes. State when repository comparison is unavailable.
 For file-based intent, compare its current hash with the saved hash before continuing and after corrections.
 If the source changed, stop and present the impact. Request approval for affected decisions before updating the recorded hash.
-Treat branch summaries as evidence, not approval. Do not overwrite an approved specification with an alternative design without permission.
+Treat branch summaries as evidence, not approval. Do not overwrite a saved specification with an alternative design without permission.
 
 When a correction changes approved scope, UI, or HLD, reopen the earliest affected gate.
 Explain the change and downstream effects. Retain unaffected approvals and obtain approval again for affected decisions.
