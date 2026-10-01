@@ -3,7 +3,7 @@ schema_version: 1
 artifact: spec
 status: "{{draft or validated; validated only after final direct or delegated approval}}"
 subject: "{{subject}}"
-intent: "{{source path or supplied in conversation}}"
+intent: "{{source path relative to this specification folder, e.g. intent.md; or supplied in conversation}}"
 intent_sha256: "{{source file SHA-256 or not applicable}}"
 repository_baseline: "{{commit or unavailable}}"
 language: "{{repository language or not applicable}}"
@@ -16,10 +16,11 @@ updated: "{{YYYY-MM-DD}}"
 <!-- Use ASD-STE100 Simplified Technical English. Remove template instructions and unused example entries from the completed specification. -->
 <!-- Keep all ledger rows. Omit inapplicable design sections and explain each omission in the ledger. -->
 <!-- During drafting, leave unresolved sections open. Do not present placeholders or unverified assumptions as approved decisions. -->
+<!-- Resolve intent and local supporting-file links against this specification's folder. Confirm file-based intent exists and hash its exact bytes. -->
 
 ## Intent and Delivery Scope
 
-- **Intent:** {{source reference, or supplied intent when no source file exists}}
+- **Intent:** {{source reference relative to this specification folder, or supplied intent when no source file exists}}
 - **Outcome:** {{approved observable outcome}}
 - **Includes:** {{one line per included behavior}}
 - **Constraints:** {{explicit constraints and their sources}}

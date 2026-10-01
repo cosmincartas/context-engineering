@@ -87,6 +87,40 @@ pi install git:github.com/cosmincartas/context-engineering
 
 Explicit invocation syntax is host-specific: `$agentic-workflow:sdlc` in Codex, `/agentic-workflow:sdlc` in Claude Code, and `/agentic-workflow/sdlc` in Copilot. To use the skills in Pi, install them separately.
 
+## Claude Code subagents
+
+The Claude Code plugin ships the `scout`, `worker`, `oracle`, and `reviewer` subagents from `agents/`. They are available as `agentic-workflow:<name>` after installing the plugin. To use them without the namespace, copy them to `~/.claude/agents/` instead. Keep them in sync with the Pi definitions in `extensions/subagent/agents/`.
+
+## Codex CLI subagents
+
+The `agents-codex/` directory contains Codex versions of `scout`, `worker`, `oracle`, and `reviewer`, adapted from `agents/`. Each standalone TOML file defines its name, description, and developer instructions. Each file explicitly sets `model` and `model_reasoning_effort`, which you can customize:
+
+| Agent | Model | Reasoning effort |
+|---|---|---|
+| `scout` | `gpt-6-luna` | `medium` |
+| `worker` | `gpt-6-luna` | `max` |
+| `reviewer` | `gpt-6.1-sol` | `high` |
+| `oracle` | `gpt-6-astra` | `high` |
+
+Luna handles research and implementation, Sol handles review, and Astra is reserved for Oracle's difficult analysis and decisions. These are role-based defaults, not exact equivalents of the Claude models. See the official [Luna](https://developers.openai.com/api/docs/models/gpt-6-luna), [Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol) and [Astra](https://developers.openai.com/api/docs/models/gpt-6-astra) model documentation. Choose an available model in each file if your account does not have access.
+
+From this repository, copy the definitions into your personal agent directory:
+
+```bash
+mkdir -p ~/.codex/agents
+cp -i agents-codex/*.toml ~/.codex/agents/
+```
+
+For project scope, copy them into that project's `.codex/agents/` instead. Start a new Codex CLI session and request a role explicitly, for example:
+
+```text
+Have scout map the affected code paths, worker implement the change, and reviewer review the resulting diff.
+```
+
+These are standalone definitions installed by copying the files. The custom `worker` takes precedence over Codex's built-in agent of the same name. `scout`, `oracle`, and `reviewer` configure `sandbox_mode = "read-only"`; `worker` inherits the parent permissions. Parent runtime permission overrides can take precedence over agent sandbox settings. Keep the role instructions in sync with `agents/` and `extensions/subagent/agents/`.
+
+See the official [Codex subagent documentation](https://learn.chatgpt.com/docs/agent-configuration/subagents) for configuration details.
+
 ## Subagent configuration
 
 In Pi's interactive TUI, run `/subagent-config` (no arguments) to set model/provider and supported reasoning defaults for `scout`, `worker`, `oracle`, and `reviewer`. Settings apply to later child batches only; they do not alter the parent model or reasoning level.

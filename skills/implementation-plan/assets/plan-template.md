@@ -3,7 +3,7 @@ schema_version: 1
 artifact: implementation-plan
 status: "{{draft or validated; validated only after final direct or delegated approval}}"
 subject: "{{subject}}"
-spec: "{{source specification path, relative to this plan or absolute}}"
+spec: "{{source specification path relative to this plan folder, e.g. spec.md}}"
 spec_sha256: "{{SHA-256 of the exact specification bytes}}"
 repository_baseline: "{{commit or unavailable}}"
 working_tree: "{{clean or summary of existing changes}}"
@@ -20,6 +20,7 @@ updated: "{{YYYY-MM-DD}}"
 This plan implements only the included requirements of the referenced specification.
 Before execution, confirm that the specification's exact content matches `spec_sha256`.
 Resolve relative specification paths against this plan's folder. Resolve relative intent paths against the specification's folder.
+Accept existing absolute source paths as written. Verify source existence and hash equality regardless of path format.
 For file-based intent, verify the specification's `intent_sha256` against its source file. Stop on missing sources or mismatched hashes.
 For conversation-supplied intent, require recorded intent content and `intent_sha256: not applicable` in the specification.
 Verify the supporting-file hashes below. Stop if a file is missing or changed, and request review of affected approvals.
@@ -29,7 +30,7 @@ Execution state belongs to the implementer, not this planning artifact.
 
 ## Supporting Sources
 
-<!-- Record local supporting files that define approved design. Resolve relative paths against this plan's folder. Write None when absent. -->
+<!-- Record local supporting files that define approved design using paths relative to this plan's folder. Write None when absent. -->
 
 - **Path:** {{approved supporting-file path}}
   - SHA-256: {{hash of exact file bytes}}

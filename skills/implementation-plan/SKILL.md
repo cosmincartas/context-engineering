@@ -118,6 +118,8 @@ Do not use "code written" or "task completed" as verification.
 ## Source freshness and continuation
 
 Resolve relative `spec` paths against the plan folder. Resolve relative `intent` paths against the specification folder.
+Accept existing absolute source paths as written. Path format alone is not a blocker; verify source existence and hash equality.
+Store new `spec` and supporting-file paths relative to the plan folder; use `spec.md` for a specification beside the plan.
 For file-based intent, require its source file and matching `intent_sha256` before planning and after corrections.
 For conversation-supplied intent, accept `intent_sha256: not applicable` only when the specification records the supplied intent.
 If a required source or hash is missing, explain the blocker. Do not fabricate a hash or silently bypass the check.

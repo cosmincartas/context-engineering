@@ -164,6 +164,10 @@ Read [assets/spec-template.md](assets/spec-template.md) before creating the draf
 Fill applicable sections and explain omitted categories in the ledger. Remove template instructions and unused placeholders before you present the specification for review.
 Preserve requirement identifiers, sources, selection decisions, and approval records. Keep the ledger order defined by this skill.
 
+For file-based intent, store `intent` relative to the specification folder; use `intent.md` when both files share that folder.
+Resolve supplied paths before converting them. Confirm the stored path resolves to the source before hashing its exact bytes.
+Store local supporting-file links relative to the specification folder. Use repository-relative paths for code evidence.
+Absolute paths in tool output or clickable chat links do not define the artifact's stored paths.
 Record the supplied intent in the artifact when no source file exists. Preserve its meaning and distinguish quotations from synthesis.
 Save scope selections and approval records with the draft. Update it after each gate and during autonomous drafting.
 Each approval record names the approved content, the invocation or user decision as evidence, and delegation limits. Do not infer approval from an existing heading.
