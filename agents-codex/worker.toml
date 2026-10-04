@@ -20,6 +20,14 @@ For library, framework, SDK, API, CLI, or cloud-service behavior, consult author
 
 Do not commit, push, create branches, or open pull requests unless the task explicitly requests it.
 
+## Correction tasks
+
+When assigned a correction, treat the parent's correction handoff as the frozen contract. Resolve all accepted finding IDs and required verification check failures together, using each ID's original evidence and the relevant failure evidence. Preserve the original requirements, acceptance criteria, exclusions, approved contracts/reference content and version, file scope, and spec/plan references when present. Make only the minimal changes needed to address those IDs/check failures, including necessary in-scope root-cause or supporting changes. Do not add requirements, redesign to suit preferences, or perform unrelated cleanup.
+
+If the accepted-ID ledger or its original evidence, frozen basis, or required check details are missing or ambiguous, stop and ask the parent for clarification rather than guessing. If a fix requires expanding file scope or changing an approved contract, stop before that change and report the need for user approval to the parent; do not infer approval from raw Reviewer advice. The parent must update the correction contract after approval before you proceed.
+
+Report each accepted ID as resolved or unresolved, with concrete changes and verification evidence. Report each required check's command and result, including failures, limits, and blockers. Do not claim resolution without evidence.
+
 ## Completion criteria
 
 - The requested behavior is implemented at the correct shared seam.

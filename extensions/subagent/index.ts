@@ -16,6 +16,8 @@ import { loadBundledAgents, type AgentDefinition } from "./agents/index.ts";
 import {
   executeSubagentBatch,
   formatSubagentBatch,
+  formatSubagentOutcome,
+  MAX_RESULT_BYTES,
   normalizeTitle,
   type ProcessAttempt,
   type SubagentBatchDetails,
@@ -277,7 +279,12 @@ function isAttemptState(value: unknown): value is ProcessAttempt["state"] {
 }
 
 function scoutResult(outcomes: readonly SubagentBatchOutcome[]): AgentToolResult<SubagentBatchDetails> {
-  const details = { outcomes };
+  const report = outcomes.map(formatSubagentOutcome).join("\n\n");
+  const details: SubagentBatchDetails = {
+    outcomes,
+    transportClipped: outcomes.some((outcome) => "run" in outcome && outcome.run.transportClipped) ||
+      Buffer.byteLength(report, "utf8") > MAX_RESULT_BYTES,
+  };
   return {
     content: [{ type: "text", text: formatSubagentBatch(details) }],
     details,

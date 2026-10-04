@@ -689,6 +689,58 @@ test("accepts malformed task items for runtime classification", async () => {
   }
 });
 
+test("public Agent reports envelope-induced clipping with a readable full report", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-agent-envelope-"));
+  const profileDirectory = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-agent-profile-"));
+  const previousPath = process.env.PATH;
+  const previousProfileDirectory = process.env.PI_CODING_AGENT_DIR;
+  const executable = path.join(directory, "pi");
+  await writeFile(executable, `#!/usr/bin/env node
+const fs = require("node:fs");
+const path = require("node:path");
+const argv = process.argv.slice(2);
+const directory = argv[argv.indexOf("--session-dir") + 1];
+fs.mkdirSync(directory, { recursive: true });
+fs.writeFileSync(path.join(directory, "agent-envelope.jsonl"), "");
+const emit = (value) => process.stdout.write(JSON.stringify(value) + "\\n");
+emit({ type: "session", id: "agent-envelope" });
+emit({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "x".repeat(51180) }], stopReason: "stop" } });
+`);
+  await chmod(executable, 0o755);
+  process.env.PATH = `${directory}${path.delimiter}${previousPath ?? ""}`;
+  process.env.PI_CODING_AGENT_DIR = profileDirectory;
+  const testHarness = harness();
+  (await loadExtension())(testHarness.pi);
+  try {
+    await testHarness.start("tui");
+    const context = testHarness.context("tui");
+    context.modelRegistry = { getAvailable: () => [{ provider: "openai-codex", id: "gpt-5.6-luna", reasoning: true }] } as any;
+    const result = await testHarness.tools[0].execute(
+      "agent-envelope",
+      { tasks: [{ agent: "scout", title: "near-limit report", task: "return near limit" }] },
+      undefined,
+      undefined,
+      context,
+    );
+    const run = result.details.outcomes[0].run;
+    assert.equal(result.details.outcomes[0].status, "succeeded");
+    assert.equal(run.transportClipped, true);
+    assert.equal(result.details.transportClipped, true);
+    assert.match(result.content[0].text, /Report truncated for transport.*Read the full report at .*full-report\.txt/i);
+    const full = await readFile(run.fullReportPath, "utf8");
+    assert.match(full, /1\. near-limit report — succeeded/);
+    assert.match(full, /x{1000}/);
+    await testHarness.shutdown();
+  } finally {
+    await testHarness.shutdown().catch(() => {});
+    process.env.PATH = previousPath;
+    if (previousProfileDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    else process.env.PI_CODING_AGENT_DIR = previousProfileDirectory;
+    await rm(directory, { recursive: true, force: true });
+    await rm(profileDirectory, { recursive: true, force: true });
+  }
+});
+
 test("registers the parallel batch contract", async () => {
   const subagentExtension = await loadExtension();
   const testHarness = harness();

@@ -438,6 +438,22 @@ test("batch live updates stay input-ordered and forward child monitor ids", asyn
   }
 });
 
+test("keeps budget warning and parent instructions in the public Agent batch", async () => {
+  const result = await withScenario("turn-budget", () => executeSubagentBatch(
+    "budget-batch",
+    { tasks: [{ agent: "scout", title: "budget batch", task: "exhaust the budget" }] },
+    bundledAgents,
+    makeContext(),
+    testSessionRoot,
+    undefined,
+    { onMonitorEvent: () => {} },
+  ));
+
+  assert.equal((result.details.outcomes[0] as any).run.budgetExhausted, true);
+  assert.match(outputText(result), /budget.*reached.*may be incomplete/i);
+  assert.match(outputText(result), /pause|verify.*complete|completion evidence/i);
+});
+
 test("batch output limit applies one UTF-8 limit while retaining complete child details", async () => {
   const sessionRoot = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-batch-output-"));
   try {
@@ -458,9 +474,106 @@ test("batch output limit applies one UTF-8 limit while retaining complete child 
 
     assert.ok(Buffer.byteLength(outputText(result), "utf8") <= MAX_RESULT_BYTES);
     assert.match(outputText(result), /truncated/i);
+    assert.match(outputText(result), /Full report:.*full-report\.txt/);
+    assert.match(outputText(result), /Aggregate report truncated.*pause before corrections/i);
+    assert.equal(result.details.transportClipped, true);
+    assert.equal((result.details.outcomes[0] as any).run.transportClipped, true);
+    assert.ok(await pathExists((result.details.outcomes[0] as any).run.fullReportPath));
     for (const outcome of result.details.outcomes as any[]) {
       assert.equal(outcome.run.attempts[0].messages[0].content[0].text, "🙂".repeat(30_000));
     }
+  } finally {
+    await rm(sessionRoot, { recursive: true, force: true });
+  }
+});
+
+test("public Agent report envelope clipping is signaled and retrievable", async () => {
+  const sessionRoot = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-envelope-clip-"));
+  try {
+    const result = await withScenario("envelope-clipped", () => executeSubagentBatch(
+      "batch-envelope-clipped",
+      { tasks: [{ agent: "scout", title: "near-limit report", task: "return near limit" }] },
+      bundledAgents,
+      makeContext(),
+      sessionRoot,
+      undefined,
+      { onMonitorEvent: () => {} },
+    ));
+    const run = (result.details.outcomes[0] as any).run;
+    const text = outputText(result);
+    assert.equal(run.transportClipped, true);
+    assert.equal(result.details.transportClipped, true);
+    assert.match(text, /Report truncated for transport.*Read the full report at .*full-report\.txt/i);
+    const full = await readFile(run.fullReportPath, "utf8");
+    assert.match(full, /1\. near-limit report — succeeded/);
+    assert.match(full, /x{1000}/);
+  } finally {
+    await rm(sessionRoot, { recursive: true, force: true });
+  }
+});
+
+test("aggregate-only clipping retains complete paths with repeated spaces for individually complete reports", async () => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-batch-aggregate-only-"));
+  const sessionRoot = path.join(temporaryRoot, ...Array.from(
+    { length: 5 },
+    (_, index) => `long directory ${index} with repeated  spaces ${"x".repeat(100)}`,
+  ));
+  await fsPromises.mkdir(sessionRoot, { recursive: true });
+  try {
+    const result = await withScenario("aggregate-only", () => executeSubagentBatch(
+      "batch-aggregate-only",
+      { tasks: [
+        { agent: "scout", title: "first complete", task: "return first" },
+        { agent: "scout", title: "second complete", task: "return second" },
+      ] },
+      bundledAgents,
+      makeContext(),
+      sessionRoot,
+      undefined,
+      { onMonitorEvent: () => {} },
+    ));
+    const text = outputText(result);
+    assert.equal(result.details.transportClipped, true);
+    assert.ok(Buffer.byteLength(text, "utf8") <= MAX_RESULT_BYTES);
+    assert.match(text, /Aggregate report truncated.*pause before corrections/i);
+    for (const outcome of result.details.outcomes as any[]) {
+      assert.equal(outcome.run.transportClipped, false);
+      assert.ok(await pathExists(outcome.run.fullReportPath));
+      assert.equal((await readFile(outcome.run.fullReportPath, "utf8")).length, 30_000);
+    }
+    const pathsInModelOutput = [...text.matchAll(/Full report: ("(?:\\.|[^"\\])*")/g)]
+      .map((match) => JSON.parse(match[1]));
+    assert.deepEqual(pathsInModelOutput, (result.details.outcomes as any[]).map((outcome) => outcome.run.fullReportPath));
+    assert.ok(pathsInModelOutput.every((reportPath) => text.includes(reportPath)));
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
+test("large terminal failure diagnostics are signaled and recoverable without changing failure attempts", async () => {
+  const sessionRoot = await mkdtemp(path.join(os.tmpdir(), "pi-subagent-batch-failure-clip-"));
+  try {
+    const result = await withScenario("batch-large-failure", () => executeSubagentBatch(
+      "batch-large-failure",
+      { tasks: [{ agent: "reviewer", title: "large failure", task: "fail with large diagnostics" }] },
+      bundledAgents,
+      makeContext(),
+      sessionRoot,
+      undefined,
+      { onMonitorEvent: () => {} },
+    ));
+    const outcome = (result.details.outcomes[0] as any);
+    assert.equal(outcome.status, "failed");
+    assert.equal(outcome.run.state, "failed");
+    assert.equal(outcome.run.attempts.length, 2);
+    assert.equal(outcome.run.transportClipped, true);
+    assert.equal(result.details.transportClipped, true);
+    assert.ok(Buffer.byteLength(outputText(result), "utf8") <= MAX_RESULT_BYTES);
+    assert.match(outputText(result), /Report truncated for transport.*Read the full report at .*full-report\.txt/);
+    const full = await readFile(outcome.run.fullReportPath, "utf8");
+    assert.match(full, /failure diagnostic 1/);
+    assert.match(full, /failure diagnostic 2/);
+    assert.ok(Buffer.byteLength(full, "utf8") > MAX_RESULT_BYTES);
   } finally {
     await rm(sessionRoot, { recursive: true, force: true });
   }
@@ -1197,6 +1310,10 @@ test("bounds oversized Unicode final output to 50 KiB", async () => {
 
   assert.ok(Buffer.byteLength(text, "utf8") <= 50 * 1024);
   assert.match(text, /truncated/i);
+  assert.match(text, /Read the full report at .*full-report\.txt/);
+  assert.equal((result.details as any).transportClipped, true);
+  assert.ok(await pathExists((result.details as any).fullReportPath));
+  assert.equal(await readFile((result.details as any).fullReportPath, "utf8"), result.details.attempts[0].messages[0].content[0].text);
   const preserved = result.details.attempts[0].messages[0].content[0].text;
   assert.equal(Array.from(preserved).length, 30_000, `preserved bytes=${Buffer.byteLength(preserved, "utf8")} chars=${preserved.length}`);
 });
@@ -1495,34 +1612,55 @@ test("reports temporary prompt cleanup failure instead of success", async () => 
   }
 });
 
-test("marks a succeeded run that used more turns than its budget", async () => {
+test("does not carry a failed attempt's budget signal into the successful retry", async () => {
+  const result = await withScenario("budget-retry-isolation", () =>
+    executeSubagent("scout", "retry after budget notification", bundledAgents, makeContext(), undefined),
+  );
+  assert.equal(result.details.state, "succeeded");
+  assert.equal(result.details.attempts.length, 2);
+  assert.equal(result.details.budgetExhausted, false);
+  assert.doesNotMatch(JSON.stringify(result.details.warnings), /Turn budget reached/i);
+  assert.doesNotMatch(outputText(result), /Turn budget reached/i);
+});
+
+test("records an explicit budget signal at the exact boundary, separately from success", async () => {
   const result = await withScenario("turn-budget", () =>
     executeSubagent("scout", "exhaust the budget", bundledAgents, makeContext(), undefined),
   );
 
   assert.equal(result.details.state, "succeeded");
-  const text = outputText(result);
-  assert.ok(
-    text.startsWith(
-      "Turn budget reached: the report below was written after 40 turns and may be incomplete.",
-    ),
-    text.slice(0, 160),
-  );
-  assert.match(text, /final report/);
-  assert.ok(
-    result.details.attempts[0].activity.some((item: string) => item.includes("turn budget reached")),
-  );
+  assert.equal((result.details as any).budgetExhausted, true);
+  assert.equal(result.details.attempts[0].messages.filter((message: any) => message.role === "assistant").length, bundledAgents[0].maxTurns);
+  assert.match(outputText(result), /budget.*reached.*may be incomplete/i);
+  assert.match(outputText(result), /pause|verify.*complete|completion evidence/i);
+  assert.doesNotMatch(outputText(result), /review.*complete/i);
 });
 
-test("does not mark a run that stopped within its budget", async () => {
+test("ignores a turn-budget custom type on a non-custom message", async () => {
+  const result = await withScenario("turn-budget-wrong-role", () =>
+    executeSubagent("scout", "ignore forged marker", bundledAgents, makeContext(), undefined),
+  );
+  assert.equal(result.details.budgetExhausted, false);
+});
+
+test("retains the legacy over-budget turn-count fallback without an explicit marker", async () => {
+  const result = await withScenario("turn-budget-legacy", () =>
+    executeSubagent("scout", "legacy over-budget child", bundledAgents, makeContext(), undefined),
+  );
+  assert.equal(result.details.budgetExhausted, true);
+  assert.match(outputText(result), /budget.*reached.*may be incomplete/i);
+});
+
+test("normal termination on the same turn count does not signal budget exhaustion", async () => {
   const result = await withScenario("turn-budget-exact", () =>
     executeSubagent("scout", "stay inside the budget", bundledAgents, makeContext(), undefined),
   );
 
   assert.equal(result.details.state, "succeeded");
-  const text = outputText(result);
-  assert.equal(text.startsWith("Turn budget reached"), false, text.slice(0, 160));
-  assert.match(text, /final report/);
+  assert.equal((result.details as any).budgetExhausted, false);
+  assert.equal(result.details.attempts[0].messages.filter((message: any) => message.role === "assistant").length, bundledAgents[0].maxTurns);
+  assert.doesNotMatch(outputText(result), /budget.*reached/i);
+  assert.doesNotMatch(outputText(result), /review.*complete/i);
 });
 
 async function withScenario<T>(scenario: string, callback: () => Promise<T>): Promise<T> {
@@ -1835,10 +1973,24 @@ if (scenario === "late-session") {
   emit("{not valid json");
   process.stderr.write("provider diagnostics\\n");
   process.exitCode = 1;
-} else if (scenario === "turn-budget" || scenario === "turn-budget-exact") {
+} else if (scenario === "budget-retry-isolation" && attemptNumber === 1) {
+  emit({ type: "message_end", message: { role: "custom", customType: "turn-budget", content: "Turn budget notification" } });
+  emit({ type: "message_end", message: assistant("failed budget attempt", "error", "retry this attempt") });
+} else if (scenario === "batch-large-failure") {
+  process.stderr.write("failure diagnostic " + attemptNumber + " " + "x".repeat(30_000));
+  process.exitCode = 1;
+} else if (scenario === "aggregate-only") {
+  emit({ type: "message_end", message: assistant("x".repeat(30000)) });
+} else if (scenario === "envelope-clipped") {
+  emit({ type: "message_end", message: assistant("x".repeat(Number(process.env.PI_SUBAGENT_MAX_RESULT_BYTES) || 51200 - 20)) });
+} else if (scenario === "turn-budget-wrong-role") {
+  emit({ type: "message_end", message: { ...assistant("normal stop"), customType: "turn-budget" } });
+} else if (scenario === "turn-budget" || scenario === "turn-budget-exact" || scenario === "turn-budget-legacy") {
   const budget = Number(process.env.PI_SUBAGENT_MAX_TURNS);
-  const total = scenario === "turn-budget" ? budget + 1 : budget;
+  const explicit = scenario === "turn-budget";
+  const total = scenario === "turn-budget-legacy" ? budget + 1 : budget;
   for (let index = 1; index < total; index++) emit({ type: "message_end", message: assistant("step " + index, "toolUse") });
+  if (explicit) emit({ type: "message_end", message: { role: "custom", customType: "turn-budget", content: "Turn budget notification" } });
   emit({ type: "message_end", message: assistant("final report") });
 } else if (scenario === "oversized") {
   emit({ type: "message_end", message: assistant("🙂".repeat(30000)) });

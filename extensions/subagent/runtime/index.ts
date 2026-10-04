@@ -76,6 +76,8 @@ export type SubagentBatchOutcome =
 
 export type SubagentBatchDetails = {
   readonly outcomes: readonly SubagentBatchOutcome[];
+  /** The combined model-facing report exceeded the transport limit. */
+  readonly transportClipped: boolean;
 };
 
 export type SubagentUsage = {
@@ -114,6 +116,11 @@ export type SubagentRun = {
   readonly model?: AgentDefinition["model"];
   readonly thinkingLevel?: AgentDefinition["thinkingLevel"];
   readonly warnings: readonly string[];
+  /** The child received the turn-budget extension's final-report notification. */
+  readonly budgetExhausted: boolean;
+  /** The model-facing report was clipped; read `fullReportPath` before acting on it. */
+  readonly transportClipped: boolean;
+  readonly fullReportPath?: string;
   readonly attempts: readonly ProcessAttempt[];
   readonly error?: string;
 };
@@ -161,6 +168,7 @@ type MutableAttempt = {
   exitCode: number | null;
   error?: string;
   providerError?: string;
+  budgetExhausted: boolean;
 };
 
 type MutableRun = {
@@ -173,6 +181,9 @@ type MutableRun = {
   model?: AgentDefinition["model"];
   thinkingLevel?: AgentDefinition["thinkingLevel"];
   warnings: string[];
+  budgetExhausted: boolean;
+  transportClipped: boolean;
+  fullReportPath?: string;
   attempts: MutableAttempt[];
   error?: string;
 };
@@ -269,6 +280,8 @@ export async function executeSubagent(
     state: "running",
     startedAt: Date.now(),
     warnings: [],
+    budgetExhausted: false,
+    transportClipped: false,
     attempts: [],
   };
   const sessions: MutableChildSessionState[] = [];
@@ -339,6 +352,7 @@ export async function executeSubagent(
         scouts: [],
         stderr: "",
         exitCode: null,
+        budgetExhausted: false,
       };
       run.attempts.push(attempt);
       emit();
@@ -378,27 +392,37 @@ export async function executeSubagent(
       if (outcome.succeeded) {
         run.state = "succeeded";
         delete run.error;
-        // The child stops itself at its budget, so an extra turn means it was cut short.
+        // The persisted notification is authoritative at the exact limit; retain
+        // the old count fallback for children without the structured signal.
         const usedTurns = attempt.messages.filter((message) => message.role === "assistant").length;
-        const overBudget = usedTurns > definition.maxTurns;
+        const overBudget = attempt.budgetExhausted || usedTurns > definition.maxTurns;
         if (overBudget) {
+          run.budgetExhausted = true;
           attempt.activity.push(`turn budget reached after ${definition.maxTurns} turns`);
+          const warning = "Turn budget reached: the report may be incomplete. Pause for completion evidence before making corrections or approving it.";
+          if (!run.warnings.includes(warning)) run.warnings.push(warning);
         }
         run.endedAt = Date.now();
-        emit("finished");
         const output = finalOutput(attempt.messages);
-        const notices = [
-          ...resolved.warnings,
-          ...(overBudget
-            ? [
-              `Turn budget reached: the report below was written after ${definition.maxTurns} turns and may be incomplete.`,
-            ]
-            : []),
-        ];
-        return result(
-          snapshotRun(run),
-          notices.length > 0 ? `${notices.join("\n\n")}\n\n${output}` : output,
-        );
+        const completeOutput = run.warnings.length > 0 ? `${run.warnings.join("\n\n")}\n\n${output}` : output;
+        const reportDirectory = sessions.at(-1)?.directory;
+        if (reportDirectory) {
+          run.fullReportPath = path.join(reportDirectory, "full-report.txt");
+          await fs.writeFile(run.fullReportPath, completeOutput, { encoding: "utf8", mode: 0o600 });
+        }
+        run.transportClipped = Buffer.byteLength(completeOutput, "utf8") > MAX_RESULT_BYTES;
+        const fullEnvelope = formatCompleteSubagentOutcome({ index: 0, status: "succeeded", run: snapshotRun(run) });
+        if (!run.transportClipped && Buffer.byteLength(fullEnvelope, "utf8") > MAX_RESULT_BYTES) {
+          run.transportClipped = true;
+          if (run.fullReportPath) {
+            await fs.writeFile(run.fullReportPath, fullEnvelope, { encoding: "utf8", mode: 0o600 });
+          }
+        }
+        const responseText = run.transportClipped && run.fullReportPath
+          ? clippedReport(completeOutput, run.fullReportPath)
+          : completeOutput;
+        emit("finished");
+        return result(snapshotRun(run), responseText);
       }
 
       run.error = outcome.error || attempt.stderr || "Subagent failed";
@@ -418,8 +442,17 @@ export async function executeSubagent(
       run.state = "failed";
       run.endedAt = Date.now();
       const output = failureOutput(run);
+      const completeOutput = resolved.warnings.length > 0 ? `${resolved.warnings.join("\n")}\n${output}` : output;
+      const reportDirectory = sessions.at(-1)?.directory;
+      if (reportDirectory) {
+        run.fullReportPath = path.join(reportDirectory, "full-report.txt");
+        const fullEnvelope = formatCompleteSubagentOutcome({ index: 0, status: "failed", run: snapshotRun(run) });
+        run.transportClipped = Buffer.byteLength(completeOutput, "utf8") > MAX_RESULT_BYTES ||
+          Buffer.byteLength(fullEnvelope, "utf8") > MAX_RESULT_BYTES;
+        await fs.writeFile(run.fullReportPath, fullEnvelope, { encoding: "utf8", mode: 0o600 });
+      }
       emit("finished");
-      return result(snapshotRun(run), resolved.warnings.length > 0 ? `${resolved.warnings.join("\n")}\n${output}` : output);
+      return result(snapshotRun(run), completeOutput);
     }
   } catch (error) {
     if (signal?.aborted) {
@@ -615,7 +648,13 @@ function publishBatchUpdate(
 }
 
 function snapshotBatch(outcomes: readonly SubagentBatchOutcome[]): SubagentBatchDetails {
-  return { outcomes: outcomes.map(cloneOutcome) };
+  const cloned = outcomes.map(cloneOutcome);
+  const fullOutput = cloned.map(formatSubagentOutcome).join("\n\n");
+  return {
+    outcomes: cloned,
+    transportClipped: cloned.some((outcome) => "run" in outcome && outcome.run.transportClipped) ||
+      Buffer.byteLength(fullOutput, "utf8") > MAX_RESULT_BYTES,
+  };
 }
 
 function cloneOutcome(outcome: SubagentBatchOutcome): SubagentBatchOutcome {
@@ -666,6 +705,8 @@ function failedRun(request: SubagentRequest, error: unknown): SubagentRun {
     startedAt: now,
     endedAt: now,
     warnings: [],
+    budgetExhausted: false,
+    transportClipped: false,
     attempts: [],
     error: error instanceof Error ? error.message : String(error),
   };
@@ -1003,6 +1044,8 @@ async function runAttempt(
         }
 
         if (event.type !== "message_end" || !event.message) return;
+        // sendMessage() custom messages are persisted with their customType.
+        if (event.message.role === "custom" && event.message.customType === "turn-budget") attempt.budgetExhausted = true;
         if (event.message.role !== "user" && event.message.role !== "assistant" && event.message.role !== "toolResult") return;
         stream.flush();
         const message = event.message as Message;
@@ -1343,8 +1386,10 @@ export function formatSubagentBatch(details: SubagentBatchDetails): string {
 
   // Reserve the ordered outcome states before a single oversized report consumes the output budget.
   const statuses = details.outcomes.map(formatBatchStatus).join("\n");
-  const remaining = MAX_RESULT_BYTES - Buffer.byteLength(`${statuses}\n\n`, "utf8");
-  return remaining > 0 ? `${statuses}\n\n${truncateOutput(output, remaining)}` : truncateOutput(statuses);
+  const notice = "[Aggregate report truncated. Read the full report paths above; pause before corrections or approval until each report is reviewed.]";
+  const prefix = `${statuses}\n\n${notice}\n\n`;
+  const remaining = MAX_RESULT_BYTES - Buffer.byteLength(prefix, "utf8");
+  return remaining > 0 ? `${prefix}${truncateOutput(output, remaining)}` : truncateOutput(`${statuses}\n\n${notice}`);
 }
 
 function formatBatchStatus(outcome: SubagentBatchOutcome): string {
@@ -1353,12 +1398,19 @@ function formatBatchStatus(outcome: SubagentBatchOutcome): string {
     : outcome.status === "failed" || outcome.status === "cancelled"
       ? failureOutput(outcome.run)
       : "";
-  const text = `${outcome.index + 1}. ${outcome.status}${reason ? `: ${reason}` : ""}`;
-  const compact = stripTerminalSequences(text).replace(/\s+/g, " ").trim();
+  const reportNotice = "run" in outcome && outcome.run.fullReportPath
+    ? ` Full report: ${JSON.stringify(outcome.run.fullReportPath)}`
+    : "";
+  const safetyNotice = "run" in outcome && outcome.run.budgetExhausted
+    ? " Budget-limited: pause for completion evidence before corrections or approval."
+    : "";
+  const status = `${outcome.index + 1}. ${outcome.status}${reason ? `: ${reason}` : ""}${safetyNotice}`;
+  const compact = stripTerminalSequences(status).replace(/\s+/g, " ").trim();
   const maxBytes = 512;
-  return Buffer.byteLength(compact, "utf8") <= maxBytes
+  const boundedStatus = Buffer.byteLength(compact, "utf8") <= maxBytes
     ? compact
     : `${takeUtf8Prefix(compact, maxBytes - Buffer.byteLength("…", "utf8"))}…`;
+  return `${boundedStatus}${reportNotice}`;
 }
 
 export function formatSubagentOutcome(outcome: SubagentBatchOutcome): string {
@@ -1369,12 +1421,18 @@ export function formatSubagentOutcome(outcome: SubagentBatchOutcome): string {
     return `${outcome.index + 1}. ${safeTitle(outcome.request.title)} — queued`;
   }
   if (!("run" in outcome)) throw new TypeError("Invalid subagent batch outcome");
+  const report = formatCompleteSubagentOutcome(outcome);
+  return outcome.run.transportClipped && outcome.run.fullReportPath
+    ? clippedReport(report, outcome.run.fullReportPath)
+    : truncateOutput(report);
+}
+
+function formatCompleteSubagentOutcome(outcome: Extract<SubagentBatchOutcome, { run: SubagentRun }>): string {
   const output = outcome.status === "succeeded"
     ? finalOutput(outcome.run.attempts.at(-1)?.messages ?? [])
     : failureOutput(outcome.run);
   const warnings = outcome.run.warnings.length > 0 ? `${outcome.run.warnings.join("\n")}\n` : "";
-  // Usage must remain visible when the specialist's report is oversized.
-  return truncateOutput(`${outcome.index + 1}. ${safeTitle(outcome.run.title)} — ${outcome.status}\n${warnings}${formatUsage(outcome.run)}\n${output}`);
+  return `${outcome.index + 1}. ${safeTitle(outcome.run.title)} — ${outcome.status}\n${warnings}${formatUsage(outcome.run)}\n${output}`;
 }
 
 function formatUsage(run: SubagentRun): string {
@@ -1428,6 +1486,9 @@ function snapshotRun(run: MutableRun): SubagentRun {
     model: run.model,
     thinkingLevel: run.thinkingLevel,
     warnings: [...run.warnings],
+    budgetExhausted: run.budgetExhausted,
+    transportClipped: run.transportClipped,
+    ...(run.fullReportPath ? { fullReportPath: run.fullReportPath } : {}),
     attempts: run.attempts.map((attempt) => ({
       number: attempt.number,
       state: attempt.state,
@@ -1461,9 +1522,17 @@ function snapshotMonitoredRun(
 
 function result(details: SubagentRun, text: string): AgentToolResult<SubagentRun> {
   return {
-    content: [{ type: "text", text: truncateOutput(text) }],
+    content: [{ type: "text", text: details.transportClipped && details.fullReportPath
+      ? clippedReport(text, details.fullReportPath)
+      : truncateOutput(text) }],
     details,
   };
+}
+
+function clippedReport(text: string, reportPath: string): string {
+  const notice = `\n\n[Report truncated for transport. Read the full report at ${reportPath} before corrections or approval.]`;
+  const prefixBudget = MAX_RESULT_BYTES - Buffer.byteLength(notice, "utf8");
+  return `${takeUtf8Prefix(text, prefixBudget)}${notice}`;
 }
 
 function truncateOutput(text: string, maxBytes = MAX_RESULT_BYTES): string {
