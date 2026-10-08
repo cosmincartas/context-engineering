@@ -20,9 +20,17 @@ updated: "{{YYYY-MM-DD}}"
 
 {{The problem in the user's vocabulary, with its source.}}
 
-## Proposed outcome
+## Definition of done
 
-{{State the Definition of Done in ordinary language: the user-visible result and the signals that show it is complete. Give each statement its source. Leave precise acceptance tests and implementation details to the specification.}}
+<!-- Use ordinary language. Give each statement its source. Leave precise acceptance tests and implementation details to the specification. -->
+
+### Outcome
+
+- {{User-visible result when the work is complete, with its source.}}
+
+### Success signals
+
+- {{Signal that a user or a test can observe when the outcome is complete, with its source.}}
 
 ## Affected users and systems
 

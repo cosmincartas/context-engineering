@@ -43,7 +43,7 @@ Turn an initial development prompt into a shared understanding of what the reque
    Identify the systems the outcome touches: this repository, external services, data stores, and integrations. Name them as systems, not as files or symbols. Leave the file-level path map to design.
 3. Build a framing ledger in conversation, not on disk: the restated request in the user's vocabulary, evidence labeled by source (user statement, repository evidence, inference, unknown), and the list of gaps.
 4. Ask questions that close material gaps in the understanding. Investigate unhappy paths, affected users and systems, and edge conditions; ask only when an unresolved answer affects the outcome. Do not ask the user to confirm a synthesis you have not yet presented.
-5. Synthesize Problem, Proposed outcome, Affected users and systems, Constraints, and Open Questions. Distinguish user statements, repository evidence, and proposed interpretations. Put unresolved unknowns and questions deferred to design under Open Questions, each with its consequence. Do not request section approvals.
+5. Synthesize Problem, Definition of done, Affected users and systems, Constraints, and Open Questions. Distinguish user statements, repository evidence, and proposed interpretations. Put unresolved unknowns and questions deferred to design under Open Questions, each with its consequence. Do not request section approvals.
 6. Write `intent.md`. Present the complete intent concisely in about 30 lines, including proposed interpretations and open questions, and invite the user to review it. Offer to expand any named part on request.
 7. Apply requested corrections to the complete file, rerun the completion check, and present what changed. Record interpretations the user confirms as confirmed. Stop when the user has no more changes.
 
@@ -52,7 +52,7 @@ Turn an initial development prompt into a shared understanding of what the reque
 Before you present the intent for review, make sure that:
 
 - Initial Request contains the first user-authored development request verbatim and excludes invocation metadata.
-- Problem, Proposed outcome, Affected users and systems, and Constraints preserve their sources. Every inferred interpretation carries the proposed label.
+- Problem, Definition of done, Affected users and systems, and Constraints preserve their sources. Every inferred interpretation carries the proposed label.
 - Affected users and systems names who and what the outcome touches, without file-level detail.
 - Open Questions holds only unknowns the user could not resolve and questions deferred to design, each with its consequence.
 - The full request is preserved except for revisions the user explicitly approved.
