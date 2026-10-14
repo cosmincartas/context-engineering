@@ -1,0 +1,26 @@
+<section class="section milestones-section" aria-labelledby="{{BLOCK_ID}}-title">
+  <div class="section-heading">
+    <span class="index" aria-hidden="true">{{SECTION_NUMBER_ESCAPED}}</span>
+    <div>
+      <p class="eyebrow">Milestones</p>
+      <h2 id="{{BLOCK_ID}}-title">{{HEADING_ESCAPED}}</h2>
+      <p>{{TIMELINE_SCOPE_FROM_SOURCE_ESCAPED}}</p>
+    </div>
+  </div>
+  <div class="board">
+    <ol class="timeline">
+      <!-- Repeat this item only for source tasks or milestones. Do not add dates or progress. -->
+      <li class="milestone">
+        <div class="milestone-label">{{EXACT_TASK_ID_AND_LABEL_ESCAPED}}</div>
+        <div class="milestone-track" aria-hidden="true"><span class="milestone-dot"></span></div>
+        <div>
+          <h3>{{TASK_OUTCOME_FROM_SOURCE_ESCAPED}}</h3>
+          <p>{{TASK_DETAIL_FROM_SOURCE_ESCAPED}}</p>
+          <div class="tags">{{EXACT_DEPENDENCIES_AND_REFERENCES}}</div>
+        </div>
+        <span class="badge">{{SOURCE_STATUS_ESCAPED}}</span>
+      </li>
+    </ol>
+  </div>
+  <p class="source-note">{{PROGRESS_EVIDENCE_OR_NO_PROGRESS_CLAIM_ESCAPED}}</p>
+</section>
