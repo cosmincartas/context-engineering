@@ -1,0 +1,29 @@
+<section class="section requirements-section" aria-labelledby="{{BLOCK_ID}}-title">
+  <div class="section-heading">
+    <span class="index" aria-hidden="true">{{SECTION_NUMBER_ESCAPED}}</span>
+    <div>
+      <p class="eyebrow">Requirements</p>
+      <h2 id="{{BLOCK_ID}}-title">{{HEADING_ESCAPED}}</h2>
+      <p>{{REQUIREMENT_SCOPE_FROM_SOURCE_ESCAPED}}</p>
+    </div>
+  </div>
+  <div class="board table-wrap" tabindex="0" role="region" aria-label="Requirements table; scroll horizontally on small screens">
+    <table>
+      <caption>{{SOURCE_AND_SELECTION_NOTE_ESCAPED}}</caption>
+      <thead>
+        <tr>
+          <th scope="col">ID</th>
+          <th scope="col">Requirement</th>
+          <th scope="col">Source</th>
+          <th scope="col">Selection</th>
+          <th scope="col">Verification</th>
+          <th scope="col">Approval evidence</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Repeat a row only for a requirement in the source. Keep its exact ID and wording. -->
+        {{SOURCE_REQUIREMENT_ROWS}}
+      </tbody>
+    </table>
+  </div>
+</section>

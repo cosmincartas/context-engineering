@@ -9,6 +9,7 @@ Model-agnostic skills turn an initial development prompt into reusable context, 
 | Understand a concept, compare technologies, inspect implementation impact, see examples, or see candidate high-level designs for a request | `explore` | Chat response or optional technical exploration brief, with a side-by-side designs page for design candidates |
 | Plan delivery work, from scope isolation to an implementation plan, or resume a planning topic | `sdlc` | Validated intent, specification, and implementation plan |
 | Auto-plan a change with input only for disruptive decisions | `quickie` | Validated specification and implementation plan |
+| Create a visual view of existing Markdown without changing its source or approval state | [`visualize`](skills/visualize/SKILL.md) | Derived, standalone HTML presentation |
 
 The delivery pipeline lives in one skill:
 
@@ -40,6 +41,12 @@ Use sdlc to resume the payment-retries topic.
 
 ```text
 Use quickie to create a specification and plan for this change. Ask only about disruptive decisions.
+```
+
+Invoke [`visualize`](skills/visualize/SKILL.md) manually when you want an HTML view; no other skill invokes it automatically. It turns source Markdown into a separate, standalone HTML view using six composing blocks: code snippets, milestones, code changes, requirement tables, flow diagrams, and sequence diagrams. Keep the Markdown authoritative, including its source format and approval state. Diagrams are embedded in the HTML for offline viewing.
+
+```text
+Use visualize to create a standalone HTML view of docs/agentic-engineering/payment-retries/spec.md. Keep the Markdown authoritative and do not change its approval state or source format.
 ```
 
 Named-skill invocation syntax varies by runtime.
