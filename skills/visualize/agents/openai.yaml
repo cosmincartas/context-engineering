@@ -1,7 +1,7 @@
 interface:
   display_name: "Visualize"
-  short_description: "Complete, source-grounded standalone HTML views from Markdown"
-  default_prompt: "Use $visualize to create a standalone HTML view from this Markdown source."
+  short_description: "Standalone HTML views from Markdown or directly from a request"
+  default_prompt: "Use $visualize to create a standalone HTML view. If a Markdown source is supplied, keep it authoritative. Otherwise, build the HTML directly from the request without creating intermediate Markdown."
 
 policy:
   allow_implicit_invocation: true

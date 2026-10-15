@@ -2,7 +2,15 @@
 
 Choose one recipe that fits the source and the reader's question. A recipe sets reading order. It does not change source meaning or approval rules.
 
-Keep every source section unless the user asks for a narrower view. A complete view is the default. For a scoped view, list included and omitted sections near the top.
+In Markdown mode, keep every source section unless the user asks for a narrower view. A complete view is the default. For a scoped view, list included and omitted sections near the top.
+
+## Direct HTML from a request
+
+Use when no Markdown source is supplied or identified. Build the HTML without an intermediate Markdown file.
+
+**Order:** title and request basis → purpose and summary → explanation, comparison, or clearly labeled proposal → relevant diagrams or illustrative examples → assumptions, limits, and references.
+
+Show the requested scope and the direct-mode record instead of a source-file record. You may author explanatory text, illustrative code, and proposed diagrams. Label examples, proposals, and assumptions. Do not invent requirement IDs, task status, approval evidence, verified diffs, or test results. Use the blocks below where they fit; their evidence rules still apply. The source-only restrictions on explanatory code and proposed diagrams do not prevent clearly labeled direct-mode examples.
 
 ## Explanation or exploration
 
