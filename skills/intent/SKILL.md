@@ -1,12 +1,12 @@
 ---
 name: intent
-description: Use it to establish common understanding with the user on a request.
+description: Use it to establish complete understanding on the user's request.
 disable-model-invocation: false
 ---
 
 ## Goal
 
-Understand the user's request and what does it means, not how to implement it.
+Focus on understanding the user's request and its intent, rather than how to implement it.
 
 
 ## Output
@@ -20,7 +20,7 @@ One artifact `docs/context-engineering/<subject>/intent.md` that needs to captur
 
 ## Invariants
 
-- Use a simplified vocabulary, easy to understand words and short sentences.
+- Use a simplified vocabulary, easy to understand and short sentences.
 - Never write production code. This skill clarifies; it does not design or implement.
 - Never run `git commit`, create branches, or push changes.
 - Inspect repository evidence before you ask the user to describe behavior the code already shows.
