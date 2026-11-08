@@ -7,6 +7,7 @@ Model-agnostic skills turn an initial development prompt into reusable context, 
 | Intent | Skill | Output |
 |---|---|---|
 | Understand a concept, compare technologies, inspect implementation impact, see examples, or see candidate high-level designs for a request | `explore` | Chat response or optional technical exploration brief, with a side-by-side designs page for design candidates |
+| Orchestrate standalone interactive sessions across configured harnesses through `hc` | `shepherd` | Scoped delegation, session status, verified results, and cleanup |
 | Plan delivery work, from scope isolation to an implementation plan, or resume a planning topic | `sdlc` | Validated intent, specification, and implementation plan |
 | Auto-plan a change with input only for disruptive decisions | `quickie` | Validated specification and implementation plan |
 
@@ -42,6 +43,10 @@ Use sdlc to resume the payment-retries topic.
 Use quickie to create a specification and plan for this change. Ask only about disruptive decisions.
 ```
 
+```text
+Use shepherd to delegate this scoped change through a configured harness with hc, monitor the session, verify its result, and clean up its terminal.
+```
+
 Named-skill invocation syntax varies by runtime.
 
 ## Artifacts
@@ -61,7 +66,7 @@ Each file-based downstream artifact records the SHA-256 hash of its upstream fil
 
 ## Implementation
 
-`sdlc` and `quickie` stop at an implementation plan. The bundled `sdd` skill executes and reviews plans from either workflow or elsewhere. After successful review, it saves `docs/context-engineering/<subject>/tasks.md` and clears its completed session tasks.
+`sdlc` and `quickie` stop at an implementation plan. Use the bundled `sdd` skill to execute and review plans through its tracked task, worker, and reviewer process. Use `shepherd` for standalone session orchestration through `hc` across configured harnesses; it coordinates sessions and their results without creating that tracked process. After successful review, `sdd` saves `docs/context-engineering/<subject>/tasks.md` and clears its completed session tasks.
 
 With Superpowers, use `superpowers:subagent-driven-development` when subagents are available, or `superpowers:executing-plans` otherwise as external alternatives. Apply `superpowers:test-driven-development` to each production-behavior task. Superpowers is an external package and is not bundled here.
 

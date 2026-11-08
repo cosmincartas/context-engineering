@@ -1,0 +1,7 @@
+interface:
+  display_name: "Shepherd"
+  short_description: "Orchestrate configured harnesses through hc"
+  default_prompt: "Use $shepherd to delegate scoped work through hc and collect verified results."
+
+policy:
+  allow_implicit_invocation: true
