@@ -1,0 +1,25 @@
+<svg class="diagram" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 280" role="img" aria-labelledby="{{ID_PREFIX}}-title {{ID_PREFIX}}-desc">
+  <!-- Authoring: This is an illustrative starter layout, not a fixed semantic graph. Add or remove nodes; add, remove, or reroute edges and set their directions and geometry to match supported source facts. Labels alone do not change topology. Update labels, title, description, geometry, and all related IDs and references together. -->
+  <title id="{{ID_PREFIX}}-title">{{DIAGRAM_TITLE_XML_ESCAPED}}</title>
+  <desc id="{{ID_PREFIX}}-desc">{{DIAGRAM_DESCRIPTION_XML_ESCAPED}}</desc>
+  <defs>
+    <marker id="{{ID_PREFIX}}-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 0L10 5L0 10Z" fill="#79839a"/>
+    </marker>
+  </defs>
+  <g aria-hidden="true">
+    <rect class="node node-accent" x="35" y="83" width="250" height="108" rx="14"/>
+    <rect class="node" x="375" y="83" width="250" height="108" rx="14"/>
+    <rect class="node node-teal" x="715" y="83" width="250" height="108" rx="14"/>
+    <path class="edge" d="M285 137H375" marker-end="url(#{{ID_PREFIX}}-arrow)"/>
+    <path class="edge" d="M625 137H715" marker-end="url(#{{ID_PREFIX}}-arrow)"/>
+    <text class="node-title" x="160" y="125" text-anchor="middle">{{NODE_1_TITLE_XML_ESCAPED}}</text>
+    <text class="node-detail" x="160" y="151" text-anchor="middle">{{NODE_1_DETAIL_XML_ESCAPED}}</text>
+    <text class="node-title" x="500" y="125" text-anchor="middle">{{NODE_2_TITLE_XML_ESCAPED}}</text>
+    <text class="node-detail" x="500" y="151" text-anchor="middle">{{NODE_2_DETAIL_XML_ESCAPED}}</text>
+    <text class="node-title" x="840" y="125" text-anchor="middle">{{NODE_3_TITLE_XML_ESCAPED}}</text>
+    <text class="node-detail" x="840" y="151" text-anchor="middle">{{NODE_3_DETAIL_XML_ESCAPED}}</text>
+    <text class="edge-label" x="330" y="122" text-anchor="middle">{{EDGE_1_LABEL_XML_ESCAPED}}</text>
+    <text class="edge-label" x="670" y="122" text-anchor="middle">{{EDGE_2_LABEL_XML_ESCAPED}}</text>
+  </g>
+</svg>

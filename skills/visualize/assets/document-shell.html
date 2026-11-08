@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{PAGE_TITLE_ESCAPED}}</title>
+<style>
+{{INLINE_STYLES}}
+</style>
+</head>
+<body>
+<div class="page">
+<header class="masthead">
+  <p class="brand">{{DOCUMENT_LABEL_ESCAPED}}</p>
+  <p class="edition">DERIVED VIEW</p>
+</header>
+<header class="hero">
+  <p class="eyebrow">{{RECIPE_LABEL_ESCAPED}}</p>
+  <h1>{{PAGE_HEADING_ESCAPED}}</h1>
+  <p class="lead">{{SUMMARY_FROM_SOURCE_ESCAPED}}</p>
+  <aside class="source-panel" aria-label="Source path, hash, freshness, and coverage">
+    <dl>
+      <dt>Source</dt><dd><code>{{SOURCE_PATH_ESCAPED}}</code></dd>
+      <dt>SHA-256</dt><dd><code>{{SOURCE_SHA256}}</code></dd>
+      <dt>Checked at (UTC)</dt><dd><time datetime="{{SOURCE_CHECK_TIME_UTC}}">{{SOURCE_CHECK_TIME_UTC}}</time></dd>
+      <dt>Coverage</dt><dd>{{COVERAGE_AND_OMISSIONS_ESCAPED}}</dd>
+    </dl>
+    <p class="freshness">Hash checked at generation time. This static view cannot detect later source changes.</p>
+  </aside>
+</header>
+<nav aria-label="Page contents">
+  {{INTERNAL_NAVIGATION}}
+</nav>
+<main>
+{{CONTENT_BLOCKS}}
+</main>
+<footer>
+  <p>Markdown source remains authoritative. This HTML is a derived view, not a new approval or verification record.</p>
+  {{SOURCE_EVIDENCE_AND_LIMITS}}
+</footer>
+</div>
+</body>
+</html>

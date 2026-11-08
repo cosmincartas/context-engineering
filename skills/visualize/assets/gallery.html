@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visualize — standalone building-block gallery</title>
+<style>
+:root{color-scheme:light;--bg:#f7f8fa;--surface:#fff;--ink:#202638;--muted:#59647a;--line:#e0e5ed;--indigo:#4f46e5;--indigo-soft:#eeedff;--teal:#08786d;--teal-soft:#e9f7f2;--mono:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;--sans:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+*{box-sizing:border-box}html{scroll-padding-top:24px}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 var(--sans);-webkit-font-smoothing:antialiased}a{color:var(--indigo);text-underline-offset:4px}a:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--indigo);outline-offset:4px}h1,h2,h3,p{margin-top:0}h1{max-width:850px;margin-bottom:14px;font-size:clamp(2.4rem,6vw,4.4rem);line-height:1.06;letter-spacing:-.05em}h2{margin-bottom:8px;font-size:1.65rem;line-height:1.2;letter-spacing:-.035em}h3{margin-bottom:6px;font-size:1rem;line-height:1.35}code,pre{font-family:var(--mono)}code{font-size:.9em;overflow-wrap:anywhere}.page{max-width:1160px;margin:auto;padding:28px 34px 58px}.masthead{display:flex;justify-content:space-between;gap:16px;border-bottom:1px solid var(--line);padding:0 0 18px;font-size:.78rem}.masthead p{margin:0}.brand{font-weight:700}.edition,.eyebrow{color:var(--muted);font: .68rem/1.5 var(--mono);letter-spacing:.08em;text-transform:uppercase}.hero{max-width:900px;padding:46px 0 28px}.hero .eyebrow{color:var(--indigo);margin-bottom:12px}.lead{max-width:720px;margin-bottom:22px;color:var(--muted);font-size:1.08rem}.source-panel{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:15px 18px}.source-panel dl{display:grid;grid-template-columns:minmax(120px,160px) minmax(0,1fr);gap:7px 16px;margin:0;font-size:.8rem}.source-panel dt{color:var(--muted);font-weight:650}.source-panel dd{min-width:0;margin:0;overflow-wrap:anywhere}.freshness,.source-note,.annotation{margin:12px 0 0;color:var(--muted);font-size:.78rem}nav{display:flex;flex-wrap:wrap;gap:8px 20px;margin:0 0 38px;border-block:1px solid var(--line);padding:14px 0}nav a{color:var(--muted);font-size:.78rem;text-decoration:none}nav a:hover{color:var(--indigo)}.section{margin:0 0 42px}.section-heading{display:flex;align-items:flex-start;gap:12px;margin-bottom:17px}.section-heading h2{margin-bottom:4px}.section-heading p{margin-bottom:0;color:var(--muted);font-size:.86rem}.index{display:grid;width:30px;height:30px;flex:0 0 30px;place-items:center;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--muted);font:.7rem var(--mono)}.board{overflow:hidden;border:1px solid var(--line);border-radius:14px;background:var(--surface);box-shadow:0 4px 20px #1a254105}.board-bar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 16px;border-bottom:1px solid var(--line);background:#fcfcfe;padding:13px 18px;color:var(--muted);font:.7rem var(--mono)}.board-bar strong{color:var(--ink)}.board-body{padding:20px}.note{margin:13px 0 0;border-left:2px solid #b7b0fb;padding:4px 0 4px 12px;color:var(--muted);font-size:.78rem}.note strong{color:var(--ink)}.summary-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));overflow:hidden;margin:0 0 26px;border:1px solid var(--line);border-radius:13px;background:var(--surface)}.stat{min-width:0;border-right:1px solid var(--line);padding:16px 19px}.stat:last-child{border-right:0}.stat-label{margin-bottom:5px;color:var(--muted);font:.65rem var(--mono);text-transform:uppercase}.stat-value{margin:0;font-size:1.02rem;font-weight:650}.stat-value.accent{color:var(--indigo)}.badge{display:inline-flex;align-items:center;gap:6px;border-radius:999px;background:#eef1f6;padding:4px 9px;color:#475369;font-size:.68rem;font-weight:650;white-space:nowrap}.badge::before{width:5px;height:5px;border-radius:50%;background:currentColor;content:""}.badge.indigo{background:var(--indigo-soft);color:#4d42c7}.badge.teal{background:var(--teal-soft);color:var(--teal)}.badge.amber{background:#fff4e4;color:#85551c}.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px}.two>*{min-width:0}.code-card{overflow:hidden;border:1px solid #253047;border-radius:12px;background:#141c2e;color:#dce3f6}.code-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:7px 14px;border-bottom:1px solid #2c3851;background:#1b253a;padding:11px 15px;color:#a9b6d1;font:.68rem var(--mono)}.code-card pre{overflow:auto;margin:0;padding:17px;font-size:.76rem;line-height:1.75;tab-size:2;white-space:pre}.code-card code{font-size:inherit}.diff-legend{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:9px;color:var(--muted);font-size:.74rem}.timeline{margin:0;padding:3px 22px;list-style:none}.milestone{display:grid;grid-template-columns:minmax(105px,145px) 18px minmax(0,1fr) auto;gap:13px;border-bottom:1px solid var(--line);padding:21px 0}.milestone:last-child{border-bottom:0}.milestone-label{color:var(--muted);font:.7rem/1.5 var(--mono)}.milestone-track{position:relative;display:flex;justify-content:center}.milestone-track::before{position:absolute;top:14px;bottom:-35px;width:1px;background:var(--line);content:""}.milestone:last-child .milestone-track::before{display:none}.milestone-dot{z-index:1;width:12px;height:12px;margin-top:3px;border:3px solid #b7b0fb;border-radius:50%;background:var(--surface)}.milestone p{max-width:650px;margin:0;color:var(--muted);font-size:.78rem}.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}.tag{border:1px solid var(--line);border-radius:5px;background:#f3f5f9;padding:2px 6px;color:var(--muted);font:.64rem var(--mono)}.table-wrap{overflow:auto}table{width:100%;min-width:850px;border-collapse:collapse;text-align:left;font-size:.78rem}caption{padding:13px 18px;color:var(--muted);text-align:left}th{background:#f8f9fc;color:var(--muted);font:.65rem var(--mono);text-transform:uppercase}th,td{border-bottom:1px solid var(--line);padding:13px 16px;vertical-align:top}tbody tr:last-child td{border-bottom:0}td:first-child{color:var(--indigo);font:.7rem var(--mono);white-space:nowrap}.empty-state{margin:0;border:1px dashed #cbd2df;border-radius:9px;background:#fafbfc;padding:17px;color:var(--muted);font-size:.84rem}.diagram-wrap{overflow:auto;padding:18px;background:radial-gradient(#dae0ec .7px,transparent .7px);background-size:18px 18px}.diagram{display:block;width:100%;min-width:720px;height:auto;margin:auto}.diagram-source{border:1px solid var(--line);border-radius:10px;background:#f8f9fc;padding:14px 16px}.diagram-source .eyebrow{margin-bottom:7px}.diagram-source pre{overflow:auto;margin:0;color:#39465d;font:.72rem/1.65 var(--mono);white-space:pre-wrap}.diagram text{fill:var(--ink);font-family:var(--sans)}.diagram .node{fill:#fff;stroke:var(--line);stroke-width:1.5}.diagram .node-accent{fill:var(--indigo-soft);stroke:#c9c4f6}.diagram .node-teal{fill:var(--teal-soft);stroke:#b7dfd5}.diagram .node-title{font-size:15px;font-weight:650}.diagram .node-detail{fill:var(--muted);font-family:var(--mono);font-size:10px}.diagram .edge{fill:none;stroke:#79839a;stroke-width:1.6}.diagram .edge-label{fill:var(--muted);font-family:var(--mono);font-size:10px}.diagram .actor{fill:var(--indigo-soft);stroke:#c9c4f6;stroke-width:1.3}.diagram .lifeline{stroke:#c2cadd;stroke-dasharray:4 5}.diagram .message{stroke:#65708a;stroke-width:1.5}.diagram .message-return{stroke:var(--teal);stroke-dasharray:5 4;stroke-width:1.5}.diagram .message-label{fill:#39465d;font-size:12px}.recipe-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.recipe{min-width:0;border:1px solid var(--line);border-radius:11px;background:var(--surface);padding:16px}.recipe .eyebrow{margin-bottom:9px;color:var(--indigo)}.recipe h3{font-size:.9rem}.recipe p{margin:0;color:var(--muted);font-size:.77rem}footer{margin-top:22px;border-top:1px solid var(--line);padding-top:20px;color:var(--muted);font-size:.78rem}footer p:last-child{margin-bottom:0}
+@media(max-width:850px){.page{padding:24px 21px 46px}.hero{padding-top:35px}.summary-strip{grid-template-columns:repeat(2,minmax(0,1fr))}.stat:nth-child(2){border-right:0}.stat:nth-child(-n+2){border-bottom:1px solid var(--line)}.two{grid-template-columns:1fr}.recipe-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.milestone{grid-template-columns:85px 16px minmax(0,1fr);gap:9px}.milestone>.badge{grid-column:3;justify-self:start}}
+@media(max-width:520px){.page{padding:24px 15px 46px}.source-panel dl{grid-template-columns:1fr;gap:2px}.source-panel dd{margin-bottom:8px}.recipe-grid{grid-template-columns:1fr}.board-body,.diagram-wrap{padding:14px}.timeline{padding-inline:14px}.milestone{grid-template-columns:1fr 14px minmax(0,1fr)}.milestone-label{grid-column:1/-1}nav{gap:8px 14px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important}}
+@media print{body{background:#fff;font-size:10pt}.page{max-width:none;padding:0}nav{display:none}.hero{padding-top:0}.board{box-shadow:none;break-inside:avoid}.diagram-wrap{overflow:visible;background:none}.diagram{min-width:0}.table-wrap,.code-card pre{overflow:visible}table{min-width:0;font-size:8pt}th,td{padding:7px}.two{display:block}.recipe-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.code-card{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+</style>
+</head>
+<body>
+<div class="page">
+<header class="masthead"><p class="brand">Visualize · building-block gallery</p><p class="edition">STANDALONE / OFFLINE</p></header>
+<header class="hero">
+  <p class="eyebrow">A derived view · proposed integration example</p>
+  <h1>Source facts, made easier to scan.</h1>
+  <p class="lead">This page uses a source exploration about possible integration to show six reusable blocks. The Markdown remains authoritative.</p>
+  <aside class="source-panel" aria-label="Source and freshness record">
+    <dl>
+      <dt>Source</dt><dd><code>docs/agentic-engineering/explorations/2026-10-14/html-block-integration.md</code></dd>
+      <dt>SHA-256</dt><dd><code>ca3a7cfedce37b00f3fbc6952855abec21a66cd17c2de6d26c6ae0350c89ff73</code></dd>
+      <dt>Checked at (UTC)</dt><dd><time datetime="2026-10-14T11:40:27Z">2026-10-14 11:40:27 UTC</time></dd>
+      <dt>Source status</dt><dd>Draft, as stated in the source front matter.</dd>
+      <dt>Recorded choice</dt><dd>The source records a choice for agent-filled standalone files and the revised visual style. Candidate A remains a proposal.</dd>
+      <dt>Recipe and coverage</dt><dd>Building-block gallery. Includes selected examples from Candidate A, Flow Mapping, and Example. Omits Question, Findings, Important distinction, remaining Candidate A content, Planning versus execution, Early gates, Repository Impact, Freshness and approval, Publication checks, Unknowns, Sources, and Suggested Next Step.</dd>
+    </dl>
+    <p class="freshness">The source SHA-256 was checked at 2026-10-14 11:40:27 UTC. This static page cannot detect later source changes.</p>
+  </aside>
+</header>
+<div class="summary-strip" aria-label="Gallery summary">
+  <div class="stat"><div class="stat-label">Reusable blocks</div><p class="stat-value">06 building blocks</p></div>
+  <div class="stat"><div class="stat-label">Delivery</div><p class="stat-value">One HTML file</p></div>
+  <div class="stat"><div class="stat-label">Runtime</div><p class="stat-value accent">Inline CSS + SVG</p></div>
+  <div class="stat"><div class="stat-label">Authority</div><p class="stat-value">Markdown source</p></div>
+</div>
+<nav aria-label="Page contents">
+  <a href="#flow">01 Flow</a><a href="#sequence">02 Sequence</a><a href="#snippet">03 Snippet</a><a href="#changes">04 Changes</a><a href="#milestones">05 Milestones</a><a href="#requirements">06 Requirements</a><a href="#recipes">Recipes</a>
+</nav>
+<main>
+<section class="section" id="flow" aria-labelledby="flow-heading">
+  <div class="section-heading"><span class="index" aria-hidden="true">01</span><div><h2 id="flow-heading">Flow diagram</h2><p>Candidate A is a proposal, not an installed system.</p></div><span class="badge indigo">Proposed</span></div>
+  <div class="board"><div class="board-bar"><strong>Source Markdown → standalone derived view</strong><span>Agent selects and assembles blocks</span></div>
+    <div class="diagram-wrap" tabindex="0" role="region" aria-label="Proposed flow diagram; scroll horizontally on small screens">
+      <svg class="diagram" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 390" role="img" aria-labelledby="gallery-flow-title gallery-flow-desc">
+        <title id="gallery-flow-title">Proposed source-to-HTML authoring flow</title>
+        <desc id="gallery-flow-desc">The existing Markdown source, a new HTML block kit, and a new recipe guide provide input to the authoring agent. The agent writes a standalone HTML view for the reader. The source document says that the Markdown remains authoritative and the view is derived.</desc>
+        <defs><marker id="gallery-flow-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#79839a"/></marker></defs>
+        <g aria-hidden="true">
+          <rect class="node node-accent" x="35" y="46" width="240" height="74" rx="13"/><text class="node-title" x="155" y="77" text-anchor="middle">Source Markdown</text><text class="node-detail" x="155" y="99" text-anchor="middle">authoritative source</text>
+          <rect class="node" x="35" y="157" width="240" height="74" rx="13"/><text class="node-title" x="155" y="188" text-anchor="middle">HTML block kit</text><text class="node-detail" x="155" y="210" text-anchor="middle">new reusable assets</text>
+          <rect class="node" x="35" y="268" width="240" height="74" rx="13"/><text class="node-title" x="155" y="299" text-anchor="middle">Scenario recipes</text><text class="node-detail" x="155" y="321" text-anchor="middle">new authoring guidance</text>
+          <rect class="node node-accent" x="420" y="147" width="260" height="105" rx="14"/><text class="node-title" x="550" y="191" text-anchor="middle">Authoring agent</text><text class="node-detail" x="550" y="216" text-anchor="middle">selects · assembles · checks</text>
+          <rect class="node node-teal" x="825" y="147" width="240" height="105" rx="14"/><text class="node-title" x="945" y="191" text-anchor="middle">Standalone HTML</text><text class="node-detail" x="945" y="216" text-anchor="middle">offline derived view</text>
+          <path class="edge" d="M275 83C340 83 355 170 420 170" marker-end="url(#gallery-flow-arrow)"/><text class="edge-label" x="347" y="112" text-anchor="middle">read full source</text>
+          <path class="edge" d="M275 194H420" marker-end="url(#gallery-flow-arrow)"/><text class="edge-label" x="347" y="184" text-anchor="middle">markup</text>
+          <path class="edge" d="M275 305C340 305 355 229 420 229" marker-end="url(#gallery-flow-arrow)"/><text class="edge-label" x="347" y="287" text-anchor="middle">block order</text>
+          <path class="edge" d="M680 199H825" marker-end="url(#gallery-flow-arrow)"/><text class="edge-label" x="752" y="188" text-anchor="middle">write view</text>
+        </g>
+      </svg>
+    </div>
+    <div class="diagram-source">
+      <p class="eyebrow">Exact source Mermaid text · Candidate A</p>
+      <pre tabindex="0" aria-label="Exact Mermaid source text for Candidate A"><code>flowchart LR
+    Owners["Existing: explore / sdlc / design-specs / implementation-plan / sdd"] --&gt; Source["Existing: Markdown artifacts / task and review evidence"]
+    Source --&gt; Present["NEW: skills/html-documents/SKILL.md:Publish"]
+    Kit["NEW: shell / six blocks / scenario recipes"] --&gt; Present
+    Present --&gt; View["NEW: standalone derived HTML"]
+    View --&gt; Review["Existing: chat review / Inbox attachment"]
+    Review --&gt;|corrections and approval| Owners
+    Owners -. "early gate snapshot, explicitly provisional" .-&gt; Present</code></pre>
+    </div>
+  </div>
+  <p class="note"><strong>Source note:</strong> The SVG shows the authoring inputs. The exact source diagram text also records review and feedback. Candidate A remains a proposal; it does not change existing skills.</p>
+</section>
+
+<section class="section" id="sequence" aria-labelledby="sequence-heading">
+  <div class="section-heading"><span class="index" aria-hidden="true">02</span><div><h2 id="sequence-heading">Sequence diagram</h2><p>One supported authoring sequence, with the freshness check from this skill's contract.</p></div><span class="badge teal">Offline SVG</span></div>
+  <div class="board"><div class="board-bar"><strong>Build a source-grounded view</strong><span>Ordered interactions · proposed authoring flow</span></div>
+    <div class="diagram-wrap" tabindex="0" role="region" aria-label="Sequence diagram; scroll horizontally on small screens">
+      <svg class="diagram" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 500" role="img" aria-labelledby="gallery-sequence-title gallery-sequence-desc">
+        <title id="gallery-sequence-title">Proposed authoring sequence for a standalone HTML view</title>
+        <desc id="gallery-sequence-desc">The authoring agent reads the full Markdown source and checks its hash. It selects blocks and a recipe from the asset kit. It checks the source hash again, writes a standalone page, and presents it to the reader. The source remains unchanged and authoritative.</desc>
+        <defs>
+          <marker id="gallery-sequence-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#65708a"/></marker>
+          <marker id="gallery-sequence-return" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#08786d"/></marker>
+        </defs>
+        <g aria-hidden="true">
+          <rect class="actor" x="25" y="20" width="190" height="54" rx="10"/><text class="node-title" x="120" y="53" text-anchor="middle">Source Markdown</text>
+          <rect class="actor" x="265" y="20" width="190" height="54" rx="10"/><text class="node-title" x="360" y="53" text-anchor="middle">Block kit + recipe</text>
+          <rect class="actor" x="505" y="20" width="190" height="54" rx="10"/><text class="node-title" x="600" y="53" text-anchor="middle">Authoring agent</text>
+          <rect class="actor" x="745" y="20" width="190" height="54" rx="10"/><text class="node-title" x="840" y="53" text-anchor="middle">HTML page</text>
+          <rect class="actor" x="985" y="20" width="190" height="54" rx="10"/><text class="node-title" x="1080" y="53" text-anchor="middle">Reader</text>
+          <path class="lifeline" d="M120 74V455M360 74V455M600 74V455M840 74V455M1080 74V455"/>
+          <path class="message" d="M120 130H600" marker-end="url(#gallery-sequence-arrow)"/><text class="message-label" x="360" y="120" text-anchor="middle">Read Markdown; record source hash</text>
+          <path class="message" d="M360 200H600" marker-end="url(#gallery-sequence-arrow)"/><text class="message-label" x="480" y="190" text-anchor="middle">Select recipe and blocks</text>
+          <path class="message-return" d="M600 270H120" marker-end="url(#gallery-sequence-return)"/><text class="message-label" x="360" y="260" text-anchor="middle">Recheck source hash</text>
+          <path class="message" d="M600 340H840" marker-end="url(#gallery-sequence-arrow)"/><text class="message-label" x="720" y="330" text-anchor="middle">Write one offline HTML file</text>
+          <path class="message" d="M840 410H1080" marker-end="url(#gallery-sequence-arrow)"/><text class="message-label" x="960" y="400" text-anchor="middle">Open derived view</text>
+        </g>
+      </svg>
+    </div>
+  </div>
+  <p class="note">The written description and SVG labels retain the same facts. This sequence does not create an approval step.</p>
+</section>
+
+<div class="two">
+<section class="section" id="snippet" aria-labelledby="snippet-heading">
+  <div class="section-heading"><span class="index" aria-hidden="true">03</span><div><h2 id="snippet-heading">Code or command snippet</h2><p>Copy a source excerpt. Preserve its label and evidence.</p></div></div>
+  <div class="code-card">
+    <div class="code-head"><span>html-block-integration.md · Example</span><span>Proposed invocation · not executed</span></div>
+    <pre tabindex="0" aria-label="Proposed invocation quoted from the source"><code>Source: the current topic's spec.md
+Recipe: specification-review
+Output: spec.html beside the source
+Mode: complete derived view</code></pre>
+  </div>
+  <p class="annotation">This text is quoted from the source. The source calls it a proposed invocation, not an implemented command.</p>
+</section>
+<section class="section" id="changes" aria-labelledby="changes-heading">
+  <div class="section-heading"><span class="index" aria-hidden="true">04</span><div><h2 id="changes-heading">Code changes</h2><p>Show an actual diff, never an inferred one.</p></div></div>
+  <div class="board"><div class="board-bar"><strong>Diff block · source evidence required</strong><span>No diff supplied</span></div><div class="board-body"><p class="empty-state">The source is an exploration, not a code diff. No changes are shown or inferred.</p></div></div>
+  <p class="annotation">For a real diff, preserve its file path, basis, hunk headers, signs, context, and verification evidence.</p>
+</section>
+</div>
+
+<section class="section" id="milestones" aria-labelledby="milestones-heading">
+  <div class="section-heading"><span class="index" aria-hidden="true">05</span><div><h2 id="milestones-heading">Suggested review points</h2><p>A timeline layout can show sourced recommendations without claiming execution progress.</p></div><span class="badge indigo">Suggestions only</span></div>
+  <div class="board"><ol class="timeline">
+    <li class="milestone"><div class="milestone-label">Specification review</div><div class="milestone-track" aria-hidden="true"><span class="milestone-dot"></span></div><div><h3>Show requirements, diagrams, and complete design details</h3><p>The source suggests this view at final specification review. It names <code>skills/design-specs/SKILL.md:Review the specification</code> as an owner.</p><div class="tags"><span class="tag">Suggested view mapping</span><span class="tag">No completion state</span></div></div><span class="badge">Suggested</span></li>
+    <li class="milestone"><div class="milestone-label">Plan review</div><div class="milestone-track" aria-hidden="true"><span class="milestone-dot"></span></div><div><h3>Group exact plan tasks and show requirement coverage</h3><p>The source suggests this view at plan review and handover. It names <code>skills/implementation-plan/SKILL.md:Review</code> as an owner.</p><div class="tags"><span class="tag">Suggested view mapping</span><span class="tag">No completion state</span></div></div><span class="badge">Suggested</span></li>
+  </ol></div>
+  <p class="note"><strong>Limit:</strong> these are recommendations in the exploration. They are not project milestones, dates, or completed work.</p>
+</section>
+
+<section class="section" id="requirements" aria-labelledby="requirements-heading">
+  <div class="section-heading"><span class="index" aria-hidden="true">06</span><div><h2 id="requirements-heading">Requirement table</h2><p>Use source IDs and evidence. Do not turn recommendations into requirements.</p></div><span class="badge amber">No ledger in source</span></div>
+  <div class="board table-wrap" tabindex="0" role="region" aria-label="Requirement table example; no source requirement rows exist">
+    <table><caption>Source: html-block-integration.md. It contains recommendations and flow mappings, but no FR/NFR ledger. No rows are fabricated.</caption>
+      <thead><tr><th scope="col">ID</th><th scope="col">Requirement</th><th scope="col">Source</th><th scope="col">Selection</th><th scope="col">Verification</th><th scope="col">Approval evidence</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section" id="recipes" aria-labelledby="recipes-heading">
+  <div class="section-heading"><span class="index" aria-hidden="true">↗</span><div><h2 id="recipes-heading">Choose blocks for the reader's question</h2><p>Recipes select and order source evidence. They do not add facts.</p></div></div>
+  <div class="recipe-grid">
+    <article class="recipe"><p class="eyebrow">Explain</p><h3>Technical explanation</h3><p>Summary → flow → snippets → sequence → limits.</p></article>
+    <article class="recipe"><p class="eyebrow">Review</p><h3>Code review</h3><p>Summary → changes → snippets → evidence. Use a diff only when one exists.</p></article>
+    <article class="recipe"><p class="eyebrow">Deliver</p><h3>Plan handover</h3><p>Scope → exact tasks → dependencies → verification plan → limits.</p></article>
+    <article class="recipe"><p class="eyebrow">Validate</p><h3>Requirement review</h3><p>Requirements → selection and approval evidence → verification → open items.</p></article>
+  </div>
+</section>
+</main>
+<footer>
+  <p><strong>Source and limit.</strong> This scoped gallery uses selected examples from Candidate A, Flow Mapping, and Example in <code>html-block-integration.md</code>. It does not show the full exploration.</p>
+  <p>All recommendations keep their proposed status. The requirement table is empty because the source has no requirement ledger. The diff block is empty because the source has no diff.</p>
+  <p>The Markdown remains authoritative. This gallery does not approve its content or start another review lifecycle. It uses inline CSS and SVG, no script, and no external resources.</p>
+</footer>
+</div>
+</body>
+</html>

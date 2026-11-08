@@ -2,7 +2,7 @@
 name: scout
 description: Read-only reconnaissance of the codebase, local docs, or library documentation. Use for bounded research that should return compressed, cited findings.
 tools: Read, Grep, Glob, Bash, WebFetch, WebSearch
-model: claude-sonnet-5-5
+model: claude-haiku-5-5
 effort: medium
 maxTurns: 40
 ---

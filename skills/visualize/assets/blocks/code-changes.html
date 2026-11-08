@@ -1,0 +1,18 @@
+<section class="section changes-section" aria-labelledby="{{BLOCK_ID}}-title">
+  <div class="section-heading">
+    <span class="index" aria-hidden="true">{{SECTION_NUMBER_ESCAPED}}</span>
+    <div>
+      <p class="eyebrow">Code changes</p>
+      <h2 id="{{BLOCK_ID}}-title">{{HEADING_ESCAPED}}</h2>
+      <p>{{CHANGE_PURPOSE_FROM_SOURCE_ESCAPED}}</p>
+    </div>
+  </div>
+  <div class="code-card">
+    <div class="code-head">
+      <code>{{SOURCE_PATH_ESCAPED}}</code>
+      <span>{{DIFF_BASIS_AND_REVISION_ESCAPED}}</span>
+    </div>
+    <pre class="diff-code" tabindex="0" aria-label="Exact source diff for {{SOURCE_PATH_ESCAPED}}"><code><!-- Replace with one escaped line span per source diff line. Keep every prefix, sign, hunk, line order, and newline. Use diff-add, diff-remove, diff-context, or diff-hunk only when the source line has that type. -->{{ESCAPED_DIFF_LINES}}</code></pre>
+  </div>
+  <p class="source-note">{{REVIEW_AND_VERIFICATION_EVIDENCE_ESCAPED}}</p>
+</section>
