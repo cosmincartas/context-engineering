@@ -1,6 +1,6 @@
 ---
 name: design-specs
-description: Create system design specifications from intent and requirements or user stories. The user selects scope and approves UI and architecture before autonomous detail drafting. Stop at the reviewed specification.
+description: Create system design specifications from intent and requirements or user stories.
 ---
 
 # Design Specifications
@@ -8,12 +8,6 @@ description: Create system design specifications from intent and requirements or
 The user drives this session. Preserve their intent, requirements, vocabulary, and explicit design choices.
 Recommend changes when evidence shows concerns. Never replace the user's approach without approval.
 This skill creates specifications, not production code or implementation plans.
-
-## Language
-
-Use ASD-STE100 Simplified Technical English for all output, including chat, questions, diagrams, and artifacts.
-Use active voice and consistent terms. Limit instruction sentences to 20 words and description sentences to 25 words.
-Write requirements with "must", not "shall" or "should". Preserve quoted input, identifiers, and required contract syntax exactly.
 
 ## Inputs and output
 

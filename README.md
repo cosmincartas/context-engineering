@@ -94,6 +94,21 @@ pi install git:github.com/cosmincartas/context-engineering
 
 Explicit invocation syntax is host-specific: `$agentic-workflow:sdlc` in Codex, `/agentic-workflow:sdlc` in Claude Code, and `/agentic-workflow/sdlc` in Copilot. To use the skills in Pi, install them separately.
 
+## Reusable prompts
+
+[`prompts/code-changes.md`](prompts/code-changes.md) contains harness-neutral instructions for approaching code changes, choosing dependencies, and verifying results. Keep this repository copy as the shared source across machines and harnesses. These instructions are not installed automatically by the plugin or Pi package.
+
+For Pi, copy it into the global append system prompt file from the repository root:
+
+```bash
+mkdir -p ~/.pi/agent
+cp -i prompts/code-changes.md ~/.pi/agent/APPEND_SYSTEM.md
+```
+
+If you use `PI_CODING_AGENT_DIR`, use that directory instead of `~/.pi/agent`. Review any existing destination file before replacing it; merge the instructions if it contains other guidance. Repeat the copy after updating the repository prompt.
+
+For other harnesses, merge the same Markdown into their supported global or project instruction file, or use their append-system-prompt mechanism. Append it to existing guidance rather than replacing the harness's base system prompt.
+
 ## Claude Code subagents
 
 The Claude Code plugin ships the `scout`, `worker`, `oracle`, and `reviewer` subagents from `agents/`. They are available as `agentic-workflow:<name>` after installing the plugin. To use them without the namespace, copy them to `~/.claude/agents/` instead. Keep them in sync with the Pi definitions in `extensions/subagent/agents/`.
