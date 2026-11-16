@@ -2,7 +2,6 @@
 schema_version: 1
 artifact: technical-exploration
 subject: "{{subject}}"
-status: draft
 repository_baseline: "{{commit or unavailable}}"
 created: "{{YYYY-MM-DD}}"
 updated: "{{YYYY-MM-DD}}"

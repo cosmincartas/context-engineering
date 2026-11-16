@@ -1,13 +1,13 @@
 ---
 name: quickie
-description: Run design-specs and implementation-plan in delegated auto mode from a request or intent file. Produce a validated specification and plan. Ask the user only for disruptive decisions.
+description: Run design-specs and implementation-plan in delegated auto mode from a request or intent file. Produce a specification and plan. Ask the user only for disruptive decisions.
 ---
 
 # Quickie
 
 Run `design-specs`, then `implementation-plan`, in this session. Read both complete skills and their artifact templates. Follow their evidence, design, traceability, freshness, and planning rules. Quickie changes only their interaction gates; it does not implement or execute the plan.
 
-Use their ASD-STE100 language rules for chat and artifacts. Do not start `intent` or create a quick-plan artifact.
+Do not start `intent` or create a quick-plan artifact.
 
 ## Input and delegation
 
@@ -31,8 +31,8 @@ Do not treat routine inferences, UI details, private structure, test selection, 
 ## Flow
 
 1. Inspect relevant code, callers, tests, contracts, and existing artifacts. Separate user input, repository facts, inferences, and unknowns.
-2. Run `design-specs` on the supplied intent. In delegated auto mode, include only explicit requirements and necessary implied acceptance conditions. Record optional proposals as excluded or deferred, with reasons. Do not silently add recommended scope. Apply its scope, UI, HLD, and final checks without routine questions; record each gate as approved under this invocation's limited delegation. Ask at the affected gate for a disruptive decision. Save `spec.md` with `status: validated` only after all applicable checks pass.
-3. Run `implementation-plan` against that validated specification. Check source hashes and repository freshness. Apply its complete plan checks without routine review questions; record plan approval under the same limited delegation. Ask for a disruptive decision or source correction when needed. Save `plan.md` with `status: validated` only after all checks pass.
+2. Run `design-specs` on the supplied intent. In delegated auto mode, include only explicit requirements and necessary implied acceptance conditions. Record optional proposals as excluded or deferred, with reasons. Do not silently add recommended scope. Apply its scope, UI, HLD, and final checks without routine questions; record each gate as approved under this invocation's limited delegation. Ask at the affected gate for a disruptive decision. Save `spec.md` only after all applicable checks pass.
+3. Run `implementation-plan` against that specification. Check source hashes and repository freshness. Apply its complete plan checks without routine review questions; record plan approval under the same limited delegation. Ask for a disruptive decision or source correction when needed. Save `plan.md` only after all checks pass.
 4. Report both paths, consequential assumptions, and any excluded optional work. Stop before implementation.
 
 Do not bypass a blocker by labeling it routine. On resume, read the saved artifacts and sources, verify their hashes and approvals, and continue from the earliest incomplete or affected gate. Never run `git commit`, create branches, push changes, or modify production code, tests, dependencies, or project configuration.

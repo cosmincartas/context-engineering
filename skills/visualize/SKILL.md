@@ -5,7 +5,7 @@ description: Build a standalone HTML view from Markdown or directly from a reque
 
 # Visualize
 
-Use ASD-STE100 Simplified Technical English in instructions and generated descriptions. Preserve source wording when it is a contract, requirement, identifier, or evidence.
+Preserve source wording when it is a contract, requirement, identifier, or evidence.
 
 ## Purpose
 

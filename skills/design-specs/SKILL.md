@@ -1,6 +1,6 @@
 ---
 name: design-specs
-description: Create system design specifications from intent and requirements or user stories.
+description: Create system design specifications from intent and requirements or user stories, or from one slice file of the slice skill.
 ---
 
 # Design Specifications
@@ -11,7 +11,7 @@ This skill creates specifications, not production code or implementation plans.
 
 ## Inputs and output
 
-- Accept an intent file or intent supplied in conversation.
+- Accept an intent file, intent supplied in conversation, or one slice file (`artifact: slice`) in place of the intent. For a slice file, apply [Slice input](#slice-input).
 - Accept functional requirements, non-functional requirements, user stories, or any combination.
 - If intent is missing, ask for it and stop. Do not start another skill automatically.
 - If requirements are absent, derive proposals from the intent. Do not require invented user stories.
@@ -20,6 +20,23 @@ This skill creates specifications, not production code or implementation plans.
 - When `quickie` invokes this skill, use its limited delegated auto mode. Skip routine approval requests below; keep all evidence and validation checks. All other invocations keep the approval gates.
 - Read an existing specification before writing. Ask before you replace it or change its approved scope, UI, or HLD.
 - Keep supplied intent files unchanged. Record intent conflicts and request an explicit decision.
+
+## Slice input
+
+A slice file is the output of the `slice` skill for one layer slice of a feature. It replaces the intent as the source of the specification.
+These rules apply to slice input only. Without a slice file, this skill does not change.
+
+- Read the slice file and the overview that it names. Do these checks at the start and on resume. If one fails, stop, report it, and name `slice` as the next step:
+  - The overview has a current approval record for Scope, for HLD, and for Slices.
+  - The `intent_sha256` of the overview matches its intent file.
+  - The requirement identifiers and the seam contracts of the slice file agree with the overview.
+- Apply the provided-rows rule in [assets/ledger.md](assets/ledger.md). Skip section 1 and the Technology Stack draft in section 2. Do not propose inferred requirements.
+- Copy the requirement lines, the Technology Stack entries, and the seam contracts from the slice file without change. For each skipped gate, record the overview approval record as evidence, not a new approval.
+- Seam contracts are fixed constraints. Design a provided seam exactly as its contract states. Use a consumed seam only as its contract states. When a consumed seam is not yet in the repository, record it as provided by its slice, not as a new component of this slice.
+- Do not add, remove, or change a requirement, a provided Technology Stack entry, or a seam contract. When the design needs such a change, stop, explain it with evidence, and name `slice` as the next step.
+- In section 4, design only inside the slice: its components, their responsibilities, and its local decisions. Show the seams as the edges of the diagram. Link the overview for the whole flow; do not repeat it.
+- Each verification must pass without a later slice.
+- Save `spec.md` beside the slice file. Use the `subject` and `slice` values of the slice file as the subject. Store `intent: "slice.md"` and the hash of the slice file as `intent_sha256`. Keep the slice file and the overview unchanged.
 
 ## Evidence and user control
 
@@ -46,53 +63,21 @@ This skill creates specifications, not production code or implementation plans.
 
 ### 1. Establish requirements and scope
 
-1. Restate the supplied intent and requirements without changing their meaning.
-2. Convert user stories into checkable behaviors. Preserve each story's source and identify inferred acceptance conditions.
-3. Present concerns first. Resolve blocking concerns with the user before dependent proposals.
-4. Present supplied requirements separately from inferred requirements.
-5. Group inferred requirements as **Recommended mandatory** and **Optional**. Each group can be empty.
-6. Explain why each recommendation is necessary or useful. State the consequence of excluding it.
-7. Treat "Recommended mandatory" as a recommendation, not permission to add scope.
-8. Outside delegated auto mode, ask which proposals to include, exclude, or defer. Permit selection by identifier and user amendments.
-9. Confirm the resulting scope, including supplied requirements, selected proposals, exclusions, and acceptance conditions.
-10. Continue after direct or delegated scope approval. In delegated auto mode, include explicit requirements and necessary implied acceptance conditions. Exclude optional proposals with reasons. Ask about disruptive scope choices.
-11. Do not interpret unresolved selections as exclusions or inclusions outside delegated auto mode.
+Read [assets/ledger.md](assets/ledger.md) before this step. Its Requirements rules define the requirement content.
 
-Give each requirement a stable `FR-*` or `NFR-*` identifier. Preserve supplied identifiers when possible.
-Record one observable behavior per FR. Include related edge cases without hiding separate behaviors inside verification.
-For each requirement, record its statement, source, recommendation when inferred, selection status, and observable verification.
-Selection states are `proposed`, `included`, `excluded`, and `deferred`.
-Only included requirements bind the design. Preserve excluded and deferred proposals outside the approved requirements lists.
-
-Consider performance, capacity, security, privacy, availability, recovery, compliance, accessibility, and observability when proposing NFRs.
-Use measurable limits or binary checks. Do not invent numeric thresholds; ask the user to approve unsupported candidate limits.
-Do not invent legal obligations. Cite applicable evidence and distinguish obligations from recommendations.
-If exclusion conflicts with an established obligation or makes the outcome impossible, explain the conflict and request a scope decision.
-Never silently remove the concern or include the rejected requirement.
+1. Restate the supplied intent and requirements without changing their meaning. List the `DoD-*` items of the intent, or derive them under the Requirements rules.
+2. Present concerns first, including each `checkable` `DoD-*` item that no requirement covers. Resolve blocking concerns with the user before dependent proposals.
+3. Propose requirements under the Requirements rules. Write each verification as a concrete oracle and show the `DoD-*` mapping.
+4. Outside delegated auto mode, ask which proposals to include, exclude, or defer. Permit selection by identifier and user amendments.
+5. Confirm the resulting scope, including supplied requirements, selected proposals, exclusions, and acceptance conditions.
+6. Continue after direct or delegated scope approval. In delegated auto mode, include explicit requirements and necessary implied acceptance conditions. Exclude optional proposals with reasons. Ask about disruptive scope choices.
+7. Do not interpret unresolved selections as exclusions or inclusions outside delegated auto mode.
 
 ### 2. Establish the framed ledger
 
 After requirements approval, create the draft specification and its ledger.
-Review these categories in this order:
-
-| Category | Required treatment | User action |
-|---|---|---|
-| UI | Screens, controls, states, inputs, and linked requirements | Approval when applicable |
-| Architecture (HLD) | Components, ownership, boundaries, decisions, and flow | Approval |
-| Models | Required data structures and invariants | Review |
-| Contracts | Shared formats, producers, consumers, and compatibility | Review |
-| Functions | Entry points, effects, and error behavior | Review |
-| Interfaces or Classes | Required signatures, responsibilities, and boundaries | Review |
-| Behavior | Important flows and state transitions | Review |
-| Failure Model | Relevant failures, detection, response, and verification | Review |
-| Traceability | Included requirements mapped to design and verification | Review |
-
-Each ledger row records its status, decision or section reference, and any unresolved issue.
-Use `open`, `drafted`, `approved`, or `not applicable`. Explain each `not applicable` decision.
-Use `approved` for UI and HLD only after direct approval or recorded quickie delegation.
-Do not mark a category drafted or approved merely because it was discussed.
-UI and HLD require direct or delegated approval before dependent work. Other applicable categories remain drafted until final review or delegated validation.
-Do not create classes, models, or contracts merely to fill a category.
+The ledger asset defines the categories, their order, the row statuses, and the drafting rules for each category.
+Draft the Technology Stack category from repository evidence before UI review, including its verification facilities. Present it with the UI, or with the HLD when UI is not applicable.
 
 ### 3. Review UI
 
@@ -108,17 +93,11 @@ Do not create classes, models, or contracts merely to fill a category.
 
 ### 4. Review architecture
 
-1. Draft one Mermaid component diagram and explain each component's responsibility.
-2. Mark components as unchanged, modified, new, or removed. Cite existing entry points where available.
-3. Explain trigger-to-outcome flow, data ownership, interfaces, and trust boundaries.
-4. Include deployment, compatibility, cost, and recovery decisions when they affect this system.
-5. Record consequential choices, evidence, assumptions, and trade-offs. Preserve explicit user choices unless an approved correction changes them.
-6. Reuse existing code, standard libraries, native features, and installed dependencies before proposing new abstractions or dependencies.
-7. Justify each new dependency or abstraction with an included requirement and an unmet present need.
-8. Outside delegated auto mode, present the HLD and request approval in chat. In delegated auto mode, record the HLD decision and continue unless disruptive.
-9. Outside delegated auto mode, end the turn and wait for the user's reply. In delegated auto mode, record approval and continue unless a disruptive decision remains.
-10. Revise until approved. Present each revision in the same manner.
-11. Record approval before drafting dependent details.
+1. Draft the HLD under the Architecture rules in [assets/ledger.md](assets/ledger.md).
+2. Outside delegated auto mode, present the HLD and request approval in chat. In delegated auto mode, record the HLD decision and continue unless disruptive.
+3. Outside delegated auto mode, end the turn and wait for the user's reply. In delegated auto mode, record approval and continue unless a disruptive decision remains.
+4. Revise until approved. Present each revision in the same manner.
+5. Record approval before drafting dependent details.
 
 ### 5. Draft remaining design autonomously
 
@@ -129,34 +108,26 @@ Continue when a step does not require user input. Put status notes in the same m
 Stop and ask only when you cannot continue without the user, or before a destructive action.
 Destructive actions include deleting data and changing anything outside this repository.
 
-- **Models:** Specify required fields, types, ownership, and invariants. Omit incidental private representations.
-- **Contracts:** Specify producers, consumers, validation, compatibility, and versioning when applicable. Cite existing definitions instead of duplicating them.
-- **Functions:** Describe existing entry points or required responsibilities, inputs, effects, outputs, and errors.
-- **Interfaces or Classes:** Specify signatures where correctness or coordination requires them. Do not mandate class-based design.
-- **Behavior:** Describe preconditions, ordered interactions, transitions, and observable results. Include interruption recovery when persistent writes require it.
-- **Failure Model:** Record relevant failures, detectors, responses, and observable checks. Cover applicable trust-boundary validation and data-loss risks.
-- **Traceability:** Map every included FR and NFR to design elements and verification. Link UI entries when applicable.
-
-Use repository-language signatures when exact syntax matters. Replace executable logic with `...`.
-Leave private decomposition to implementation unless an approved constraint requires it.
-Do not invent design elements without an included requirement or an established repository constraint.
+Draft each remaining category under the drafting rules in [assets/ledger.md](assets/ledger.md).
 
 ### 6. Review the specification
 
 1. Check scope, UI, and HLD approvals against the complete draft.
 2. Check every ledger category. Explain omitted categories and resolve blocking unknowns.
-3. Check every included requirement for a source, observable verification, and design coverage.
+3. Check every included requirement for a source, a concrete oracle, a verification level, and design coverage. Check that each verification level has a facility in the Technology Stack.
+   - Check that every `DoD-*` item maps to included requirements or, for a `human` item, to a review criterion. For slice input, the overview owns this mapping.
+   - Check that every Failure Model entry has a test trigger or a reason why it is not testable.
 4. Check that excluded and deferred requirements did not enter the design.
-5. Check that contracts agree with models, interfaces, behavior, and failure responses. Check all output against the language rules.
+5. Check that contracts agree with models, interfaces, behavior, and failure responses.
 6. Present the saved path, current ledger, requirements coverage, and details added after HLD approval.
 7. Outside delegated auto mode, invite the user to review the specification. Apply corrections and repeat affected checks.
-8. In delegated auto mode, record final delegated approval only after all checks pass. Set `status: validated` and return the path to quickie for planning. Otherwise, report the path and stop.
+8. In delegated auto mode, record final delegated approval only after all checks pass. Return the path to quickie for planning. Otherwise, report the path and stop.
 
 ## Artifact structure and continuation
 
 Read [assets/spec-template.md](assets/spec-template.md) before creating the draft specification. Use it as the artifact template.
 Fill applicable sections and explain omitted categories in the ledger. Remove template instructions and unused placeholders before you present the specification for review.
-Preserve requirement identifiers, sources, selection decisions, and approval records. Keep the ledger order defined by this skill.
+Preserve requirement identifiers, sources, selection decisions, and approval records. Keep the ledger order defined in [assets/ledger.md](assets/ledger.md).
 
 For file-based intent, store `intent` relative to the specification folder; use `intent.md` when both files share that folder.
 Resolve supplied paths before converting them. Confirm the stored path resolves to the source before hashing its exact bytes.

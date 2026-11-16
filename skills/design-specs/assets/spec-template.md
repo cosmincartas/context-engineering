@@ -1,9 +1,8 @@
 ---
 schema_version: 1
 artifact: spec
-status: "{{draft or validated; validated only after final direct or delegated approval}}"
 subject: "{{subject}}"
-intent: "{{source path relative to this specification folder, e.g. intent.md; or supplied in conversation}}"
+intent: "{{source path relative to this specification folder, e.g. intent.md, or slice.md for slice input; or supplied in conversation}}"
 intent_sha256: "{{source file SHA-256 or not applicable}}"
 repository_baseline: "{{commit or unavailable}}"
 language: "{{repository language or not applicable}}"
@@ -13,7 +12,7 @@ updated: "{{YYYY-MM-DD}}"
 
 # {{Subject}} Specification
 
-<!-- Use ASD-STE100 Simplified Technical English. Remove template instructions and unused example entries from the completed specification. -->
+<!-- Remove template instructions and unused example entries from the completed specification. -->
 <!-- Keep all ledger rows. Omit inapplicable design sections and explain each omission in the ledger. -->
 <!-- During drafting, leave unresolved sections open. Do not present placeholders or unverified assumptions as approved decisions. -->
 <!-- Resolve intent and local supporting-file links against this specification's folder. Confirm file-based intent exists and hash its exact bytes. -->
@@ -25,9 +24,18 @@ updated: "{{YYYY-MM-DD}}"
 - **Includes:** {{one line per included behavior}}
 - **Constraints:** {{explicit constraints and their sources}}
 
+### Definition of Done
+
+<!-- Copy each DoD-* item from the intent. When the intent has no identifiers, derive them and add "(derived)". For slice input, link the overview instead of this list. -->
+<!-- A checkable item maps to included requirements. A human item maps to requirements or to a review criterion. -->
+
+- **DoD-1** ({{checkable or human}}) — {{observable result}}
+  - Covered by: {{FR-* and NFR-* identifiers, or human review: criterion}}
+
 ## Functional Requirements
 
 <!-- Include only selected requirements. Preserve supplied identifiers and link user stories to their derived requirements. -->
+<!-- For slice input, copy the requirement lines of the slice file without change into this section and the next. Do not add sub-items. In Excluded and Deferred Requirements, link the overview. -->
 
 - **FR-1** — The system must {{one checkable behavior}}.
   - Selection: included
@@ -35,7 +43,7 @@ updated: "{{YYYY-MM-DD}}"
   - Recommendation: {{Recommended mandatory or Optional; omit for supplied requirements}}
   - Reason: {{reason for an inferred recommendation and consequence of exclusion; otherwise omit}}
   - UI: {{related UI-* identifiers; omit when not applicable}}
-  - Verification: {{observable action and expected result}}
+  - Verification: Given {{precondition with example values}}, when {{one action}}, then {{exact observable result}}.
 
 ## Non-Functional Requirements
 
@@ -46,7 +54,7 @@ updated: "{{YYYY-MM-DD}}"
   - Source: {{source, including provenance for numeric limits}}
   - Recommendation: {{Recommended mandatory or Optional; omit for supplied requirements}}
   - Reason: {{reason for an inferred recommendation and consequence of exclusion; otherwise omit}}
-  - Verification: {{observable action and expected result}}
+  - Verification: {{measurement method, conditions, and approved limit, or binary check}}
 
 ## Excluded and Deferred Requirements
 
@@ -63,10 +71,12 @@ updated: "{{YYYY-MM-DD}}"
 ## Framed Ledger
 
 <!-- Use open, drafted, approved, or not applicable. Explain every not applicable decision. -->
-<!-- Mark UI and HLD approved only after their gates. Other applicable rows remain drafted; do not mark them approved. -->
+<!-- Mark Requirements, UI, and HLD approved only after their gates or under the provided-rows rule of the ledger. Other applicable rows remain drafted; do not mark them approved. -->
 
 | Category | Status | Decision or section reference | Open issue or omission reason |
 |---|---|---|---|
+| Requirements | open | {{reference}} | {{issue or none}} |
+| Technology Stack | open | {{reference}} | {{issue or none}} |
 | UI | open | {{reference}} | {{issue or none}} |
 | Architecture (HLD) | open | {{reference}} | {{issue or none}} |
 | Models | open | {{reference}} | {{issue or none}} |
@@ -87,6 +97,21 @@ updated: "{{YYYY-MM-DD}}"
   - Evidence: {{user approval statement and date or available message reference}}
   - Delegation: {{explicit delegation and limits, or none}}
   - Validity: {{current or superseded, with reason}}
+
+## Technology Stack
+
+<!-- List only technology the implementation of this scope uses. Cite manifest or lock files for existing entries. -->
+
+- **{{language, framework, runtime, data store, or library}}** {{version}} — {{existing or new}}
+  - Evidence: {{repository-relative manifest or lock file, or source URL for a new entry}}
+  - Use: {{what this scope uses it for}}
+
+### Verification Facilities
+
+<!-- List each tool and command that the verification levels in Traceability need. A missing facility is a new entry, justified at the HLD gate. -->
+
+- **{{typecheck, lint, build, unit, integration, contract, e2e, visual, or evidence capture}}** — `{{command}}` — {{existing or new}}
+  - Evidence: {{manifest script, Makefile target, CI configuration, or source URL for a new entry}}
 
 ## UI
 
@@ -198,16 +223,21 @@ updated: "{{YYYY-MM-DD}}"
   - Owner: {{responsible component}}
   - Detector: {{detection mechanism}}
   - Response: {{designed response}}
-  - Verification: {{observable action and expected result}}
+  - Test trigger: {{input, fake collaborator, or injection point that produces the failure every time; or not testable, with reason}}
+  - Verification: Given {{the trigger}}, when {{one action}}, then {{exact observable response}}.
 
 ## Traceability
 
 <!-- Map every included FR and NFR. Do not map excluded or deferred proposals as implemented behavior. -->
+<!-- Level is the lowest of unit, integration, contract, e2e, visual, or human that can observe the oracle. Each level needs a Verification Facilities entry. -->
 
 - **FR-1** → {{design section, responsibility, contract, or invariant; include UI-* when applicable}}
-  - Verification: {{requirement verification reference or observable check}}
+  - Verification: {{requirement verification reference}}
+  - Level: {{unit, integration, contract, e2e, visual, or human}}
 - **NFR-1** → {{design section, responsibility, contract, or invariant}}
-  - Verification: {{requirement verification reference or observable check}}
+  - Verification: {{requirement verification reference}}
+  - Level: {{unit, integration, contract, e2e, visual, or human}}
+- **DoD-1** → {{FR-* and NFR-* identifiers, or human review: criterion}}
 
 ## Open Issues
 

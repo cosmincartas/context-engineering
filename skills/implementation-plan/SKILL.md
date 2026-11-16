@@ -9,19 +9,13 @@ Turn an approved specification into a plan that an implementer can use in a fres
 The user controls scope and reviews the complete plan. Draft implementation details autonomously within the approved specification.
 This skill works independently of the workflow that created the specification.
 
-## Language
-
-Use ASD-STE100 Simplified Technical English for all output, including chat, questions, and artifacts.
-Use active voice and consistent terms. Limit instruction sentences to 20 words and description sentences to 25 words.
-Preserve quoted input, identifiers, required signatures, and commands exactly.
-
 ## Inputs and output
 
-- Require a specification file with `artifact: spec`. Treat open ledger rows or unresolved blocking issues as a blocker. In quickie's delegated auto mode, also require `status: validated` and recorded gate approvals.
+- Require a specification file with `artifact: spec`. Treat open ledger rows or unresolved blocking issues as a blocker. In quickie's delegated auto mode, also require recorded gate approvals.
 - Accept any specification with the required artifact fields. Do not require fixed section numbering.
 - If no specification is supplied, ask for its path or topic folder.
 - If the specification is missing, blocked, or inconsistent, explain the blocker and stop.
-- Do not start another skill or resolve specification blockers on the user's behalf. Quickie alone orchestrates the handoff after design-specs returns a validated specification.
+- Do not start another skill or resolve specification blockers on the user's behalf. Quickie alone orchestrates the handoff after design-specs returns a specification.
 - Save `plan.md` beside the source specification using [assets/plan-template.md](assets/plan-template.md).
 - Read an existing plan before writing. Ask before replacing approved content; resume or revise drafts under quickie's delegation.
 - Keep the specification and its intent unchanged.
@@ -39,7 +33,7 @@ Preserve quoted input, identifiers, required signatures, and commands exactly.
 - Do not manufacture alternatives or reopen approved choices without new evidence.
 - Silence, cancellation, and factual answers are not approval. Record explicit delegation and its limits.
 - In quickie's delegated auto mode, use its invocation as approval evidence for the complete plan only after all checks pass. Ask for disruptive decisions under quickie's rules; never claim direct user review.
-- Use read-only repository investigation. Do not run implementation or verification commands merely because the plan contains them.
+- Use read-only repository investigation. The one exception is the baseline run of declared verification commands in step 2. Do not run commands that the plan creates or proposes.
 - Distinguish commands proposed for execution from checks actually performed during planning.
 
 ## Workflow
@@ -48,7 +42,7 @@ Preserve quoted input, identifiers, required signatures, and commands exactly.
 
 1. Read the complete specification and relevant supporting files, including approved UI references when applicable.
 2. Check that no unresolved issue blocks implementation. Check approval records when the specification provides them.
-3. Collect included functional and non-functional requirements with their identifiers, acceptance conditions, and design references.
+3. Collect included functional and non-functional requirements with their identifiers, acceptance conditions, verification levels, and design references. Collect the `DoD-*` items and their mapping. For slice input, read them from the overview.
 4. Exclude proposed, excluded, deferred, and parked requirements from implementation coverage.
 5. When selection fields are absent, use the approved FR and NFR sections as the included set.
 6. Resolve ambiguous selection or missing acceptance conditions before drafting dependent tasks. Do not silently interpret them as approval.
@@ -63,9 +57,13 @@ Preserve quoted input, identifiers, required signatures, and commands exactly.
 2. Trace each included behavior from its entry point through affected components and observable outputs.
 3. Record the current commit as `repository_baseline`, or `unavailable` when Git metadata is absent.
 4. Record existing working-tree changes without altering them. Do not assume a clean repository.
-5. Identify existing test commands, build commands, verification methods, and prerequisites from repository evidence.
-6. Record known baseline failures and unavailable verification facilities. Do not claim checks passed without executing them.
-7. Compare current evidence with specification assumptions. Route material conflicts through the correction rules before dependent planning.
+5. Identify existing test commands, build commands, verification methods, and prerequisites from repository evidence. Compare them with the Verification Facilities of the specification.
+6. Run each declared typecheck, lint, build, and test command once, with a timeout. A command is declared when a manifest script, a Makefile target, CI configuration, or project documentation names it.
+   - Do not run a command that deploys, publishes, writes to a shared or remote system, needs secrets, or changes tracked files. Record each skipped command and the reason.
+   - Record the exit code, the duration, the timeout, and the names of failing tests for each command that you run.
+   - A command that you did not run is unproven. Do not present it as working.
+7. Record known baseline failures and unavailable verification facilities. Do not claim checks passed without executing them.
+8. Compare current evidence with specification assumptions. Route material conflicts through the correction rules before dependent planning. A verification facility that the specification marks existing but the baseline run shows missing or unable to run is such a conflict. Failing tests in a facility that runs are baseline failures, not a conflict.
 
 ### 3. Draft the complete plan
 
@@ -73,7 +71,7 @@ Read the template and prepare the complete plan before presenting it. Do not req
 Keep the plan sufficient for a fresh session without copying the complete specification.
 
 - Give each task a stable `Task N` identifier and one independently verifiable outcome.
-- Keep behavior tasks small enough for one red-green-refactor cycle. Avoid separate tasks for disconnected layers of one outcome.
+- Keep behavior tasks small enough for one red-green-refactor cycle. Within the scope of the specification, avoid separate tasks for disconnected layers of one outcome. Do not plan work outside that scope to complete an outcome.
 - Give each task one entry point: an existing `file:symbol`, a required new symbol, or a file path.
 - Tell the implementer to trace downstream from that entry point. Do not freeze an exhaustive downstream file list.
 - Cite included requirement identifiers and relevant specification sections for each task.
@@ -92,18 +90,53 @@ Plan tests through a supported entry point, such as an exported function, regist
 
 For every production-behavior task, specify:
 
-- **RED:** The test to add or change, its command, and the expected failure caused by missing behavior.
+- **RED:** The test to add or change and the check identifiers that must fail before the change.
 - **GREEN:** The minimum behavior that passes the test.
 - **REFACTOR:** Permitted cleanup within approved constraints, with tests remaining green.
-- **Verification:** Exact commands or observable checks, prerequisites, and expected results.
+- **Verification:** The check identifiers that must pass after the change. The gates always apply.
+- **Allowed areas:** The directories or modules that the task may change. Use areas, not an exhaustive file list.
 
-For non-behavior tasks, replace the TDD fields with a reason why TDD does not apply. Retain observable verification.
+For non-behavior tasks, replace the TDD fields with a reason why TDD does not apply. Retain checks.
 Use existing verification facilities. Do not invent available scripts or claim proposed commands already exist.
 When a command requires a new test or script, name its creating task and the dependency.
-When automated verification is unavailable, specify a reproducible observation and explain the limitation.
 
-Map every included FR and NFR to at least one task and its verification.
-Include integration or end-to-end checks when isolated task checks cannot establish an approved acceptance condition.
+#### Checks
+
+Write every verification as a check in the `Checks` block of the plan. A program decides the result of a check from its exit code and output. A report from the implementer is never a result.
+
+- Give each check a stable `C-N` identifier and list the `DoD-*`, `FR-*`, `NFR-*`, or `F-*` identifiers that it covers.
+- Name the task that writes the check and the task that makes it pass. They are the same task, except for Task 0 checks.
+- Use the verification level from the specification Traceability. Use the lowest level that can observe the oracle.
+- Give the exact command, the files that hold the test or capture script, and a timeout.
+- Give the RED expectation: a nonzero exit code and an output pattern that names the missing behavior. A failure from a syntax error, a missing file, or a timeout is not a valid RED.
+- Give the GREEN expectation: exit code 0, and an output pattern when the exit code alone does not identify the test.
+- Derive expected values from the oracle in the specification, not from the planned implementation.
+- Do not use "tests pass", "works", or "no errors" as an expectation without the exact command and pattern.
+- For a `human` level check, the command captures evidence: screenshots, video, or output files at fixed paths. Give the evidence paths and the review criterion from the specification. The agent captures the evidence. The user only reviews it. A `human` check stays `pending review` until the user approves it. After approval, a screenshot can become the baseline of a `visual` check.
+
+#### Task 0: acceptance checks
+
+When the scope has any `e2e`, `visual`, or `human` check, or any check that covers a `DoD-*` item, make Task 0 the first task.
+
+- Task 0 writes the test and capture files of these checks before any production change. It writes no production code.
+- Every Task 0 check must give its RED result. A `human` capture fails because the behavior does not exist yet.
+- Before other tasks start, a reviewer compares each Task 0 test with its oracle and its `DoD-*` item. Record who reviews: the user, or a reviewer under delegated approval.
+- After that review, the Task 0 files are protected. Other tasks must not change them.
+
+#### Gates
+
+Record the gates that apply after every task:
+
+- **Commands:** the declared typecheck, lint, and build commands, and the regression run of every check that passed earlier.
+- **Protected paths:** Task 0 files, approved visual baselines and golden files, lockfiles, and lint, test, and CI configuration. A change to a protected path fails the gate, unless a task names that path as its outcome.
+- **Dependencies:** forbid new packages unless the specification Technology Stack lists them.
+- **Scope:** a change outside the task's allowed areas fails the gate. The implementer reports the need. The plan does not grow silently.
+
+#### Coverage and final verification
+
+Map every included FR, NFR, and `DoD-*` item to at least one check. Map every testable Failure Model entry to a check.
+Always write Final Verification. It runs every check and every gate on the integrated result and lists the result for each `DoD-*` item.
+A `checkable` `DoD-*` item is done only when all of its checks pass. A `human` item is done only after the user approves its evidence.
 Do not use "code written" or "task completed" as verification.
 
 ### 4. Review
@@ -113,7 +146,7 @@ Do not use "code written" or "task completed" as verification.
 3. Keep the recap concise. Offer to expand any task without replacing the saved complete plan.
 4. Outside delegated auto mode, invite the user to review the complete plan. Apply requested corrections in place.
 5. Recheck source freshness and repository evidence after corrections. Explain any changes since drafting.
-6. In delegated auto mode, record the limited approval and set `status: validated` only after all checks pass. Return the path to quickie. Otherwise, report the plan path and stop. Do not start execution.
+6. In delegated auto mode, record the limited approval only after all checks pass. Return the path to quickie. Otherwise, report the plan path and stop. Do not start execution.
 
 ## Source freshness and continuation
 
@@ -139,6 +172,7 @@ Report write failures and stop. Never claim unsaved work can be resumed.
 - Never refresh a hash merely to hide staleness. Review the changed source and obtain approval for affected content first.
 - If intent changes, request intent review before dependent specification or plan revisions.
 - If scope, acceptance, UI, contracts, or architecture change, request specification review through `design-specs` or its original workflow.
+- If a verification level needs a facility that the specification does not list, or a listed facility cannot run, request specification review. Do not add the facility inside a task.
 - Do not edit upstream artifacts or start another skill automatically. Resume after the specification is corrected.
 - If only task order, grouping, or verification changes, revise the plan and present the change for review.
 - Private structural choices within approved constraints do not require specification approval.
@@ -147,14 +181,17 @@ Report write failures and stop. Never claim unsaved work can be resumed.
 ## Completion checks
 
 - The source specification is current and free of implementation-blocking issues.
-- Only included requirements appear in task coverage. Every included FR and NFR maps to tasks and observable verification.
-- Every task has a stable identifier, one outcome, an entry point, dependencies, and a specification or repository justification.
-- Dependency identifiers exist, have no cycles, and precede dependent tasks.
+- Only included requirements appear in task coverage. Every included FR, NFR, and `DoD-*` item maps to one or more checks.
+- Every check has an identifier, covered identifiers, a level, a command, files, a timeout, a RED expectation with an exit code and a pattern, and a GREEN expectation. Every `human` check has evidence paths and a review criterion.
+- Every identifier in a `covers` list exists in the specification. Every check identifier that a task cites exists in the `Checks` block.
+- Every task has a stable identifier, one outcome, an entry point, allowed areas, dependencies, and a specification or repository justification.
+- Dependency identifiers exist, have no cycles, and precede dependent tasks. Task 0 exists when the Task 0 rule requires it, and every other task depends on it.
 - Behavior tasks contain RED, GREEN, REFACTOR, and verification. Other tasks explain why TDD does not apply.
-- Verification commands are evidence-backed or explicitly planned. Each check names prerequisites and an expected result.
+- Verification commands ran at baseline or are created by a named task. Each check names prerequisites.
+- The gates list commands, protected paths, the dependency rule, and the scope rule. Final Verification lists every `DoD-*` item.
 - Existing changes, known failures, unexecuted checks, and unavailable evidence are clearly distinguished.
 - Tasks preserve the approved scope, contracts, invariants, and architecture without freezing incidental private structure.
 - The plan contains no unresolved consequential design decision disguised as implementation work.
 - The saved plan contains source hashes, repository findings, implementation discretion, correction rules, and approval evidence in delegated auto mode.
-- The artifact and recap follow the language rules. No unused placeholders remain.
+- No unused placeholders remain.
 - No implementation work has started.

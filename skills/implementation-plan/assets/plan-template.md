@@ -1,7 +1,6 @@
 ---
 schema_version: 1
 artifact: implementation-plan
-status: "{{draft or validated; validated only after final direct or delegated approval}}"
 subject: "{{subject}}"
 spec: "{{source specification path relative to this plan folder, e.g. spec.md}}"
 spec_sha256: "{{SHA-256 of the exact specification bytes}}"
@@ -13,7 +12,7 @@ updated: "{{YYYY-MM-DD}}"
 
 # {{Subject}} Implementation Plan
 
-<!-- Use ASD-STE100 Simplified Technical English. Remove template instructions and unused placeholders before you present the plan for review. -->
+<!-- Remove template instructions and unused placeholders before you present the plan for review. -->
 
 ## Source and Execution Boundaries
 
@@ -67,41 +66,101 @@ Do not refresh source hashes without reviewing changes and obtaining approval fo
 - **Tests and commands:** {{existing test or build facilities with source references}}
 - **Contracts and conventions:** {{relevant definitions and constraints}}
 - **Existing changes:** {{working-tree changes relevant to execution, or none}}
-- **Baseline verification:** {{checks actually performed and results; otherwise not executed}}
 - **Known failures or limits:** {{evidence-backed failures, unavailable facilities, or none}}
+
+### Baseline Verification
+
+<!-- Record each declared command. A command that did not run is unproven. -->
+
+| Command | Source | Result | Exit code | Duration | Timeout | Failing tests or skip reason |
+|---|---|---|---|---|---|---|
+| `{{command}}` | {{manifest script, Makefile target, CI configuration, or documentation}} | {{ran or skipped}} | {{code}} | {{seconds}} | {{seconds}} | {{names, reason, or none}} |
+
+## Gates
+
+<!-- These gates apply after every task and in Final Verification. -->
+
+- **Commands:** {{declared typecheck, lint, and build commands}}, and a regression run of every check that passed earlier.
+- **Protected paths:** {{Task 0 files, approved visual baselines and golden files, lockfiles, lint, test, and CI configuration}}. A change fails the gate unless a task names the path as its outcome.
+- **Dependencies:** No new packages unless the specification Technology Stack lists them: {{listed new packages or none}}.
+- **Scope:** A change outside the allowed areas of the task fails the gate. The implementer reports the need instead.
+
+## Checks
+
+<!-- A program decides each check from its exit code and output. A report from the implementer is never a result. -->
+<!-- Derive expected values from the specification oracle. RED must fail because the behavior is missing, not because of a syntax error, a missing file, or a timeout. -->
+<!-- level: unit, integration, contract, e2e, visual, or human. For human, the command captures evidence and the user reviews it. -->
+
+```yaml
+checks:
+  - id: C-{{N}}
+    covers: [{{DoD-*, FR-*, NFR-*, or F-* identifiers}}]
+    level: {{level}}
+    written_by: Task {{N}}
+    passes_in: Task {{N}}
+    files: [{{test or capture script paths}}]
+    cmd: "{{exact command}}"
+    timeout_s: {{seconds}}
+    red: { exit: {{nonzero code}}, match: "{{pattern that names the missing behavior}}" }
+    green: { exit: 0, match: "{{pattern, or omit when the exit code identifies the test}}" }
+  - id: C-{{N}}
+    covers: [{{DoD-* identifier}}]
+    level: human
+    written_by: Task 0
+    passes_in: Task {{N}}
+    files: [{{capture script path}}]
+    cmd: "{{capture command}}"
+    timeout_s: {{seconds}}
+    red: { exit: {{nonzero code}}, match: "{{pattern that names the missing screen or output}}" }
+    green: { exit: 0 }
+    evidence: [{{screenshot, video, or output paths}}]
+    review: "{{review criterion from the specification}}"
+```
 
 ## Tasks
 
 <!-- Give each task one independently verifiable outcome. Use stable Task N identifiers and explicit dependencies. -->
 <!-- Cite included requirements only. Justify supporting tasks through included requirements or established repository constraints. -->
+<!-- Include Task 0 when the scope has an e2e, visual, or human check, or a check that covers a DoD-* item. Otherwise, remove it. -->
+
+### Task 0: Acceptance Checks
+
+- **Requirements:** {{DoD-* and requirement identifiers of the Task 0 checks}}
+- **Checks written:** {{C-* identifiers}}
+- **Outcome:** Every listed check exists and gives its RED result. No production code changes.
+- **Review:** {{user, or reviewer under delegated approval}} compares each test with its oracle and its DoD-* item before other tasks start.
+- **Allowed areas:** {{test and capture directories}}
+- **After review:** The files of these checks are protected paths.
 
 ### Task {{N}}: {{Independently Verifiable Outcome}}
 
 - **Requirements:** {{included FR-* and NFR-* identifiers, or repository constraint for a supporting task}}
 - **Design references:** {{relevant specification sections or established repository constraint}}
 - **Entry point:** {{existing file:symbol, required new symbol, or file path}}
-- **Depends on:** {{exact Task N identifiers or none}}
-- **RED:** {{test to add or change, exact command, and expected missing-behavior failure}}
+- **Allowed areas:** {{directories or modules this task may change}}
+- **Depends on:** {{Task 0 when it exists, other exact Task N identifiers, or none}}
+- **RED:** {{test to add or change}}; checks {{C-* identifiers}} give their RED result.
 - **GREEN:** {{minimum behavior needed to pass}}
 - **REFACTOR:** {{permitted cleanup with tests remaining green}}
-- **Verification:** {{exact command or reproducible observation and expected result}}
+- **Verification:** Checks {{C-* identifiers}} give their GREEN result, and the gates pass.
 - **Prerequisites:** {{environment, data, or earlier task that creates a required test or script; otherwise none}}
 
-<!-- For non-behavior tasks, replace RED, GREEN, and REFACTOR with a reason why TDD does not apply. -->
-<!-- Retain observable verification. Label commands that require facilities created by this plan. -->
+<!-- For non-behavior tasks, replace RED, GREEN, and REFACTOR with a reason why TDD does not apply. Retain checks. -->
 
-## Requirement Coverage
+## Coverage
 
-<!-- Map every included requirement to tasks and verification. Do not include excluded, deferred, proposed, or parked requirements. -->
+<!-- Map every included requirement and DoD-* item to checks. Do not include excluded, deferred, proposed, or parked requirements. -->
 
-- **{{FR-* or NFR-*}}** → {{Task N identifiers}}
-  - Verification: {{task verification reference or approved acceptance check}}
+- **{{DoD-*, FR-*, NFR-*, or F-*}}** → {{C-* identifiers}} in {{Task N identifiers}}
 
 ## Final Verification
 
-<!-- Include combined checks when individual tasks cannot establish complete acceptance. Otherwise, reference sufficient task checks. -->
+<!-- Always include this section. Run every check and every gate on the integrated result. -->
 
-- **Check:** {{command or reproducible observation}}
-  - Prerequisites: {{required completed tasks and environment}}
-  - Expected result: {{observable acceptance condition}}
-  - Coverage: {{included requirement identifiers}}
+- **Run:** every check in the Checks block and every gate.
+- **Definition of done:**
+
+| DoD | Type | Checks | Done when |
+|---|---|---|---|
+| DoD-{{N}} | checkable | {{C-* identifiers}} | All listed checks give their GREEN result. |
+| DoD-{{N}} | human | {{C-* identifiers}} | The capture succeeds and the user approves the evidence. |

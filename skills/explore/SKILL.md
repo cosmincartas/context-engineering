@@ -5,8 +5,6 @@ description: Use when the user wants to understand a technical concept, compare 
 
 # Explore
 
-Use ASD-STE100 Simplified Technical English when you ask questions or write output files.
-
 Answer a technical question without turning it into a delivery project. The user is learning, comparing, or assessing impact. They have not committed to building anything.
 
 ## Modes
@@ -46,9 +44,9 @@ A request can combine modes. Ask one clarifying question only when the requested
 
 ## Output
 
-Answer in chat by default. When the user asks for a reusable artifact, fill `assets/technical-brief-template.md` and save it to `docs/agentic-engineering/explorations/<YYYY-MM-DD>/<subject>.md`. Ask before overwriting an existing artifact. Mark it `validated` only after the user approves it.
+Answer in chat by default. When the user asks for a reusable artifact, fill `assets/technical-brief-template.md` and save it to `docs/agentic-engineering/explorations/<YYYY-MM-DD>/<subject>.md`. Ask before overwriting an existing artifact.
 
-For Design mode, also write a companion page `docs/agentic-engineering/explorations/<YYYY-MM-DD>/<subject>-designs.html` that renders every candidate side by side. Use one section per candidate with its name, key decision, and diagram. Use inline CSS only. The only script is the Mermaid renderer loaded from a CDN. The page is a supporting file of the brief, not a status-bearing artifact. In chat, show the Mermaid code blocks.
+For Design mode, also write a companion page `docs/agentic-engineering/explorations/<YYYY-MM-DD>/<subject>-designs.html` that renders every candidate side by side. Use one section per candidate with its name, key decision, and diagram. Use inline CSS only. The only script is the Mermaid renderer loaded from a CDN. The page is a supporting file of the brief. In chat, show the Mermaid code blocks.
 
 Remove optional sections that do not apply. A concept explanation does not need a repository-impact section. A repository-impact assessment does not need sample code unless the example reduces uncertainty.
 
